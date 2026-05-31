@@ -1,0 +1,113 @@
+# ============================================================
+#  Caleyez — B.Sc. Capstone .gitignore
+#  Last updated: 2026-05-31
+# ============================================================
+
+
+# ── 1. IMAGE DATASETS ────────────────────────────────────────
+# Entire datasets folder is excluded (too large for GitHub)
+datasets/
+
+
+# ── 2. PyTorch WEIGHT FILES (.pt) ────────────────────────────
+# Exclude ALL .pt files globally (individual epoch checkpoints,
+# base pre-trained weights in root, etc.)
+*.pt
+
+# Exception: keep the best.pt files of the TWO production runs.
+# These are re-included explicitly with '!' after the global rule.
+!runs/general_model_yolo11l5/weights/best.pt
+!runs/israeli_food_yolo11l/weights/best.pt
+
+
+# ── 3. RUNS FOLDER — keep only the two meaningful runs ───────
+# Step A: Exclude EVERY subdirectory inside runs/ by default.
+runs/*/
+
+# Step B: Un-exclude the two production runs (whitelist pattern).
+# Git requires every parent directory to be un-ignored before
+# a child can be un-ignored — so we need both levels.
+!runs/general_model_yolo11l5/
+!runs/general_model_yolo11l5/**
+
+!runs/israeli_food_yolo11l/
+!runs/israeli_food_yolo11l/**
+
+# Step C: Re-apply .pt exclusion inside those whitelisted runs
+#         (epoch checkpoints are large and unnecessary on GitHub).
+runs/general_model_yolo11l5/weights/epoch*.pt
+runs/general_model_yolo11l5/weights/last.pt
+runs/israeli_food_yolo11l/weights/epoch*.pt
+runs/israeli_food_yolo11l/weights/last.pt
+
+
+# ── 4. LARGE CSV DATA FILES ───────────────────────────────────
+# Raw inference output datasets are too large for GitHub.
+# Code files (.py) that generate them are kept.
+arbiter_training_dataset.csv
+*_dataset.csv
+*_training_data.csv
+*_inference_output.csv
+
+
+# ── 5. PYTHON STANDARD IGNORES ───────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyo
+*.pyd
+.Python
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+.env
+
+# Distribution / packaging
+dist/
+build/
+*.egg-info/
+*.egg
+.eggs/
+
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+.tox/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+
+# ── 6. IDE & EDITOR FILES ─────────────────────────────────────
+# PyCharm / IntelliJ
+.idea/
+
+# VS Code
+.vscode/
+
+# Spyder
+.spyderproject.proj
+.spyproject/
+
+# macOS
+.DS_Store
+__MACOSX/
+
+# Windows
+Thumbs.db
+desktop.ini
+
+
+# ── 7. MISC PROJECT-SPECIFIC ─────────────────────────────────
+# Claude Code internal settings
+.claude/
+
+# Temporary / scratch files
+*.tmp
+*.log
+*.bak
