@@ -112,3 +112,6 @@ desktop.ini
 *.tmp
 *.log
 *.bak
+
+# Accidental nested clone of this repo
+CalEyeZ/
