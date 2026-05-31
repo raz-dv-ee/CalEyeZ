@@ -269,15 +269,17 @@ Re-Ranker, trained on the same flat label distribution, reinforces this behaviou
 ### Folder Structure
 
 ```
-arbiter/
-├── README.md
-├── SYSTEM_STATE.md   (this file)
-├── data/             generate_reranker_dataset.py + reranker_vector_mechanics.html
-│                     (+ reranker_dataset.csv — generated, gitignored)
-├── train/            train_reranker_xgb.py + evaluate_system.py
-│                     + evaluation_mechanics_and_hierarchy.html + reranker_xgb.ubj
-│                     (+ system_evaluation_results.csv — generated, gitignored)
-└── old_versions/     superseded prototypes (router design, early arbiter)
+<project root>/
+├── SYSTEM_STATE.md     (this file — arbiter architecture & v1→v4 history)
+├── ARBITER_README.md   (arbiter folder map + run order)
+├── REPO_STATE.md       (whole-repo overview)
+└── arbiter/
+    ├── data/           generate_reranker_dataset.py + reranker_vector_mechanics.html
+    │                   (+ reranker_dataset.csv — generated, gitignored)
+    ├── train/          train_reranker_xgb.py + evaluate_system.py
+    │                   + evaluation_mechanics_and_hierarchy.html + reranker_xgb.ubj
+    │                   (+ system_evaluation_results.csv — generated, gitignored)
+    └── old_versions/   superseded prototypes (router design, early arbiter)
 ```
 
 > Scripts use absolute paths rooted at `BASE = E:\final project - models retrain`,

@@ -5,10 +5,11 @@ Israeli (13-class) YOLO11l-cls models to produce a single final prediction.
 
 ## Folder Map
 
+Docs live at the **project root**: this file (`ARBITER_README.md`) and
+`SYSTEM_STATE.md` (the living architecture & v1→v4 history tracker).
+
 ```
 arbiter/
-├── README.md            this file
-├── SYSTEM_STATE.md      living architecture & state tracker (v1→v4 history)
 ├── data/                dataset preparation
 │   ├── generate_reranker_dataset.py
 │   └── reranker_vector_mechanics.html   ← explains vector alignment + the 9 features
