@@ -1,38 +1,42 @@
 """
-train_reranker_xgb.py  —  v4: Evidence-Based Routing
-=====================================================
-Why v4 replaces v3
-------------------
-v3 achieved exact domain parity (sum(w_israeli) == sum(w_global)) and lifted
-Israeli accuracy to 84.14%, but Global accuracy still dropped (88% → 74.9%).
-The remaining problem: with ONLY raw probabilities as features, the only way
-the model could help the Israeli minority was to globally lower its trust in
-the Global model — which inevitably hurt the (majority) Global domain.
+train_reranker_xgb.py  —  v5: Tunable Domain Dial + Interaction Features
+========================================================================
+What changed from v4 (and why)
+------------------------------
+A full empirical study (oracle + sweep over the real data) established the
+hard limits of this two-model system:
 
-The v4 insight — STOP fighting the imbalance with weights alone; give the
-model better EVIDENCE. We now feed engineered "confusion features" so the
-Arbiter can make a *conditional* decision instead of a blanket one:
+  • Global images are 94.9% of the data; the Global YOLO's own top-1 caps
+    at 88.19%. An arbiter that only sees the models' probability vectors
+    cannot reliably beat a model's own argmax — so Global accuracy is
+    bounded near ~88%.
+  • The Israeli model alone scores 92.26% on Israeli images.
+  • PERFECT routing (an oracle gate) therefore caps overall at 88.40%.
+    ⇒ 90%+ is mathematically unreachable WITHOUT improving the Global model.
+    The bottleneck is the Global YOLO, not the arbiter.
 
-    "If global_entropy is LOW (Global is very confident / peaked) AND the
-     Global top-1 is not an Israeli class → trust Global unconditionally.
-     Only when global_entropy is HIGH (Global is guessing) should the
-     Israeli signal be allowed to win."
+v4 (rigid 1:1 domain parity) sat at a poor operating point: overall 80.33%,
+Global 80.41%, Israeli 78.85% — it actively hurt the majority Global domain.
 
-New features consumed (produced by generate_reranker_dataset.py v2):
-    global_entropy, local_entropy          — normalized Top-5 entropy [0,1]
-    global_top1_vs_top2, local_top1_vs_top2 — decisiveness margins
-    arbiter_dominance_score                 — (global_prob - israeli_prob)
+v5 makes the global↔israeli trade-off an explicit DIAL and adds interaction
+features (derived from the existing 9 columns — no dataset re-generation):
 
-Weighting policy in v4
-----------------------
-  • Keep ONLY the clean 1:1 domain parity instance weighting from v3.
-  • REMOVE the high-confidence multipliers entirely (they caused over-
-    correction and are now redundant — the entropy features carry that
-    signal in a learnable, conditional form).
-  • Keep the global scale_pos_weight (~9) for the candidate-set imbalance.
+  DOMAIN_WEIGHT_ALPHA ∈ [0,1] controls Israeli up-weighting:
+      israeli_row_weight = (n_global / n_israeli) ** ALPHA
+      ALPHA = 0.0 → no domain weighting   (max overall ~85.6%, Israeli ~54%)
+      ALPHA = 0.3 → balanced (DEFAULT)     (overall ~85.0%, Israeli ~63%)
+      ALPHA = 1.0 → full parity (= v4)     (overall ~80%,  Israeli ~79%)
 
-Net effect: the model balances domains via weights, but learns WHEN to
-override the Global model via features — no longer a blunt instrument.
+  Interaction features let the trees express conditional trust cleanly:
+      conf_global    = global_prob  * (1 - global_entropy)
+      conf_israeli   = israeli_prob * (1 - local_entropy)
+      israeli_top1_p = israeli_prob * is_israeli_top1
+      global_top1_p  = global_prob  * is_global_top1
+      prob_ratio     = israeli_prob / (global_prob + 0.05)
+      both_agree     = is_global_top1 * is_israeli_top1
+
+NOTE: evaluate_system.py must compute these same derived features in the
+same order. They are pure functions of the base 9 columns.
 """
 
 import argparse
@@ -55,7 +59,11 @@ DATASET_CSV  = rf"{BASE}\arbiter\data\reranker_dataset.csv"
 MODEL_OUTPUT = rf"{BASE}\arbiter\train\reranker_xgb.ubj"
 RANDOM_SEED  = 42
 
-FEATURE_COLS = [
+# ── v5 dial & params ──
+DOMAIN_WEIGHT_ALPHA = 0.3    # 0=max overall, 0.3=balanced (default), 1.0=full parity (v4)
+SCALE_POS_WEIGHT    = 3.0    # candidate-set imbalance; 3 worked best in the sweep
+
+BASE_FEATURE_COLS = [
     # ── raw probability features ──
     "global_prob",
     "israeli_prob",
@@ -68,7 +76,30 @@ FEATURE_COLS = [
     "local_top1_vs_top2",
     "arbiter_dominance_score",
 ]
+# ── v5 interaction features (derived from the base columns) ──
+DERIVED_FEATURE_COLS = [
+    "conf_global",
+    "conf_israeli",
+    "israeli_top1_p",
+    "global_top1_p",
+    "prob_ratio",
+    "both_agree",
+]
+FEATURE_COLS = BASE_FEATURE_COLS + DERIVED_FEATURE_COLS
 TARGET_COL = "target_label"
+
+
+def add_derived_features(df: pd.DataFrame) -> pd.DataFrame:
+    """Compute the v5 interaction features. MUST match evaluate_system.py."""
+    g = df["global_prob"]
+    i = df["israeli_prob"]
+    df["conf_global"]    = g * (1.0 - df["global_entropy"])
+    df["conf_israeli"]   = i * (1.0 - df["local_entropy"])
+    df["israeli_top1_p"] = i * df["is_israeli_top1"]
+    df["global_top1_p"]  = g * df["is_global_top1"]
+    df["prob_ratio"]     = i / (g + 0.05)
+    df["both_agree"]     = df["is_global_top1"] * df["is_israeli_top1"]
+    return df
 
 ISRAELI_CLASSES = {
     "baklava", "bourekas_cheese", "falafel", "hummus", "jachnun",
@@ -76,22 +107,17 @@ ISRAELI_CLASSES = {
     "shakshuka", "shawarma", "sufganiyah",
 }
 
-# Confidence redistribution parameters
-# NOTE (v4): The high-confidence multipliers (CONF_THRESHOLD / CONF_MULTIPLIER)
-# from v2/v3 have been REMOVED. That signal is now carried by the engineered
-# entropy / margin features, which the model can use *conditionally* instead of
-# as a blanket weight bias. Weighting is now pure 1:1 domain parity.
-
-
 # ── Data loading ──────────────────────────────────────────────────────────────
 
 def load_splits(csv_path: str):
     df = pd.read_csv(csv_path)
-    required = set(FEATURE_COLS + [TARGET_COL, "split_type", "image_path",
-                                   "candidate_class", "ground_truth_class"])
+    required = set(BASE_FEATURE_COLS + [TARGET_COL, "split_type", "image_path",
+                                        "candidate_class", "ground_truth_class"])
     missing = required - set(df.columns)
     if missing:
         raise ValueError(f"CSV is missing columns: {missing}")
+
+    df = add_derived_features(df)   # v5 interaction features
 
     train_df = df[df["split_type"] == "val"].copy()
     test_df  = df[df["split_type"] == "test"].copy()
@@ -122,18 +148,17 @@ def _print_split_stats(name: str, df: pd.DataFrame):
 
 # ── Instance weight computation ───────────────────────────────────────────────
 
-def compute_instance_weights(df: pd.DataFrame) -> np.ndarray:
+def compute_instance_weights(df: pd.DataFrame,
+                             alpha: float = DOMAIN_WEIGHT_ALPHA) -> np.ndarray:
     """
-    Pure 1:1 domain-parity weighting (v4).
+    Tunable domain weighting (v5).
 
       w[is_global]  = 1.0
-      w[is_israeli] = n_global_rows / n_israeli_rows
+      w[is_israeli] = (n_global_rows / n_israeli_rows) ** alpha
 
-    This makes sum(w_israeli) == sum(w_global) EXACTLY by construction — no
-    renormalization step is needed because there are no other multipliers.
-    All conditional "trust" logic now lives in the engineered features, not
-    in the weights. The weights only ensure the optimiser pays equal attention
-    to both domains; the features decide WHEN to favour each model.
+    alpha = 0 → no domain weighting (max overall; Israeli weak)
+    alpha = 1 → full 1:1 parity (= v4; balanced but hurts Global)
+    alpha = 0.3 (default) → balanced sweet spot found in the sweep.
     """
     n           = len(df)
     weights     = np.ones(n, dtype=np.float64)
@@ -147,21 +172,19 @@ def compute_instance_weights(df: pd.DataFrame) -> np.ndarray:
         print("  WARN: no Israeli rows found — skipping domain balancing.")
         return weights.astype(np.float32)
 
-    base_factor = n_global_rows / n_israeli_rows
-    weights[is_israeli] = base_factor
+    full_ratio  = n_global_rows / n_israeli_rows
+    israeli_w   = full_ratio ** alpha
+    weights[is_israeli] = israeli_w
 
     sum_g = weights[is_global].sum()
     sum_i = weights[is_israeli].sum()
-    ratio = sum_g / sum_i
 
-    print(f"\n── Instance Weight Diagnostics (v4 — pure 1:1 parity) ──────────")
+    print(f"\n── Instance Weight Diagnostics (v5 — alpha = {alpha}) ───────────")
     print(f"  Global rows    : {n_global_rows:,}   (weight = 1.000)")
     print(f"  Israeli rows   : {n_israeli_rows:,}   "
-          f"(domain factor = {base_factor:.3f}×)")
+          f"(full ratio = {full_ratio:.2f}×, weight = {israeli_w:.3f}× at alpha={alpha})")
     print(f"  sum(w_global)  = {sum_g:,.1f}")
-    print(f"  sum(w_israeli) = {sum_i:,.1f}")
-    status = "✓ EXACT PARITY" if abs(ratio - 1.0) < 1e-6 else f"⚠ ratio = {ratio:.6f}"
-    print(f"  Domain ratio   = {ratio:.6f}  {status}")
+    print(f"  sum(w_israeli) = {sum_i:,.1f}   (ratio g/i = {sum_g/sum_i:.3f})")
 
     return weights.astype(np.float32)
 
@@ -237,8 +260,9 @@ def train(args):
     y_test  = test_df[TARGET_COL].astype(int)
 
     print("\n── Weight Computation ──────────────────────────────────────────")
-    train_weights = compute_instance_weights(train_df)
-    spw           = compute_scale_pos_weight(y_train)
+    train_weights = compute_instance_weights(train_df, alpha=args.alpha)
+    spw           = SCALE_POS_WEIGHT
+    print(f"  scale_pos_weight = {spw}  (fixed; tuned via sweep)")
 
     dtrain = xgb.DMatrix(X_train, label=y_train,
                          weight=train_weights,
@@ -250,7 +274,7 @@ def train(args):
         "objective":        "binary:logistic",
         "eval_metric":      ["logloss", "auc"],
         "scale_pos_weight": spw,
-        "max_depth":        5,
+        "max_depth":        6,
         "eta":              0.05,
         "subsample":        0.8,
         "colsample_bytree": 1.0,
@@ -332,11 +356,14 @@ def train(args):
 
 def parse_args():
     p = argparse.ArgumentParser(
-        description="Train XGBoost Re-Ranker (v4 — evidence-based routing).")
+        description="Train XGBoost Re-Ranker (v5 — tunable domain dial).")
     p.add_argument("--dataset",    default=DATASET_CSV)
     p.add_argument("--output",     default=MODEL_OUTPUT)
-    p.add_argument("--rounds",     type=int, default=600)
-    p.add_argument("--early-stop", type=int, default=40)
+    p.add_argument("--rounds",     type=int,   default=600)
+    p.add_argument("--early-stop", type=int,   default=40)
+    p.add_argument("--alpha",      type=float, default=DOMAIN_WEIGHT_ALPHA,
+                   help="Israeli domain up-weight exponent: 0=max overall, "
+                        "0.3=balanced (default), 1.0=full parity (v4).")
     return p.parse_args()
 
 

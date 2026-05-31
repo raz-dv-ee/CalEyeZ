@@ -157,7 +157,7 @@ a zero-sum trade that inevitably hurt the (majority) Global domain.
 
 ---
 
-### v4 — Evidence-Based Routing *(current)*
+### v4 — Evidence-Based Routing
 
 **Insight:** Stop fighting the imbalance with weights alone. Give the model
 better *evidence* (engineered confusion features) so it can make a **conditional**
@@ -195,7 +195,34 @@ is peaked/confident) AND the Global top-1 is not an Israeli class → trust Glob
 unconditionally. Only when `global_entropy` is HIGH (Global is guessing) should
 the Israeli signal be allowed to win."*
 
-**Result:** *(fill after running)*
+**Result:** Overall 80.33% / Global 80.41% / Israeli 78.85% — balanced but the
+1:1 weighting hurt the majority Global domain (below its 88.19% baseline).
+
+---
+
+### v5 — Tunable Domain Dial + Interaction Features *(current)*
+
+**Insight:** the global↔israeli trade-off is real and unavoidable, so make it an
+explicit dial instead of hard-coding 1:1. Add interaction features so the trees can
+express "confident-and-correct" directly.
+
+| Parameter | Value |
+|-----------|-------|
+| Objective | `binary:logistic` |
+| `DOMAIN_WEIGHT_ALPHA` | **0.3** (shipped) — `israeli_weight = (n_g/n_i)**α`; 0=max-overall, 1=v4 parity |
+| `scale_pos_weight` | 3.0 (fixed; best in sweep) |
+| `max_depth` | 6 |
+| `max_delta_step` | 1 |
+| Features | **15** = base 9 + 6 derived (`conf_global`, `conf_israeli`, `israeli_top1_p`, `global_top1_p`, `prob_ratio`, `both_agree`) |
+
+The 6 derived features are pure functions of the base 9 — computed in BOTH
+`train_reranker_xgb.py` (`add_derived_features`) and `evaluate_system.py`, in the
+same order. No dataset regeneration needed.
+
+**Result:** Overall **84.99%** / Global 86.18% / Israeli 62.84% (+4.66 pp overall
+over v4). `conf_global` became the dominant feature (gain 2563). Still ~2 pp below
+the Global baseline on the Global domain — the inherent re-ranker tax. **Did not
+reach 90% — see the hard-ceiling analysis in §8; that requires a better Global model.**
 
 ---
 
@@ -224,19 +251,29 @@ the Israeli signal be allowed to win."*
 | Global domain accuracy | 74.90% ← still too low |
 | Israeli domain accuracy | 84.14% |
 
-### v4 Evaluation (test split)
-
-> ⚠️ **To be filled after running `evaluate_system.py` with the v4 model.**
+### v4 Evaluation (test split) — GOAL NOT MET
 
 | Metric | Value |
 |--------|-------|
-| Overall Re-Rank Accuracy@1 | — |
-| Global domain accuracy | — (target: ≥ 85%) |
-| Israeli domain accuracy | — (target: ≥ 85%) |
-| High-confidence error rate (score > 0.7) | — |
-| Top confusion pair #1 (predicted → truth) | — |
-| Top confusion pair #2 (predicted → truth) | — |
-| Top confusion pair #3 (predicted → truth) | — |
+| Overall Re-Rank Accuracy@1 | 80.33% |
+| Re-Rank Accuracy@3 | 93.95% |
+| Mean Reciprocal Rank | 0.8729 |
+| Global domain accuracy | 80.41% (target ≥85% ✗; baseline raw top-1 = 88.19%, **lift −7.78 pp**) |
+| Israeli domain accuracy | 78.85% (target ≥85% ✗; baseline = 0.00%, **lift +78.85 pp**) |
+| Binary ROC-AUC / Avg Precision | 0.9827 / 0.8985 |
+
+**Feature importances (gain):** `global_prob` 1989 (~50%), `arbiter_dominance_score`
+655 (~16%), `israeli_prob` 608 (~15%), `global_entropy` 153, `local_entropy` 153,
+`local_top1_vs_top2` 115, `is_israeli_top1` 108, `global_top1_vs_top2` 97,
+`is_global_top1` 24.
+
+**Verdict:** v4 balanced the domains (Israeli 0→78.85%) but is **net-negative on
+Global** — the Re-Ranker scores 80.41% where simply trusting the raw Global top-1
+gives 88.19%. The raw probabilities carry ~80% of total gain; the v4 evidence
+features (~16%) are not influential enough to implement the intended conditional
+rule, and 1:1 domain weighting still over-picks Israeli on Global images.
+**Accuracy@3 = 93.95%** ⇒ the correct class is almost always in the candidate set,
+so the remaining error is a top-1 ordering problem (a gating rule can target it).
 
 ---
 
@@ -336,7 +373,30 @@ Re-Ranker, trained on the same flat label distribution, reinforces this behaviou
 | May 2026 | v1 | Baseline — global `scale_pos_weight` only | 88.19% | 28.20% | 84.90% |
 | May 2026 | v2 | Three-layer instance weights (no normalization guard) | 68.67% | 85.98% | 69.53% |
 | May 2026 | v3 | Normalize-last weighting + `max_delta_step=1` | 74.90% | 84.14% | — |
-| May 2026 | v4 | Evidence-based routing (entropy/margin/dominance features) + pure 1:1 parity | — | — | — |
+| May 2026 | v4 | Evidence-based routing (entropy/margin/dominance features) + pure 1:1 parity | 80.41% | 78.85% | 80.33% |
+| May 2026 | v5 | Tunable domain dial (α=0.3) + 6 interaction features (conf_global etc.) | 86.18% | 62.84% | **84.99%** |
+
+### ⛔ HARD CEILING — established empirically (oracle study, v5 era)
+
+| Policy | Overall | Global | Israeli |
+|--------|---------|--------|---------|
+| Always trust Global top-1 (no arbiter) | 83.73% | 88.19% | 0.00% |
+| **v5 (shipped, α=0.3)** | **84.99%** | 86.18% | 62.84% |
+| PERFECT routing (oracle gate) | **88.40%** | 88.19% | 92.26% |
+| Oracle (true class in candidate set) | 97.82% | 97.71% | 99.92% |
+
+**90%+ overall is mathematically impossible with the current two models.**
+Global-domain images are 94.9% of the data and the Global YOLO's own top-1 caps at
+88.19%; an arbiter seeing only the probability vectors cannot beat a model's own
+argmax (best measured Global = 87.3% < baseline). Therefore
+`overall_max ≈ 0.949·88.19 + 0.051·92.26 = 88.40%` even with perfect routing.
+**The bottleneck is the Global YOLO, not the arbiter — to break 90% the Global
+model's top-1 must improve.** Arbiter tuning has hit diminishing returns.
+
+**v5 domain dial** (`DOMAIN_WEIGHT_ALPHA` in `train_reranker_xgb.py`):
+α=0 → overall 85.6% / Global 87.3% / Israeli 54%;
+α=0.3 (shipped) → 85.0% / 86.2% / 63%;
+α=1.0 (=v4) → 80.3% / 80.4% / 79%.
 
 ---
 

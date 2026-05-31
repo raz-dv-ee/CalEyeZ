@@ -624,8 +624,10 @@
 <p>
   The feature space evolved across versions. <strong>v1 used 4 raw features.</strong>
   <strong>v4 (current) adds 5 engineered "evidence" features</strong> so the Arbiter
-  can reason about each model's <em>certainty</em>, not just its raw prediction —
-  the change that finally broke the Global-vs-Israeli accuracy trade-off.
+  can reason about each model's <em>certainty</em>, not just its raw prediction.
+  The intent was to break the Global-vs-Israeli accuracy trade-off; in practice the
+  evidence features helped only partially (see the measured results and feature-importance
+  analysis in the evaluation document — the raw probabilities still dominate).
 </p>
 
 <h3>5.1 Raw Features (v1 — per candidate)</h3>
@@ -749,13 +751,26 @@ params = {
 </p>
 
 <div class="callout green">
-  <strong>v4 insight — weights balance, features decide.</strong> Earlier versions
-  tried to fix the domain imbalance with ever-heavier weight multipliers, which
-  over-corrected and wrecked Global accuracy (a zero-sum trade). v4 keeps weighting
-  to a clean 1:1 parity and instead lets the engineered <em>evidence features</em>
-  (§5.2 — especially <code>global_entropy</code>) decide <em>when</em> to trust each
-  model. The Arbiter can now learn: <em>"trust Global unconditionally when its
-  entropy is low; only defer to Israeli when Global is genuinely confused."</em>
+  <strong>v4 design intent — weights balance, features decide.</strong> Earlier
+  versions tried to fix the domain imbalance with ever-heavier weight multipliers,
+  which over-corrected and wrecked Global accuracy (a zero-sum trade). v4 keeps
+  weighting to a clean 1:1 parity and instead lets the engineered <em>evidence
+  features</em> (§5.2 — especially <code>global_entropy</code>) decide <em>when</em>
+  to trust each model, learning: <em>"trust Global when its entropy is low; defer to
+  Israeli only when Global is confused."</em>
+</div>
+
+<div class="callout amber">
+  <strong>Measured outcome (v4 → v5).</strong> v4's rigid 1:1 parity hurt the
+  majority Global domain (Global 80.41%, overall 80.33%). <strong>v5</strong>
+  replaced it with a tunable domain dial (α=0.3) plus six interaction features
+  (e.g. <code>conf_global = global_prob·(1−global_entropy)</code>), lifting overall
+  to <strong>84.99%</strong> (Global 86.18%, Israeli 62.84%). An oracle study then
+  established a <strong>hard ceiling of 88.40%</strong> for <em>any</em> arbiter:
+  Global images are 94.9% of the data and the Global model's own top-1 caps at
+  88.19%, which an arbiter cannot beat from probability vectors alone.
+  <strong>Reaching 90%+ requires improving the Global model itself — not the
+  arbiter.</strong> Full analysis in the evaluation document.
 </div>
 
 <h3>Primary Evaluation Metric: Re-Rank Accuracy@1</h3>
@@ -780,7 +795,103 @@ params = {
 
 
 <!-- ══════════════════════════════════════════════════════════════════════ -->
-<h2>7. Why Pointwise Re-Ranking Is Superior to Flat Routing</h2>
+<h2>7. Why XGBoost? — Algorithm Selection</h2>
+
+<p>
+  The Arbiter operates on a <strong>small, heterogeneous, tabular</strong> feature
+  space: 9 columns per candidate, mixing continuous probabilities ([0,1]),
+  continuous entropies/margins, and binary indicator flags. The choice of
+  <strong>gradient-boosted decision trees (XGBoost)</strong> is deliberate, not
+  default. The four realistic alternatives and why each was rejected:
+</p>
+
+<table>
+  <thead>
+    <tr><th>Candidate algorithm</th><th>Why it falls short here</th></tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td><strong>Hand-tuned heuristic</strong><br>(if/else thresholds)</td>
+      <td>This is literally what the old router was. Brittle, requires manual
+          re-tuning per class, and cannot weigh 9 interacting signals. The whole
+          project exists to replace it.</td>
+    </tr>
+    <tr>
+      <td><strong>Logistic regression</strong></td>
+      <td>Linear in the features — it can only learn a weighted sum. It
+          <em>cannot</em> represent the core v4 rule, which is a logical
+          <em>conjunction</em> (see below), without manually engineering
+          interaction-cross terms by hand.</td>
+    </tr>
+    <tr>
+      <td><strong>Neural network (MLP)</strong></td>
+      <td>Overkill for 9 features and ~15k positive rows. Needs careful
+          normalization, more data, longer tuning, and a GPU — yet empirically
+          loses to boosted trees on small structured tabular data. Also far less
+          interpretable for a capstone defence.</td>
+    </tr>
+    <tr>
+      <td><strong>Random forest</strong></td>
+      <td>Close, but bagging averages many independent trees; boosting
+          <em>sequentially corrects residual errors</em>, which handles the
+          extreme 9:1 class imbalance and the rare-but-important Israeli rows
+          much better via <code>scale_pos_weight</code> + per-row weights.</td>
+    </tr>
+  </tbody>
+</table>
+
+<h3>7.1 The decisive reason: trees natively express conditional logic</h3>
+
+<p>
+  The v4 routing rule we <em>want</em> the model to learn is a conjunction of
+  thresholded conditions:
+</p>
+
+<div class="callout purple">
+  <strong>IF</strong> <code>global_entropy</code> &lt; 0.3
+  <strong>AND</strong> <code>is_global_top1</code> = 1
+  <strong>AND</strong> candidate is the Global top-1
+  <strong>THEN</strong> assign a high score (trust Global)
+  — <strong>ELSE</strong> let <code>israeli_prob</code> compete.
+</div>
+
+<p>
+  A decision tree represents exactly this as a single root-to-leaf path: one split
+  on <code>global_entropy</code>, another on <code>is_global_top1</code>, another
+  on <code>arbiter_dominance_score</code>. Gradient boosting then stacks hundreds
+  of such shallow trees, each correcting the previous ensemble's mistakes — so the
+  model discovers these conditional "trust regions" automatically from data, with
+  no hand-crafted feature crosses. A linear model would need every interaction term
+  pre-multiplied by hand; a tree gets them for free.
+</p>
+
+<h3>7.2 Practical advantages that sealed the choice</h3>
+<ul style="margin: 0 0 16px 24px;">
+  <li><strong>Scale-invariant.</strong> Trees split on thresholds, so mixing a
+      probability (0–1) with a binary flag needs no normalization.</li>
+  <li><strong>Imbalance tooling built in.</strong> <code>scale_pos_weight</code>
+      for the 9:1 candidate imbalance and per-row <code>weight</code> for the
+      19:1 domain imbalance — both first-class XGBoost features.</li>
+  <li><strong>Interpretable.</strong> <code>get_score(importance_type="gain")</code>
+      tells us exactly which signals drive decisions — essential for diagnosing
+      the bias we fought across v1–v4, and for defending the design.</li>
+  <li><strong>Tiny &amp; fast to deploy.</strong> The trained model is a single
+      ~130 KB <code>.ubj</code> file; scoring ≤ 10 candidate rows is
+      microsecond-scale and CPU-only — negligible next to the two CNN passes.</li>
+  <li><strong>Robust on small positive sets.</strong> ~15k positives train a
+      strong boosted model in seconds, where an MLP would risk overfitting.</li>
+</ul>
+
+<div class="callout green">
+  <strong>Empirical confirmation:</strong> the trained v4 model reaches
+  <strong>ROC-AUC 0.983</strong> with a negligible train/eval gap (0.988 vs 0.983),
+  confirming gradient-boosted trees both fit this feature space and generalise
+  without overfitting.
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2>8. Why Pointwise Re-Ranking Is Superior to Flat Routing</h2>
 
 <p>
   The table below summarises the architectural advantages across five dimensions:
@@ -833,7 +944,7 @@ params = {
 
 
 <!-- ══════════════════════════════════════════════════════════════════════ -->
-<h2>8. End-to-End Inference Protocol</h2>
+<h2>9. End-to-End Inference Protocol</h2>
 
 <p>
   At inference time (after the XGBoost model is trained and saved):

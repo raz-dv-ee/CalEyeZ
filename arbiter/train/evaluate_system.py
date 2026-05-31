@@ -41,8 +41,10 @@ TOP_K          = 5
 DEVICE         = "cuda" if torch.cuda.is_available() else "cpu"
 IMG_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
 
-# MUST match FEATURE_COLS order in train_reranker_xgb.py (v4 — 9 features).
+# MUST match FEATURE_COLS order in train_reranker_xgb.py (v5 — 15 features:
+# 9 base + 6 derived interaction features appended in this exact order).
 FEATURE_COLS = [
+    # base 9
     "global_prob",
     "israeli_prob",
     "is_global_top1",
@@ -52,6 +54,13 @@ FEATURE_COLS = [
     "global_top1_vs_top2",
     "local_top1_vs_top2",
     "arbiter_dominance_score",
+    # v5 derived 6
+    "conf_global",
+    "conf_israeli",
+    "israeli_top1_p",
+    "global_top1_p",
+    "prob_ratio",
+    "both_agree",
 ]
 
 OUTPUT_FIELDNAMES = [
@@ -178,21 +187,31 @@ def run_pipeline(
     g_margin  = top1_vs_top2_margin(g_probs)
     i_margin  = top1_vs_top2_margin(i_probs)
 
-    # Build feature matrix for XGBoost — order MUST match FEATURE_COLS (v4)
+    # Build feature matrix for XGBoost — order MUST match FEATURE_COLS (v5, 15 feats)
     rows = []
     for cls in candidates:
-        g_prob = prob_for_class(cls, g_probs, g_c2i)
-        i_prob = prob_for_class(cls, i_probs, i_c2i)
+        g_prob   = prob_for_class(cls, g_probs, g_c2i)
+        i_prob   = prob_for_class(cls, i_probs, i_c2i)
+        is_g_t1  = int(cls == g_top1_cls)
+        is_i_t1  = int(cls == i_top1_cls)
         rows.append([
-            g_prob,                      # global_prob
-            i_prob,                      # israeli_prob
-            int(cls == g_top1_cls),      # is_global_top1
-            int(cls == i_top1_cls),      # is_israeli_top1
-            g_entropy,                   # global_entropy
-            i_entropy,                   # local_entropy
-            g_margin,                    # global_top1_vs_top2
-            i_margin,                    # local_top1_vs_top2
-            g_prob - i_prob,             # arbiter_dominance_score
+            # ── base 9 ──
+            g_prob,                          # global_prob
+            i_prob,                          # israeli_prob
+            is_g_t1,                         # is_global_top1
+            is_i_t1,                         # is_israeli_top1
+            g_entropy,                       # global_entropy
+            i_entropy,                       # local_entropy
+            g_margin,                        # global_top1_vs_top2
+            i_margin,                        # local_top1_vs_top2
+            g_prob - i_prob,                 # arbiter_dominance_score
+            # ── v5 derived 6 (must match add_derived_features in training) ──
+            g_prob * (1.0 - g_entropy),      # conf_global
+            i_prob * (1.0 - i_entropy),      # conf_israeli
+            i_prob * is_i_t1,                # israeli_top1_p
+            g_prob * is_g_t1,                # global_top1_p
+            i_prob / (g_prob + 0.05),        # prob_ratio
+            is_g_t1 * is_i_t1,               # both_agree
         ])
 
     feature_matrix = np.array(rows, dtype=np.float32)

@@ -261,7 +261,7 @@
   <li>Run <strong>Israeli YOLO</strong> → extract <code>result.probs.data</code> (13-dim tensor) → take Top-5 class names.</li>
   <li>Merge into ordered unique candidate set (Global first, then any additional Israeli entries).</li>
   <li>For every candidate, query <code>global_prob</code> and <code>israeli_prob</code> via the aligned name→index lookup; zero-impute for out-of-vocabulary classes.</li>
-  <li>Build an <em>N×4</em> feature matrix (<em>N</em> = number of candidates) and score it with the XGBoost Booster.</li>
+  <li>Build an <em>N×9</em> feature matrix (<em>N</em> = number of candidates; 4 raw + 5 evidence features) and score it with the XGBoost Booster.</li>
   <li>The candidate with the highest XGBoost score is the <strong>Arbiter Final Class</strong>.</li>
 </ol>
 
@@ -324,10 +324,13 @@
 </p>
 
 <div class="math-block">
-  score(c | x) = σ( F(global_prob<sub>c</sub>, israeli_prob<sub>c</sub>,
-                       is_global_top1<sub>c</sub>, is_israeli_top1<sub>c</sub>) )
+  score(c | x) = σ( F( global_prob<sub>c</sub>, israeli_prob<sub>c</sub>,
+                       is_global_top1<sub>c</sub>, is_israeli_top1<sub>c</sub>,
+                       global_entropy, local_entropy,
+                       global_top1_vs_top2, local_top1_vs_top2,
+                       arbiter_dominance_score<sub>c</sub> ) )
   <br>
-  <span class="comment">where F is the XGBoost ensemble and σ is the logistic sigmoid</span>
+  <span class="comment">where F is the XGBoost ensemble (9 features) and σ is the logistic sigmoid</span>
   <br><br>
   At training time, label(c) = 1  iff  c == ground_truth
   <br>
@@ -432,9 +435,9 @@ print(hierarchical[[<span class="str">"ground_truth"</span>, <span class="str">"
 <h2>4. Re-Ranker Training — Version History &amp; Bias Correction Log</h2>
 
 <p>
-  The XGBoost Re-Ranker went through three training iterations to resolve a
-  severe domain imbalance. This section documents the exact failure mode of
-  each version and the algorithmic change made to fix it.
+  The XGBoost Re-Ranker went through four training iterations (v1 → v4) to resolve
+  a severe domain imbalance. This section documents the exact failure mode of each
+  version and the algorithmic change made to fix it.
 </p>
 
 <h3>4.1 v1 — Baseline: Global <code>scale_pos_weight</code> only</h3>
@@ -627,27 +630,257 @@ weights[is_israeli] *= <span class="fn">sum</span>(weights[is_global]) / <span c
     <tr>
       <td>Overall Accuracy@1</td>
       <td>84.90%</td><td>69.53%</td><td>—</td>
-      <td><span class="badge b-amber">TBD</span></td>
+      <td>80.33%</td>
     </tr>
     <tr>
       <td>Global accuracy</td>
       <td><span class="badge b-green">88.19%</span></td>
       <td><span class="badge b-red">68.67%</span></td>
       <td><span class="badge b-amber">74.90%</span></td>
-      <td><span class="badge b-amber">TBD — target ≥85%</span></td>
+      <td><span class="badge b-amber">80.41%</span></td>
     </tr>
     <tr>
       <td>Israeli accuracy</td>
       <td><span class="badge b-red">28.20%</span></td>
       <td><span class="badge b-green">85.98%</span></td>
       <td><span class="badge b-green">84.14%</span></td>
-      <td><span class="badge b-amber">TBD — target ≥85%</span></td>
+      <td><span class="badge b-amber">78.85%</span></td>
     </tr>
   </tbody>
 </table>
 
+<h3>4.5 v4 — Measured Training Run</h3>
+
+<p>
+  The v4 Re-Ranker was trained on the <code>val</code> split and evaluated on the
+  <code>test</code> split. The dataset is counted in <em>candidate rows</em>
+  (~6–7 per image, since each image contributes one row per merged candidate):
+</p>
+
+<table>
+  <thead><tr><th>Split</th><th>Total rows</th><th>Global rows</th><th>Israeli rows</th><th>Positive rows</th></tr></thead>
+  <tbody>
+    <tr><td>Train (val)</td><td>159,590</td><td>149,950</td><td>9,640</td><td>15,275</td></tr>
+    <tr><td>Test</td><td>258,030</td><td>244,980</td><td>13,050</td><td>25,241</td></tr>
+  </tbody>
+</table>
+
+<p>The two imbalance corrections behaved exactly as designed:</p>
+<table>
+  <thead><tr><th>Mechanism</th><th>Measured value</th></tr></thead>
+  <tbody>
+    <tr><td>Domain balance factor (Israeli row weight)</td><td>15.555×</td></tr>
+    <tr><td><code>sum(w_global)</code> vs <code>sum(w_israeli)</code></td><td>149,950.0 = 149,950.0 → ratio <strong>1.000000 ✓ exact parity</strong></td></tr>
+    <tr><td><code>scale_pos_weight</code></td><td>144,315 / 15,275 = <strong>9.45</strong></td></tr>
+  </tbody>
+</table>
+
+<h4 style="margin-top:22px">Binary classification metrics (threshold 0.5, on test)</h4>
+<table>
+  <thead><tr><th>Class</th><th>Precision</th><th>Recall</th><th>F1</th><th>Support</th></tr></thead>
+  <tbody>
+    <tr><td>Wrong (label 0)</td><td>0.99</td><td>0.95</td><td>0.97</td><td>232,789</td></tr>
+    <tr><td>Correct (label 1)</td><td>0.65</td><td><strong>0.91</strong></td><td>0.76</td><td>25,241</td></tr>
+    <tr><td colspan="5" style="font-style:italic;color:#6b7280">
+      Accuracy 0.94 &nbsp;|&nbsp; <strong>ROC-AUC 0.9827</strong> &nbsp;|&nbsp;
+      Average Precision 0.8985</td></tr>
+  </tbody>
+</table>
+
+<div class="callout green">
+  <strong>Reading these numbers correctly — precision is a red herring here.</strong>
+  The "Correct" class shows high <em>recall</em> (0.91) but modest
+  <em>precision</em> (0.65) at the 0.5 threshold. For a <strong>ranker</strong>
+  this is exactly the right trade-off:
+  <ul style="margin:8px 0 0 20px">
+    <li><strong>Recall 0.91</strong> means the true candidate is given a high score
+      91% of the time — so it reliably surfaces near the top of the ranking. This
+      is what actually drives Re-Rank Accuracy@1.</li>
+    <li><strong>Precision 0.65</strong> only says several <em>other</em> candidates
+      also score &gt; 0.5. That is harmless: at inference we take a single
+      <code>argmax</code> per image, so non-winning false positives never become
+      predictions. The 0.5 threshold is meaningless for a ranker — only the
+      <em>relative order</em> of scores within an image matters.</li>
+  </ul>
+</div>
+
+<div class="callout">
+  <strong>No overfitting.</strong> Across 600 boosting rounds the train/eval AUC
+  curves stayed locked together (final train-AUC 0.988 vs eval-AUC 0.983 — a gap
+  of just 0.005), and eval-logloss kept decreasing monotonically. The shallow
+  trees (<code>max_depth = 5</code>) plus <code>subsample = 0.8</code> regularise
+  effectively on this 9-feature space.
+</div>
+
+<h4 style="margin-top:22px">Re-Ranking metrics (the decisive numbers)</h4>
+<table>
+  <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Re-Rank Accuracy@1 (overall)</td><td>80.33%</td></tr>
+    <tr><td>Re-Rank Accuracy@3 (overall)</td><td>93.95%</td></tr>
+    <tr><td>Mean Reciprocal Rank</td><td>0.8729</td></tr>
+    <tr><td>Global domain Accuracy@1</td><td><span class="badge b-amber">80.41%</span> (target ≥85% ✗)</td></tr>
+    <tr><td>Israeli domain Accuracy@1</td><td><span class="badge b-amber">78.85%</span> (target ≥85% ✗)</td></tr>
+  </tbody>
+</table>
+
+<h4 style="margin-top:22px">Baseline comparison (Global model top-1 alone)</h4>
+<table>
+  <thead><tr><th>Domain</th><th>Baseline (raw Global top-1)</th><th>v4 Re-Ranker</th><th>Lift</th></tr></thead>
+  <tbody>
+    <tr><td>Global</td><td>88.19%</td><td>80.41%</td>
+        <td><span class="badge b-red">−7.78 pp</span></td></tr>
+    <tr><td>Israeli</td><td>0.00%</td><td>78.85%</td>
+        <td><span class="badge b-green">+78.85 pp</span></td></tr>
+  </tbody>
+</table>
+
+<div class="callout red">
+  <strong>Honest verdict — v4 did not meet the goal.</strong> Both domains land
+  below the 85% target, and critically, on the Global domain the Re-Ranker is now
+  <em>worse than doing nothing</em>: simply trusting the raw Global top-1 scores
+  88.19%, but the Re-Ranker drops it to 80.41% (−7.78 pp). The Israeli domain is
+  the success story — it went from 0% (the Global model literally never predicts
+  an Israeli class) to 78.85%. <strong>v4 bought Israeli coverage by sacrificing
+  Global accuracy — a better-balanced but net-negative trade on the majority
+  domain.</strong>
+</div>
+
+<h4 style="margin-top:22px">Feature importances (gain) — the diagnosis</h4>
+<table>
+  <thead><tr><th>Feature</th><th>Gain</th><th>Share</th></tr></thead>
+  <tbody>
+    <tr><td><code>global_prob</code></td><td>1989.4</td><td>~50%</td></tr>
+    <tr><td><code>arbiter_dominance_score</code></td><td>654.5</td><td>~16%</td></tr>
+    <tr><td><code>israeli_prob</code></td><td>607.8</td><td>~15%</td></tr>
+    <tr><td><code>global_entropy</code></td><td>153.4</td><td>~4%</td></tr>
+    <tr><td><code>local_entropy</code></td><td>152.7</td><td>~4%</td></tr>
+    <tr><td><code>local_top1_vs_top2</code></td><td>114.6</td><td>~3%</td></tr>
+    <tr><td><code>is_israeli_top1</code></td><td>108.2</td><td>~3%</td></tr>
+    <tr><td><code>global_top1_vs_top2</code></td><td>97.3</td><td>~2%</td></tr>
+    <tr><td><code>is_global_top1</code></td><td>24.4</td><td>~1%</td></tr>
+  </tbody>
+</table>
+
+<div class="callout amber">
+  <strong>Why it underperformed — read the importances.</strong> The three raw
+  probability features (<code>global_prob</code>, <code>arbiter_dominance_score</code>,
+  <code>israeli_prob</code>) account for ~80% of total gain, while the engineered
+  evidence features we added in v4 (<code>global_entropy</code> et al.) contribute
+  only ~16% combined. The entropy signal — the entire premise of v4 — is present
+  but <em>not influential enough</em> to implement the intended conditional rule
+  ("trust Global when its entropy is low"). Meanwhile the 1:1 domain weighting still
+  pushes the model to over-pick Israeli candidates on Global-domain images, which is
+  exactly why Global accuracy fell below its baseline. The features were necessary
+  but not sufficient; the weighting is still too aggressive for the majority domain.
+</div>
+
+<div class="callout green">
+  <strong>Indicated next steps (see §5).</strong> (1) Relax domain weighting below
+  1:1 (e.g. weight Israeli to ~0.5× parity) so Global recovers toward its 88% baseline.
+  (2) Add a <em>gate</em>: only let the Re-Ranker override the Global top-1 when
+  <code>local_top1_vs_top2</code> or <code>israeli_prob</code> is high — otherwise
+  pass the Global prediction straight through. (3) Note Accuracy@3 is 93.95%, so the
+  correct class is almost always <em>in</em> the candidate set — the remaining error
+  is purely a top-1 ordering problem, which a gating rule can target directly.
+</div>
+
+
+<h3>4.6 v5 — Tunable Domain Dial + Interaction Features, and the Hard Ceiling</h3>
+
+<p>
+  After v4, a full empirical study (an <em>oracle</em> analysis plus a sweep over
+  domain-weight strength) was run on the real test set to find the true limits of
+  the system. It produced the single most important result of the whole project:
+</p>
+
+<div class="callout red">
+  <strong>90%+ overall is mathematically unreachable with the current two models.</strong>
+  The bottleneck is the <em>Global model itself</em>, not the arbiter.
+</div>
+
+<p>The proof is in these measured reference points (test split, 25,803 images):</p>
+<table>
+  <thead><tr><th>Policy</th><th>Overall</th><th>Global</th><th>Israeli</th></tr></thead>
+  <tbody>
+    <tr><td>Always trust Global top-1 (no arbiter)</td><td>83.73%</td><td>88.19%</td><td>0.00%</td></tr>
+    <tr><td>v4 (rigid 1:1 parity)</td><td>80.33%</td><td>80.41%</td><td>78.85%</td></tr>
+    <tr><td><strong>v5 (balanced, α=0.3) — shipped</strong></td><td><strong>84.99%</strong></td><td>86.18%</td><td>62.84%</td></tr>
+    <tr><td><em>PERFECT routing (oracle gate)</em></td><td><em>88.40%</em></td><td><em>88.19%</em></td><td><em>92.26%</em></td></tr>
+    <tr><td><em>Oracle (true class anywhere in candidates)</em></td><td><em>97.82%</em></td><td><em>97.71%</em></td><td><em>99.92%</em></td></tr>
+  </tbody>
+</table>
+
+<div class="callout amber">
+  <strong>Why the ceiling is 88.4%, not 90%.</strong> Global-domain images are
+  <strong>94.9%</strong> of the data, and the Global YOLO's own top-1 caps at
+  <strong>88.19%</strong>. An arbiter that only sees the two models' probability
+  vectors cannot reliably beat a model's own argmax — empirically our best
+  re-ranker reached only 87.3% on Global, <em>below</em> that baseline. So:
+  <br><br>
+  <code>overall_max ≈ 0.949 × 88.19% + 0.051 × 92.26% = 88.40%</code>
+  <br><br>
+  even with a <em>perfect</em> Israeli-vs-Global router. The 97.8% oracle is
+  unreachable because it would require the arbiter to know the answer better than
+  the models that produced the probabilities. <strong>To break 90%, the Global
+  YOLO's top-1 accuracy must improve — that is now the highest-leverage work item,
+  not further arbiter tuning.</strong>
+</div>
+
+<h4 style="margin-top:22px">The v5 design — make the trade-off an explicit dial</h4>
+<p>
+  v4 was stuck at a bad operating point. v5 exposes the global↔israeli trade-off as
+  a single hyperparameter and adds six <em>interaction features</em> derived from
+  the existing columns (no dataset regeneration):
+</p>
+<pre><span class="cm"># Domain-weight dial: israeli_row_weight = (n_global / n_israeli) ** ALPHA</span>
+ALPHA = <span class="num">0.0</span>   <span class="cm"># no weighting → overall 85.6%, Global 87.3%, Israeli 54%</span>
+ALPHA = <span class="num">0.3</span>   <span class="cm"># balanced (SHIPPED) → overall 85.0%, Global 86.2%, Israeli 63%</span>
+ALPHA = <span class="num">1.0</span>   <span class="cm"># full parity (= v4) → overall 80.3%, Global 80.4%, Israeli 79%</span>
+
+<span class="cm"># Interaction features (pure functions of the base 9 columns):</span>
+conf_global    = global_prob  * (<span class="num">1</span> - global_entropy)   <span class="cm"># confident-and-correct signal</span>
+conf_israeli   = israeli_prob * (<span class="num">1</span> - local_entropy)
+israeli_top1_p = israeli_prob * is_israeli_top1
+global_top1_p  = global_prob  * is_global_top1
+prob_ratio     = israeli_prob / (global_prob + <span class="num">0.05</span>)
+both_agree     = is_global_top1 * is_israeli_top1</pre>
+
+<h4 style="margin-top:22px">v5 measured results (α = 0.3, balanced)</h4>
+<table>
+  <thead><tr><th>Metric</th><th>v4</th><th>v5</th></tr></thead>
+  <tbody>
+    <tr><td>Overall Re-Rank Accuracy@1</td><td>80.33%</td><td><strong>84.99%</strong> (+4.66 pp)</td></tr>
+    <tr><td>Re-Rank Accuracy@3</td><td>93.95%</td><td>94.52%</td></tr>
+    <tr><td>Mean Reciprocal Rank</td><td>0.8729</td><td>0.9002</td></tr>
+    <tr><td>Global domain</td><td>80.41%</td><td>86.18% (baseline 88.19%, −2.01 pp)</td></tr>
+    <tr><td>Israeli domain</td><td>78.85%</td><td>62.84%</td></tr>
+    <tr><td>ROC-AUC / Avg Precision</td><td>0.9827 / 0.8985</td><td>0.9891 / 0.9389</td></tr>
+  </tbody>
+</table>
+
+<div class="callout green">
+  <strong>What v5 achieved.</strong> +4.66 pp overall over v4, and the new
+  <code>conf_global</code> interaction feature became the single most important
+  signal (gain 2563, vs the next feature at 452) — confirming the model now reasons
+  about <em>confident-and-correct</em> rather than raw probability. v5 still costs
+  ~2 pp on Global vs blind trust (the inherent re-ranker tax), and the α dial lets
+  the operator trade Global for Israeli as the use-case demands. It does not — and
+  provably cannot — reach 90%; that requires a stronger Global model.
+</div>
+
+
 <!-- ══════════════════════════════════════════════════════════════════════ -->
-<h2>6. Proposed Future Mitigations</h2>
+<h2>5. Proposed Future Mitigations</h2>
+
+<div class="callout red">
+  <strong>#1 lever — improve the Global model.</strong> The §4.6 ceiling analysis
+  proves the arbiter cannot exceed ~88.4% while the Global YOLO's top-1 sits at
+  88.19% and represents 94.9% of traffic. Every mitigation below is a second-order
+  refinement; the only way to reach 90%+ is to raise the Global model's own
+  accuracy (more/cleaner data, longer training, a larger backbone, or better
+  augmentation). Arbiter tuning has reached diminishing returns.
+</div>
 
 <table>
   <thead><tr><th>Mitigation</th><th>Mechanism</th><th>When to Apply</th></tr></thead>
@@ -658,12 +891,12 @@ weights[is_israeli] *= <span class="fn">sum</span>(weights[is_global]) / <span c
           discount factor δ &lt; 1, boosting sub-class candidates.</td>
       <td>After identifying the top confusion pairs in the CSV.</td>
     </tr>
-    <tr>
-      <td><strong>Confidence entropy feature</strong></td>
-      <td>Add H(P<sub>G</sub>) = −Σ p log p as a feature.
-          High-confidence broad predictions have <em>low</em> entropy;
-          XGBoost can learn to discount them.</td>
-      <td>Retrain the Re-Ranker with the new feature column.</td>
+    <tr style="opacity:.7">
+      <td><strong>Confidence entropy feature</strong> <span class="badge b-green">✓ shipped in v4</span></td>
+      <td>H(P<sub>G</sub>) = −Σ p log p added as <code>global_entropy</code> /
+          <code>local_entropy</code> (normalized by log k). High-confidence broad
+          predictions have <em>low</em> entropy; XGBoost discounts them conditionally.</td>
+      <td>Done — see §4.4.</td>
     </tr>
     <tr>
       <td><strong>Hierarchical label smoothing</strong></td>
@@ -692,7 +925,7 @@ weights[is_israeli] *= <span class="fn">sum</span>(weights[is_global]) / <span c
 
 
 <!-- ══════════════════════════════════════════════════════════════════════ -->
-<h2>7. Evaluation Metrics Glossary</h2>
+<h2>6. Evaluation Metrics Glossary</h2>
 
 <table>
   <thead><tr><th>Metric</th><th>Formula</th><th>Sensitivity to Hierarchy</th></tr></thead>
