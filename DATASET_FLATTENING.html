@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Dataset Preparation Methodology — Global Food Classifier</title>
+<style>
+  /* GitHub dark palette */
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#0d1117; --line:#30363d;
+    --ink:#e6edf3; --mut:#8b949e; --accent:#58a6ff; --accent-d:#1f6feb;
+    --green:#3fb950; --red:#f85149; --amber:#d29922; --purple:#bc8cff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:16px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+  .wrap{max-width:860px;margin:0 auto;padding:52px 28px 96px}
+  header{border-bottom:1px solid var(--line);padding-bottom:22px;margin-bottom:6px}
+  .kicker{font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:var(--accent);margin-bottom:10px}
+  h1{font-size:27px;line-height:1.28;margin:0 0 10px;font-weight:600;letter-spacing:-.2px}
+  .meta{color:var(--mut);font-size:14px}
+  h2{font-size:20px;margin:38px 0 12px;font-weight:600;padding-bottom:7px;border-bottom:1px solid var(--line)}
+  h3{font-size:16px;margin:24px 0 7px;color:var(--accent)}
+  p{margin:11px 0}
+  a{color:var(--accent);text-decoration:none}
+  code,.mono{font-family:ui-monospace,SFMono-Regular,"SF Mono",Consolas,monospace;font-size:13.5px;
+    background:rgba(110,118,129,.16);padding:2px 6px;border-radius:6px}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;
+    padding:16px 18px;overflow:auto;font-family:ui-monospace,Consolas,monospace;font-size:13px;color:var(--ink)}
+  .abstract{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--accent);
+    padding:16px 20px;margin:24px 0;border-radius:0 8px 8px 0;font-size:15px}
+  .abstract strong{color:var(--accent);font-variant:small-caps;letter-spacing:.4px}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px}
+  caption{caption-side:bottom;color:var(--mut);font-size:12.5px;text-align:left;padding-top:8px;font-style:italic}
+  th,td{text-align:left;padding:8px 11px;border-bottom:1px solid var(--line)}
+  thead th{color:var(--mut);font-size:11.5px;text-transform:uppercase;letter-spacing:.5px;border-bottom:1px solid var(--line)}
+  td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+  tbody tr:last-child td{border-top:1px solid var(--line);font-weight:600}
+  .callout{border:1px solid var(--line);border-left:3px solid var(--green);background:var(--panel);
+    padding:12px 16px;border-radius:0 8px 8px 0;margin:18px 0;font-size:14.5px}
+  .callout.amber{border-left-color:var(--amber)}
+  .callout strong{color:var(--green)} .callout.amber strong{color:var(--amber)}
+  ul,ol{margin:8px 0;padding-left:24px} li{margin:5px 0}
+  .arrow{color:var(--mut)}
+  figure{margin:16px 0}
+  .foot{color:var(--mut);font-size:12.5px;margin-top:46px;border-top:1px solid var(--line);padding-top:14px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="kicker">Caleyez Project · Technical Methodology Report</div>
+    <h1>Dataset Preparation and Label-Space Consolidation<br>for the Global Food-Classification Model</h1>
+    <div class="meta">YOLOv11 baseline · May 2026</div>
+  </header>
+
+  <div class="abstract">
+    <p style="margin-top:0"><strong>Abstract.</strong> This report documents the data
+    preparation pipeline applied to the global food-image dataset prior to retraining the
+    baseline convolutional classifier (YOLOv11). The procedure consolidates an inconsistent
+    142-class label space into 133 well-defined classes through three operations — semantic
+    merging, label normalization, and removal of out-of-scope or noisy classes — and then
+    re-partitions the data into reproducible 70/20/10 train/validation/test splits. A
+    two-stage de-duplication step (exact and perceptual) is introduced to eliminate
+    cross-split data leakage, a known source of optimistic bias in reported accuracy. The
+    original dataset is preserved unaltered; all transformations are deterministic and fully
+    auditable.</p>
+  </div>
+
+  <h2>1. Motivation</h2>
+  <p>Prior evaluation of the classification system indicated that overall accuracy was
+  constrained by the quality of the underlying classifier rather than by downstream
+  re-ranking logic. In addition, an inconsistency audit of the dataset revealed three
+  categories of defect: (i) redundant fine-grained classes that fragment visually similar
+  samples, (ii) non-standardized folder labels (inconsistent casing, whitespace, and
+  spelling), and (iii) duplicated images shared between the training and test partitions.
+  The last of these is particularly significant, as train/test leakage inflates measured test
+  accuracy and undermines the validity of any subsequent comparison. The pipeline described
+  here addresses all three defects to establish a clean and defensible baseline.</p>
+
+  <h2>2. Label-Space Consolidation</h2>
+
+  <h3>2.1 Semantic merging</h3>
+  <p>Closely related sub-classes were merged into a single parent label, allowing the model to
+  learn the visual variation of a concept under one stronger, better-populated category.</p>
+  <table>
+    <caption>Table 1. Semantic merge operations.</caption>
+    <thead><tr><th>Source class(es)</th><th>Target label</th><th>Rationale</th></tr></thead>
+    <tbody>
+      <tr><td><code>filet_mignon</code>, <code>prime_rib</code>, <code>steak</code></td><td><code>steak</code></td><td>cuts of the same dish</td></tr>
+      <tr><td><code>frozen_yogurt</code>, <code>ice_cream</code></td><td><code>ice_cream</code></td><td>visually indistinct frozen dessert</td></tr>
+      <tr><td><code>dumplings</code>, <code>gyoza</code></td><td><code>gyoza</code></td><td>same food category</td></tr>
+      <tr><td><code>beef_tartare</code>, <code>tuna_tartare</code></td><td><code>tartare</code> (new)</td><td>shared preparation</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.2 Label normalization</h3>
+  <p>Four class folders carried non-standard names. These were renamed to a consistent
+  convention (lower-case, underscore-delimited, corrected spelling). The operations are
+  lossless one-to-one renames; no samples were merged or discarded.</p>
+  <table>
+    <caption>Table 2. Label normalization (renaming) operations.</caption>
+    <thead><tr><th>Original</th><th>Normalized</th><th>Defect corrected</th></tr></thead>
+    <tbody>
+      <tr><td><code>Baked_Potato</code></td><td><code>baked_potato</code></td><td>inconsistent casing</td></tr>
+      <tr><td><code>chilli pepper</code></td><td><code>chili_pepper</code></td><td>whitespace + spelling</td></tr>
+      <tr><td><code>jalepeno</code></td><td><code>jalapeno</code></td><td>spelling</td></tr>
+      <tr><td><code>raddish</code></td><td><code>radish</code></td><td>spelling</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.3 Removal of out-of-scope and noisy classes</h3>
+  <p>Three pork-derived classes were removed as out-of-scope. A fourth class,
+  <code>paprika</code>, was removed because the folder conflated multiple distinct concepts
+  (ground-spice powder, bell peppers, and chilli peppers), rendering the label
+  unusable as a supervised target.</p>
+  <table>
+    <caption>Table 3. Removed classes.</caption>
+    <thead><tr><th>Class removed</th><th>Reason</th><th class="r">Images removed</th></tr></thead>
+    <tbody>
+      <tr><td><code>pork_chop</code></td><td>out of scope (pork)</td><td class="r">1,000</td></tr>
+      <tr><td><code>pulled_pork_sandwich</code></td><td>out of scope (pork)</td><td class="r">1,000</td></tr>
+      <tr><td><code>baby_back_ribs</code></td><td>out of scope (pork)</td><td class="r">1,000</td></tr>
+      <tr><td><code>paprika</code></td><td>mixed/noisy label</td><td class="r">103</td></tr>
+      <tr><td>Total</td><td></td><td class="r">3,103</td></tr>
+    </tbody>
+  </table>
+
+  <h3>2.4 Classes retained without modification</h3>
+  <p>Several groups of visually overlapping classes (e.g. raw-beef preparations, raw-fish
+  preparations, pepper varieties, and rice dishes) were deliberately retained as distinct
+  labels. Merging them would discard semantically meaningful granularity; the limited
+  separability of such groups is attributable to model capacity rather than to label
+  definition, and is therefore better addressed through model improvement than through label
+  coarsening.</p>
+
+  <h2>3. De-duplication and Leakage Prevention</h2>
+  <p>To guarantee that no image — nor a near-identical variant of it — appears in more than one
+  partition, a two-stage de-duplication procedure is applied prior to splitting. The
+  fundamental unit of partitioning is therefore a <em>content cluster</em>, never an
+  individual file.</p>
+  <ol>
+    <li><strong>Exact duplicates.</strong> A SHA-1 digest is computed over the raw bytes of
+    each image. Byte-identical copies are collapsed to a single representative and the
+    redundant copies are discarded. This step removes genuine train/test leakage.</li>
+    <li><strong>Near-duplicates.</strong> A 64-bit perceptual difference hash (dHash) is
+    computed for each representative; images whose hashes differ by a Hamming distance of at
+    most five are grouped into a single cluster. Near-duplicates are <em>not</em> discarded —
+    they contribute legitimate visual variance — but the entire cluster is assigned to one
+    partition.</li>
+  </ol>
+  <figure>
+  <pre>raw images  →  SHA-1 collapse (drop exact duplicates)  →  dHash near-duplicate
+clustering  →  partition whole clusters 70 / 20 / 10</pre>
+  <caption>Figure 1. De-duplication and partitioning flow.</caption>
+  </figure>
+  <p>Correctness was confirmed by a per-class verification pass asserting that no source file
+  path is assigned to more than one partition.</p>
+
+  <h2>4. Re-partitioning</h2>
+  <p>All surviving images were pooled by final label and partitioned by whole clusters to
+  approximate a 70% training / 20% validation / 10% test ratio. Partitioning uses a fixed
+  random seed (42), making the split fully reproducible. A manifest file
+  (<code>split_manifest.csv</code>) records the provenance of every output image — its source
+  partition, source class, and original filename.</p>
+
+  <h2>5. Results</h2>
+  <p>The consolidation reduced the label space from 142 to <strong>133</strong> classes. Of
+  the pooled images, exact de-duplication removed 1,003 byte-identical copies, and 522
+  near-duplicate pairs were co-located within a single partition. The resulting dataset
+  contains 99,307 images distributed as shown in Table 4.</p>
+  <table>
+    <caption>Table 4. Final partition sizes (disk-verified). All 133 classes are represented in every partition.</caption>
+    <thead><tr><th>Partition</th><th class="r">Images</th><th class="r">Proportion</th><th class="r">Classes</th></tr></thead>
+    <tbody>
+      <tr><td>Training</td><td class="r">69,491</td><td class="r">70.0%</td><td class="r">133</td></tr>
+      <tr><td>Validation</td><td class="r">19,846</td><td class="r">20.0%</td><td class="r">133</td></tr>
+      <tr><td>Test</td><td class="r">9,970</td><td class="r">10.0%</td><td class="r">133</td></tr>
+      <tr><td>Total</td><td class="r">99,307</td><td class="r">100%</td><td class="r">133</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><strong>Integrity check.</strong> All 133 classes are present in every
+  partition, partition proportions match the 70/20/10 target, and no image (or near-duplicate)
+  is shared across partitions.</div>
+
+  <h2>6. Reproducibility and Data Integrity</h2>
+  <ul>
+    <li><strong>Non-destructive.</strong> The procedure operates in copy mode; the original
+      dataset is retained unmodified as an archival reference.</li>
+    <li><strong>Deterministic.</strong> A fixed random seed yields an identical partition on
+      every execution.</li>
+    <li><strong>Auditable.</strong> A per-image provenance manifest accompanies the dataset.</li>
+    <li><strong>Self-contained.</strong> The full pipeline is implemented in a single
+      parameterized script, enabling exact replication.</li>
+  </ul>
+
+  <h2>7. Threats to Validity</h2>
+  <p>Two limitations are noted for transparency. First, the dataset exhibits substantial class
+  imbalance: ingredient-level classes contain on the order of 70–200 images, whereas
+  prepared-dish classes contain approximately 1,000 (and merged classes up to 3,000). This
+  imbalance should be mitigated during training (e.g. via class-balanced sampling or loss
+  weighting). Second, the label taxonomy mixes two granularities — single raw ingredients and
+  composed dishes — which increases intra-task difficulty. Both factors are properties of the
+  source data rather than of the preparation procedure, and are documented here to inform
+  interpretation of subsequent results.</p>
+
+  <div class="foot">
+    Pipeline: <span class="mono">scripts/flatten_general_dataset.py</span> ·
+    Output: <span class="mono">datasets/general_model_flattened/{train,val,test}/&lt;class&gt;/</span> ·
+    Seed 42 · Generated from the executed run.
+  </div>
+
+</div>
+</body>
+</html>
