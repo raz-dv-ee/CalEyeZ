@@ -2,9 +2,21 @@
 Training script — General World Cuisine Model
 Architecture : YOLO11l-cls (Ultralytics YOLO11, Large, Classification head)
 Hardware     : NVIDIA RTX 3060 Ti (8 GB VRAM)
-Target       : 142-class food classification, Top-1 accuracy priority
+Target       : 132-class food classification, Top-1 accuracy priority
 Domain       : Smartphone photos in classroom environments
                (fluorescent lighting, shadows, blur, odd angles)
+
+Dataset      : datasets/general_model_flattened — the cleaned, leakage-free,
+               132-class label space (merged sub-classes, normalized labels,
+               pork/paprika/soy_beans removed, exact+perceptual de-duplication,
+               re-split 70/20/10). See DATASET_FLATTENING.html.
+
+Accuracy levers applied vs the previous run:
+  - imgsz 224 -> 320  (largest single gain for fine-grained food)
+  - epochs 120 -> 150 with patience 30 and an explicit cosine LR schedule
+  - cleaner 132-class label space (done upstream in the flattening pipeline)
+Domain-shift augmentation is intentionally kept heavy (classroom robustness),
+which trades some clean-test Top-1 for real-world deployability.
 """
 
 import os
@@ -14,13 +26,13 @@ import albumentations as A
 from ultralytics import YOLO
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
-DATASET_DIR = r"E:\final project - models retrain\datasets\general_model_data_set"
+DATASET_DIR = r"E:\final project - models retrain\datasets\general_model_flattened"
 PROJECT_DIR = r"E:\final project - models retrain\runs"
-RUN_NAME    = "general_model_yolo11l"
+RUN_NAME    = "general_model_flattened"   # new run; does NOT overwrite ...yolo11l5
 
-IMGSZ  = 224
-BATCH  = 32
-EPOCHS = 120
+IMGSZ  = 320   # raised from 224: biggest accuracy lever for fine-grained food
+BATCH  = 16    # lowered from 32 so 320 px fits the 8 GB VRAM budget under AMP
+EPOCHS = 150   # raised from 120; early stopping (patience=30) ends it sooner if converged
 
 # ─── Albumentations blur transform (defined at module level so worker
 #     processes can pickle it on Windows without re-importing __main__) ────────
@@ -69,6 +81,7 @@ if __name__ == "__main__":
         optimizer      = "AdamW",
         lr0            = 0.001,
         lrf            = 0.01,
+        cos_lr         = True,        # explicit cosine decay -> sharper final minimum
         momentum       = 0.937,
         weight_decay   = 0.0005,
         warmup_epochs  = 5,
@@ -77,7 +90,7 @@ if __name__ == "__main__":
         dropout         = 0.2,
         label_smoothing = 0.1,
 
-        patience    = 25,
+        patience    = 30,
         save        = True,
         save_period = 10,
 

@@ -583,19 +583,20 @@
 
     <!-- Hero -->
     <section class="hero" id="overview">
-      <div class="hero-badge">Technical Documentation · v1.0</div>
+      <div class="hero-badge">Technical Documentation · v2.0</div>
       <h1>General World Cuisine<br>Recognition Model</h1>
       <p class="hero-sub">
-        Training documentation for a 142-class hierarchical food classification model
+        Training documentation for a 132-class hierarchical food classification model
         designed for real-world deployment in classroom environments with severe domain shift.
+        Trained on the cleaned, leakage-free <code>general_model_flattened</code> dataset.
       </p>
       <div class="hero-meta">
         <div class="meta-chip"><span class="label">Architecture</span><span class="val">YOLO11l-cls</span></div>
-        <div class="meta-chip"><span class="label">Classes</span><span class="val">142</span></div>
+        <div class="meta-chip"><span class="label">Classes</span><span class="val">132</span></div>
         <div class="meta-chip"><span class="label">GPU</span><span class="val">RTX 3060 Ti 8 GB</span></div>
-        <div class="meta-chip"><span class="label">Epochs</span><span class="val">120</span></div>
-        <div class="meta-chip"><span class="label">Image Size</span><span class="val">224 px</span></div>
-        <div class="meta-chip"><span class="label">Batch Size</span><span class="val">32</span></div>
+        <div class="meta-chip"><span class="label">Epochs</span><span class="val">150</span></div>
+        <div class="meta-chip"><span class="label">Image Size</span><span class="val">320 px</span></div>
+        <div class="meta-chip"><span class="label">Batch Size</span><span class="val">16</span></div>
         <div class="meta-chip"><span class="label">Priority</span><span class="val">Top-1 Accuracy</span></div>
         <div class="meta-chip"><span class="label">Generated</span><span class="val">2026-05-31</span></div>
       </div>
@@ -622,7 +623,7 @@
       </div>
 
       <div class="vram-bar-wrap">
-        <div class="vram-bar-title">Estimated VRAM Allocation — Batch 32 · imgsz 224 · AMP ON</div>
+        <div class="vram-bar-title">Estimated VRAM Allocation — Batch 16 · imgsz 320 · AMP ON</div>
         <div class="vram-row">
           <div class="vram-label">Model weights (YOLO11l)</div>
           <div class="vram-track"><div class="vram-fill" style="width:26%"></div></div>
@@ -664,9 +665,9 @@
         <div class="callout-icon">⚠️</div>
         <div class="callout-body">
           <strong>If you encounter a CUDA Out of Memory error</strong> despite these settings, reduce
-          <code>batch</code> from <code>32</code> → <code>24</code> or <code>16</code>. Do <em>not</em>
-          increase <code>imgsz</code> above 224 without first reducing batch, as memory scales
-          quadratically with image size.
+          <code>batch</code> from <code>16</code> → <code>12</code> or <code>8</code>. The run uses
+          <code>imgsz=320</code> at <code>batch=16</code>, which keeps peak VRAM roughly equal to the
+          previous 224 px / batch 32 configuration; memory scales quadratically with image size.
         </div>
       </div>
     </section>
@@ -715,11 +716,11 @@
 
       <h3>Why not YOLO11x-cls or YOLOv8x-cls?</h3>
       <p>
-        The <em>-x</em> (Extra-Large) variants have ~56M parameters. At batch=32 and imgsz=224,
-        they consume approximately 9.4 GB VRAM under AMP — exceeding the 8 GB physical limit.
-        Reducing to batch=16 to compensate would increase training time by ~2× and introduce
-        noisier gradient estimates that hurt accuracy on a 142-class balanced dataset.
-        The accuracy gain over YOLO11l is only ~0.4% on this type of dataset.
+        The <em>-x</em> (Extra-Large) variants have ~56M parameters. At batch=32 and imgsz=224
+        they already consume approximately 9.4 GB VRAM under AMP — exceeding the 8 GB physical
+        limit — and the move to imgsz=320 used here makes the gap worse. Shrinking the batch
+        far enough to fit would introduce noisier gradient estimates that hurt accuracy on a
+        132-class dataset. The accuracy gain over YOLO11l is only ~0.4% on this type of dataset.
       </p>
     </section>
 
@@ -743,7 +744,7 @@
           <tr>
             <td>YOLOv8s-cls</td><td>6.4M</td><td>~2.8 GB</td><td>72.3%</td>
             <td><span class="badge badge-green">Yes</span></td>
-            <td><span class="badge badge-red">Too small for 142 classes</span></td>
+            <td><span class="badge badge-red">Too small for 132 classes</span></td>
           </tr>
           <tr>
             <td>YOLOv8m-cls</td><td>17M</td><td>~4.1 GB</td><td>76.4%</td>
@@ -987,7 +988,7 @@
         </div>
         <pre><span class="kw">import</span> os, yaml
 
-DATASET_ROOT = <span class="st">r"E:\final project - models retrain\datasets\general_model_data_set"</span>
+DATASET_ROOT = <span class="st">r"E:\final project - models retrain\datasets\general_model_flattened"</span>
 OUTPUT_YAML  = <span class="st">r"E:\final project - models retrain\data.yaml"</span>
 
 train_dir = os.path.<span class="fn">join</span>(DATASET_ROOT, <span class="st">"train"</span>)
@@ -1038,15 +1039,15 @@ model = <span class="fn">YOLO</span>(<span class="st">"yolo11l-cls.pt"</span>)
 model.<span class="fn">add_callback</span>(<span class="st">"on_train_batch_start"</span>, apply_blur_augmentation)
 
 results = model.<span class="fn">train</span>(
-    data       = <span class="st">r"E:\final project - models retrain\data.yaml"</span>,
+    data       = <span class="st">r"E:\final project - models retrain\datasets\general_model_flattened"</span>,
     task       = <span class="st">"classify"</span>,
-    epochs     = <span class="nb">120</span>,  imgsz = <span class="nb">224</span>,  batch  = <span class="nb">32</span>,
+    epochs     = <span class="nb">150</span>,  imgsz = <span class="nb">320</span>,  batch  = <span class="nb">16</span>,
     workers    = <span class="nb">4</span>,    device = <span class="nb">0</span>,    amp    = <span class="nb">True</span>,   cache = <span class="nb">False</span>,
-    optimizer  = <span class="st">"AdamW"</span>,  lr0 = <span class="nb">0.001</span>,  lrf = <span class="nb">0.01</span>,
+    optimizer  = <span class="st">"AdamW"</span>,  lr0 = <span class="nb">0.001</span>,  lrf = <span class="nb">0.01</span>,  cos_lr = <span class="nb">True</span>,
     momentum   = <span class="nb">0.937</span>,  weight_decay = <span class="nb">0.0005</span>,
     warmup_epochs = <span class="nb">5</span>,  warmup_momentum = <span class="nb">0.8</span>,
     dropout = <span class="nb">0.2</span>,  label_smoothing = <span class="nb">0.1</span>,
-    patience = <span class="nb">25</span>,  save = <span class="nb">True</span>,  save_period = <span class="nb">10</span>,
+    patience = <span class="nb">30</span>,  save = <span class="nb">True</span>,  save_period = <span class="nb">10</span>,
     <span class="cm"># ── Domain-shift augmentations ──────────────────────────────</span>
     hsv_h = <span class="nb">0.02</span>,   hsv_s = <span class="nb">0.75</span>,    hsv_v = <span class="nb">0.50</span>,
     degrees = <span class="nb">20.0</span>, translate = <span class="nb">0.15</span>, scale = <span class="nb">0.60</span>,
@@ -1055,7 +1056,7 @@ results = model.<span class="fn">train</span>(
     erasing = <span class="nb">0.40</span>, mixup = <span class="nb">0.10</span>, mosaic = <span class="nb">0.0</span>,
     <span class="cm"># ── Output ─────────────────────────────────────────────────</span>
     project = <span class="st">r"E:\final project - models retrain\runs"</span>,
-    name = <span class="st">"general_model_yolo11l"</span>,  pretrained = <span class="nb">True</span>,
+    name = <span class="st">"general_model_flattened"</span>,  pretrained = <span class="nb">True</span>,
 )</pre>
       </div>
     </section>
@@ -1082,18 +1083,18 @@ results = model.<span class="fn">train</span>(
           </tr>
           <tr>
             <td class="param-name">epochs</td>
-            <td class="param-val">120</td>
-            <td><div class="param-desc">Maximum training iterations over the full dataset. 120 gives a pretrained YOLO11l enough gradient steps to fully adapt its classification head and fine-tune the backbone for 142 food classes. Early stopping (<code>patience=25</code>) will terminate earlier if the model converges.</div></td>
+            <td class="param-val">150</td>
+            <td><div class="param-desc">Maximum training iterations over the full dataset. 150 gives a pretrained YOLO11l ample gradient steps to adapt its head and fine-tune the backbone for 132 food classes at the higher 320 px resolution. Early stopping (<code>patience=30</code>) will terminate earlier if the model converges.</div></td>
           </tr>
           <tr>
             <td class="param-name">imgsz</td>
-            <td class="param-val">224</td>
-            <td><div class="param-desc">Input resolution in pixels (224×224). Chosen to match the ImageNet pretraining resolution, ensuring the pre-trained weights are maximally effective. Increasing to 320 provides only marginal accuracy gain (&lt;0.5%) while tripling activation memory. 224 is the sweet spot for this VRAM budget.</div></td>
+            <td class="param-val">320</td>
+            <td><div class="param-desc">Input resolution in pixels (320×320), raised from 224. Higher resolution is the single largest accuracy lever for fine-grained food classification — it preserves the fine texture and colour detail that distinguishes visually similar dishes. The cost is quadratically higher activation memory, absorbed here by reducing batch to 16.</div></td>
           </tr>
           <tr>
             <td class="param-name">batch</td>
-            <td class="param-val">32</td>
-            <td><div class="param-desc">Images processed per gradient step. 32 is the largest batch that fits in 8 GB VRAM with AMP enabled. Larger batches produce more stable gradient estimates and generally improve final accuracy. Below 16, gradient noise becomes a limiting factor for 142-class classification.</div></td>
+            <td class="param-val">16</td>
+            <td><div class="param-desc">Images processed per gradient step. Reduced from 32 to 16 to fund the move to 320 px within the 8 GB VRAM budget under AMP. The cosine LR schedule and 5-epoch warmup compensate for the slightly noisier gradient estimates of the smaller batch.</div></td>
           </tr>
           <tr>
             <td class="param-name">workers</td>
@@ -1108,7 +1109,7 @@ results = model.<span class="fn">train</span>(
           <tr>
             <td class="param-name">amp</td>
             <td class="param-val">True</td>
-            <td class="param-desc">Automatic Mixed Precision. Runs forward/backward passes in FP16, stores master weights in FP32. Reduces activation memory by ~40%, enabling batch=32 on 8 GB VRAM. Accuracy impact is negligible (&lt;0.1% Top-1).</td>
+            <td class="param-desc">Automatic Mixed Precision. Runs forward/backward passes in FP16, stores master weights in FP32. Reduces activation memory by ~40%, enabling batch=16 at imgsz=320 on 8 GB VRAM. Accuracy impact is negligible (&lt;0.1% Top-1).</td>
           </tr>
           <tr>
             <td class="param-name">cache</td>
@@ -1193,8 +1194,8 @@ results = model.<span class="fn">train</span>(
           </tr>
           <tr>
             <td class="param-name">patience</td>
-            <td class="param-val">25</td>
-            <td class="param-desc">Early stopping: training halts if Top-1 validation accuracy does not improve for 25 consecutive epochs. Prevents wasted compute on a converged model, and avoids overfitting the augmented training distribution.</td>
+            <td class="param-val">30</td>
+            <td class="param-desc">Early stopping: training halts if Top-1 validation accuracy does not improve for 30 consecutive epochs. Prevents wasted compute on a converged model, and avoids overfitting the augmented training distribution.</td>
           </tr>
           <tr>
             <td class="param-name">save_period</td>
@@ -1220,11 +1221,11 @@ results = model.<span class="fn">train</span>(
       <div class="card card-accent">
         <div class="card-title">Execution Order</div>
         <div class="code-block" style="margin:10px 0 0; border-radius:var(--radius-sm)">
-          <pre style="padding:14px 18px; font-size:12px"><span class="cm"># Step 1: Verify dataset structure, auto-generate data.yaml</span>
-python generate_yaml.py
+          <pre style="padding:14px 18px; font-size:12px"><span class="cm"># Classification reads the dataset folder directly (train/ val/ test/);</span>
+<span class="cm"># no data.yaml is required for task="classify".</span>
 
-<span class="cm"># Step 2: Launch training (downloads yolo11l-cls.pt on first run)</span>
-python train_general_model.py</pre>
+<span class="cm"># Launch training (downloads yolo11l-cls.pt on first run)</span>
+python scripts\training\train_general_model.py</pre>
         </div>
       </div>
 
@@ -1232,8 +1233,8 @@ python train_general_model.py</pre>
         <div class="card-title">Verify Before Training</div>
         <p style="margin:0; color:var(--text-muted)">
           ✓ CUDA available: <code>python -c "import torch; print(torch.cuda.is_available())"</code><br>
-          ✓ Dataset split integrity: each of <code>train/</code>, <code>val/</code>, <code>test/</code> has exactly 142 subdirectories<br>
-          ✓ data.yaml <code>nc: 142</code> and names list has 142 entries<br>
+          ✓ Dataset split integrity: each of <code>train/</code>, <code>val/</code>, <code>test/</code> has exactly 132 subdirectories<br>
+          ✓ Dataset root is <code>datasets/general_model_flattened</code> (the cleaned, leakage-free set)<br>
           ✓ GPU temperature is below 80°C before starting (long training run)
         </p>
       </div>
@@ -1253,23 +1254,23 @@ python train_general_model.py</pre>
         </thead>
         <tbody>
           <tr>
-            <td class="param-name" style="font-size:12px">runs/general_model_yolo11l/<br>weights/best.pt</td>
+            <td class="param-name" style="font-size:12px">runs/general_model_flattened/<br>weights/best.pt</td>
             <td class="param-desc"><strong style="color:var(--accent3)">Primary deliverable.</strong> Model checkpoint at the epoch with highest validation Top-1 accuracy. Use this for inference and the next hierarchical model stage.</td>
           </tr>
           <tr>
-            <td class="param-name" style="font-size:12px">runs/general_model_yolo11l/<br>weights/last.pt</td>
+            <td class="param-name" style="font-size:12px">runs/general_model_flattened/<br>weights/last.pt</td>
             <td class="param-desc">Checkpoint from the final training epoch. Useful if early stopping fired prematurely — compare its val accuracy to <code>best.pt</code> before discarding.</td>
           </tr>
           <tr>
-            <td class="param-name" style="font-size:12px">runs/general_model_yolo11l/<br>results.csv</td>
+            <td class="param-name" style="font-size:12px">runs/general_model_flattened/<br>results.csv</td>
             <td class="param-desc">Per-epoch training log: train loss, val loss, Top-1 accuracy, Top-5 accuracy, LR. Import into Excel or matplotlib to plot the learning curve.</td>
           </tr>
           <tr>
-            <td class="param-name" style="font-size:12px">runs/general_model_yolo11l/<br>confusion_matrix.png</td>
-            <td class="param-desc">142×142 normalised confusion matrix evaluated on the validation set. Identifies which food class pairs are most commonly confused — useful for downstream hierarchical model design.</td>
+            <td class="param-name" style="font-size:12px">runs/general_model_flattened/<br>confusion_matrix.png</td>
+            <td class="param-desc">132×132 normalised confusion matrix evaluated on the validation set. Identifies which food class pairs are most commonly confused — useful for downstream hierarchical model design.</td>
           </tr>
           <tr>
-            <td class="param-name" style="font-size:12px">runs/general_model_yolo11l/<br>weights/epoch_N.pt</td>
+            <td class="param-name" style="font-size:12px">runs/general_model_flattened/<br>weights/epoch_N.pt</td>
             <td class="param-desc">Periodic checkpoints saved every 10 epochs (configurable via <code>save_period</code>). Resume from any of these if training is interrupted.</td>
           </tr>
         </tbody>
@@ -1279,7 +1280,7 @@ python train_general_model.py</pre>
         <div class="callout-icon">💡</div>
         <div class="callout-body">
           <strong>Resuming a crashed training run.</strong> If training stops unexpectedly, resume from
-          the last checkpoint by passing <code>model = YOLO("runs/general_model_yolo11l/weights/last.pt")</code>
+          the last checkpoint by passing <code>model = YOLO("runs/general_model_flattened/weights/last.pt")</code>
           and adding <code>resume=True</code> to <code>model.train()</code>. All hyperparameters and
           augmentation settings are stored in the checkpoint and will be restored automatically.
         </div>
@@ -1288,7 +1289,7 @@ python train_general_model.py</pre>
 
     <!-- Footer -->
     <footer class="footer">
-      <span>General World Cuisine Model · Training Documentation v1.0</span>
+      <span>General World Cuisine Model · Training Documentation v2.0</span>
       <span>Generated 2026-05-31 · YOLO11l-cls · RTX 3060 Ti</span>
     </footer>
 
