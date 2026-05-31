@@ -21,7 +21,7 @@
 ```
 runs/general_model_yolo11l5/weights/best.pt   ← Global model
 runs/israeli_food_yolo11l/weights/best.pt      ← Israeli model
-reranker_xgb.ubj                               ← XGBoost Re-Ranker (current: v3)
+reranker_xgb.ubj                               ← XGBoost Re-Ranker (current: v5)
 ```
 
 ### 1.3 Dataset Paths
@@ -300,14 +300,14 @@ Re-Ranker, trained on the same flat label distribution, reinforces this behaviou
 | Script | Purpose | Key Output |
 |--------|---------|------------|
 | `arbiter/data/generate_reranker_dataset.py` | Build Re-Ranker CSV w/ evidence features (v2) | `arbiter/data/reranker_dataset.csv` |
-| `arbiter/train/train_reranker_xgb.py` | Train XGBoost Re-Ranker (current: v4) | `arbiter/train/reranker_xgb.ubj` |
+| `arbiter/train/train_reranker_xgb.py` | Train XGBoost Re-Ranker (current: v5) | `arbiter/train/reranker_xgb.ubj` |
 | `arbiter/train/evaluate_system.py` | Full pipeline evaluation on test splits | `arbiter/train/system_evaluation_results.csv` |
 
 ### Folder Structure
 
 ```
 <project root>/
-├── SYSTEM_STATE.md     (this file — arbiter architecture & v1→v4 history)
+├── SYSTEM_STATE.md     (this file — arbiter architecture & v1→v5 history)
 ├── ARBITER_README.md   (arbiter folder map + run order)
 ├── REPO_STATE.md       (whole-repo overview)
 └── arbiter/
@@ -320,10 +320,11 @@ Re-Ranker, trained on the same flat label distribution, reinforces this behaviou
 ```
 
 > Scripts use absolute paths rooted at `BASE = E:\final project - models retrain`,
-> so they run correctly regardless of the working directory. The v4 feature set
-> (`global_entropy`, `local_entropy`, `global_top1_vs_top2`, `local_top1_vs_top2`,
-> `arbiter_dominance_score`) is kept in the SAME column order across all three
-> scripts — changing one requires changing all three.
+> so they run correctly regardless of the working directory. The v5 feature set
+> (15 cols: the 9 base features + 6 derived — `conf_global`, `conf_israeli`,
+> `israeli_top1_p`, `global_top1_p`, `prob_ratio`, `both_agree`) is kept in the
+> SAME column order across `train_reranker_xgb.py` and `evaluate_system.py` —
+> changing one requires changing both.
 
 ---
 
@@ -341,7 +342,7 @@ Re-Ranker, trained on the same flat label distribution, reinforces this behaviou
 - **Why:** Targeted fix for known confusion pairs without full retraining.
 - **How:** Build a `PENALTY_MAP` dict from confusion-pair analysis of the CSV.
 - **Effort:** Low — post-processing only.
-- **Status:** `[ ] Blocked — need v4 evaluation results first`
+- **Status:** `[ ] Available — v5 evaluation CSV can now feed this`
 
 ### 7.3 Hierarchical Label Smoothing
 - **What:** Assign `target_label = 0.4` for candidates that are a known
