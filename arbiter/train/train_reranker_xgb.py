@@ -51,8 +51,8 @@ warnings.filterwarnings("ignore", category=UserWarning)
 
 # ── Paths ─────────────────────────────────────────────────────────────────────
 BASE         = r"E:\final project - models retrain"
-DATASET_CSV  = rf"{BASE}\arbiter\artifacts\reranker_dataset.csv"
-MODEL_OUTPUT = rf"{BASE}\arbiter\artifacts\reranker_xgb.ubj"
+DATASET_CSV  = rf"{BASE}\arbiter\data\reranker_dataset.csv"
+MODEL_OUTPUT = rf"{BASE}\arbiter\train\reranker_xgb.ubj"
 RANDOM_SEED  = 42
 
 FEATURE_COLS = [

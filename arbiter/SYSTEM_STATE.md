@@ -262,20 +262,22 @@ Re-Ranker, trained on the same flat label distribution, reinforces this behaviou
 
 | Script | Purpose | Key Output |
 |--------|---------|------------|
-| `arbiter/data_gen/generate_reranker_dataset.py` | Build Re-Ranker CSV w/ evidence features (v2) | `arbiter/artifacts/reranker_dataset.csv` |
-| `arbiter/train/train_reranker_xgb.py` | Train XGBoost Re-Ranker (current: v4) | `arbiter/artifacts/reranker_xgb.ubj` |
-| `arbiter/evaluate/evaluate_system.py` | Full pipeline evaluation on test splits | `arbiter/artifacts/system_evaluation_results.csv` |
+| `arbiter/data/generate_reranker_dataset.py` | Build Re-Ranker CSV w/ evidence features (v2) | `arbiter/data/reranker_dataset.csv` |
+| `arbiter/train/train_reranker_xgb.py` | Train XGBoost Re-Ranker (current: v4) | `arbiter/train/reranker_xgb.ubj` |
+| `arbiter/train/evaluate_system.py` | Full pipeline evaluation on test splits | `arbiter/train/system_evaluation_results.csv` |
 
 ### Folder Structure
 
 ```
 arbiter/
-├── data_gen/      generate_reranker_dataset.py  +  reranker_vector_mechanics.html
-├── train/         train_reranker_xgb.py
-├── evaluate/      evaluate_system.py            +  evaluation_mechanics_and_hierarchy.html
-├── docs/          SYSTEM_STATE.md  (this file)
-├── artifacts/     reranker_dataset.csv, reranker_xgb.ubj, system_evaluation_results.csv
-└── _archive/      superseded Set-B files (arbiter_train_xgb.py, ARBITER_CONTEXT.md, …)
+├── README.md
+├── SYSTEM_STATE.md   (this file)
+├── data/             generate_reranker_dataset.py + reranker_vector_mechanics.html
+│                     (+ reranker_dataset.csv — generated, gitignored)
+├── train/            train_reranker_xgb.py + evaluate_system.py
+│                     + evaluation_mechanics_and_hierarchy.html + reranker_xgb.ubj
+│                     (+ system_evaluation_results.csv — generated, gitignored)
+└── old_versions/     superseded prototypes (router design, early arbiter)
 ```
 
 > Scripts use absolute paths rooted at `BASE = E:\final project - models retrain`,

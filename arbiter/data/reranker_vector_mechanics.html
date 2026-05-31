@@ -721,21 +721,42 @@
 <h2>6. Class Imbalance &amp; Training Strategy</h2>
 
 <p>
-  With a candidate set of size ≈ 9 per image, at most one candidate is positive.
-  The dataset is therefore <strong>approximately 9:1 imbalanced</strong>.
-  This is handled via XGBoost's <code>scale_pos_weight</code> hyperparameter:
+  Two distinct imbalances had to be solved. The training pipeline evolved through
+  four versions (full history in <code>SYSTEM_STATE.md</code>); the current
+  <strong>v4</strong> strategy is summarised here.
 </p>
 
-<pre><span class="cm"># scale_pos_weight = #negative / #positive  ≈  9.0</span>
-<span class="cm"># Equivalent to up-weighting each positive example by 9×</span>
-<span class="cm"># so the loss gradient is balanced across classes.</span>
-
+<h3>6.1 Candidate Imbalance (≈ 9:1) — <code>scale_pos_weight</code></h3>
+<p>
+  With a candidate set of ≈ 9 per image and at most one positive, the dataset is
+  ~9:1 imbalanced. This is handled by XGBoost's <code>scale_pos_weight</code>:
+</p>
+<pre><span class="cm"># scale_pos_weight = #negative / #positive  ≈  9.0  (identical in both domains)</span>
 params = {
     <span class="str">"objective"</span>:        <span class="str">"binary:logistic"</span>,
     <span class="str">"scale_pos_weight"</span>: n_neg / n_pos,   <span class="cm"># ≈ 9.0</span>
+    <span class="str">"max_delta_step"</span>:   <span class="num">1</span>,             <span class="cm"># stabilises steps on weighted data</span>
     <span class="str">"eval_metric"</span>:      [<span class="str">"logloss"</span>, <span class="str">"auc"</span>],
-    ...
 }</pre>
+
+<h3>6.2 Domain Imbalance (≈ 19:1) — 1:1 instance weighting</h3>
+<p>
+  The training set has ~25,000 Global images vs ~1,300 Israeli — so Israeli rows
+  were only ~5% of the data, and early models simply ignored the Israeli model.
+  v4 fixes this with <strong>pure 1:1 domain-parity instance weights</strong>:
+  each Israeli row is weighted by <code>n_global_rows / n_israeli_rows</code> so
+  that <code>sum(w_israeli) == sum(w_global)</code> exactly.
+</p>
+
+<div class="callout green">
+  <strong>v4 insight — weights balance, features decide.</strong> Earlier versions
+  tried to fix the domain imbalance with ever-heavier weight multipliers, which
+  over-corrected and wrecked Global accuracy (a zero-sum trade). v4 keeps weighting
+  to a clean 1:1 parity and instead lets the engineered <em>evidence features</em>
+  (§5.2 — especially <code>global_entropy</code>) decide <em>when</em> to trust each
+  model. The Arbiter can now learn: <em>"trust Global unconditionally when its
+  entropy is low; only defer to Israeli when Global is genuinely confused."</em>
+</div>
 
 <h3>Primary Evaluation Metric: Re-Rank Accuracy@1</h3>
 
@@ -823,7 +844,7 @@ params = {
   <li>Extract the Top-5 candidates from each → merge → unique set of 5–10 classes.</li>
   <li>For each candidate, query <code>global_prob</code> and <code>israeli_prob</code>
       using the aligned lookup (zero-impute for OOV).</li>
-  <li>Build a feature matrix of shape <code>[num_candidates × 4]</code>.</li>
+  <li>Build a feature matrix of shape <code>[num_candidates × 9]</code> (4 raw + 5 evidence features).</li>
   <li>Score all rows with the XGBoost model → obtain a score vector.</li>
   <li>Return <code>candidates[argmax(scores)]</code> as the final prediction.</li>
 </ol>

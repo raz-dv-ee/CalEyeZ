@@ -29,8 +29,8 @@ from ultralytics import YOLO
 BASE               = r"E:\final project - models retrain"
 GLOBAL_MODEL_PATH  = rf"{BASE}\runs\general_model_yolo11l5\weights\best.pt"
 ISRAELI_MODEL_PATH = rf"{BASE}\runs\israeli_food_yolo11l\weights\best.pt"
-XGB_MODEL_PATH     = rf"{BASE}\arbiter\artifacts\reranker_xgb.ubj"
-OUTPUT_CSV         = rf"{BASE}\arbiter\artifacts\system_evaluation_results.csv"
+XGB_MODEL_PATH     = rf"{BASE}\arbiter\train\reranker_xgb.ubj"
+OUTPUT_CSV         = rf"{BASE}\arbiter\train\system_evaluation_results.csv"
 
 TEST_DIRS = {
     "global":  rf"{BASE}\datasets\general_model_data_set\test",

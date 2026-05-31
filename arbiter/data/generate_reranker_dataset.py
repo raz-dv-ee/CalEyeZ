@@ -55,7 +55,7 @@ SPLIT_DIRS: dict[str, list[str]] = {
     ],
 }
 
-OUTPUT_CSV     = rf"{BASE}\arbiter\artifacts\reranker_dataset.csv"
+OUTPUT_CSV     = rf"{BASE}\arbiter\data\reranker_dataset.csv"
 TOP_K          = 5
 DEVICE         = "cuda" if torch.cuda.is_available() else "cpu"
 IMG_EXTENSIONS = {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
