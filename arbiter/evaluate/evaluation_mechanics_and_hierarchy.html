@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Caleyez — Evaluation Pipeline & Hierarchical Misclassification Analysis</title>
+  <style>
+    :root {
+      --blue:    #2563eb;
+      --purple:  #7c3aed;
+      --green:   #16a34a;
+      --red:     #dc2626;
+      --amber:   #d97706;
+      --gray-50: #f9fafb;
+      --gray-100:#f3f4f6;
+      --gray-200:#e5e7eb;
+      --gray-700:#374151;
+      --gray-900:#111827;
+      --r:       10px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: "Georgia", serif;
+      color: var(--gray-900);
+      background: #fff;
+      max-width: 920px;
+      margin: 0 auto;
+      padding: 52px 36px 88px;
+      line-height: 1.78;
+    }
+
+    /* ── Header ── */
+    header { border-bottom: 3px solid var(--blue); padding-bottom: 26px; margin-bottom: 44px; }
+    .kicker {
+      font-family: "Helvetica Neue", sans-serif;
+      font-size: .73rem; letter-spacing: .13em;
+      text-transform: uppercase; color: var(--blue); margin-bottom: 8px;
+    }
+    h1 { font-size: 1.95rem; font-weight: 700; line-height: 1.22; margin-bottom: 12px; }
+    .subtitle { font-size: 1.02rem; color: var(--gray-700); }
+    .meta { margin-top: 16px; font-family: "Helvetica Neue", sans-serif;
+            font-size: .8rem; color: #6b7280; }
+
+    /* ── Headings ── */
+    h2 { font-size: 1.3rem; font-weight: 700; color: var(--blue);
+         margin: 52px 0 14px; padding-bottom: 6px;
+         border-bottom: 1px solid var(--gray-200); }
+    h3 { font-size: 1.02rem; font-weight: 700; margin: 28px 0 8px; }
+    p  { margin-bottom: 14px; }
+
+    /* ── Callouts ── */
+    .callout {
+      border-left: 4px solid var(--blue); background: var(--gray-50);
+      padding: 14px 20px; border-radius: 0 var(--r) var(--r) 0; margin: 22px 0;
+      font-size: .94rem;
+    }
+    .callout.amber  { border-color: var(--amber); }
+    .callout.red    { border-color: var(--red);   }
+    .callout.green  { border-color: var(--green); }
+    .callout.purple { border-color: var(--purple);}
+    .callout strong { color: var(--blue); }
+    .callout.amber  strong { color: var(--amber); }
+    .callout.red    strong { color: var(--red);   }
+    .callout.green  strong { color: var(--green); }
+    .callout.purple strong { color: var(--purple);}
+
+    /* ── Code ── */
+    pre, code { font-family: "Fira Code", "Courier New", monospace; font-size: .84rem; }
+    pre {
+      background: #1e1e2e; color: #cdd6f4;
+      padding: 20px 24px; border-radius: var(--r);
+      overflow-x: auto; margin: 18px 0; line-height: 1.65;
+    }
+    .kw  { color: #cba6f7; } .fn { color: #89dceb; }
+    .str { color: #a6e3a1; } .cm { color: #6c7086; font-style: italic; }
+    .num { color: #fab387; } .op { color: #89dceb; }
+
+    /* ── Pipeline flow ── */
+    .flow {
+      display: flex; align-items: stretch; flex-wrap: wrap;
+      gap: 0; margin: 30px 0;
+      font-family: "Helvetica Neue", sans-serif; font-size: .8rem;
+    }
+    .flow-step {
+      flex: 1 1 110px; background: var(--gray-50);
+      border: 1.5px solid var(--gray-200); border-radius: 8px;
+      padding: 14px 12px; text-align: center;
+    }
+    .flow-step .num-badge {
+      display: inline-block; width: 22px; height: 22px; line-height: 22px;
+      background: var(--blue); color: #fff; border-radius: 50%;
+      font-size: .72rem; font-weight: 700; margin-bottom: 8px;
+    }
+    .flow-step .title { font-weight: 700; font-size: .8rem;
+                        color: var(--blue); display: block; margin-bottom: 4px; }
+    .flow-step.highlight { border-color: var(--purple); background: #f5f3ff; }
+    .flow-step.highlight .title { color: var(--purple); }
+    .flow-step.highlight .num-badge { background: var(--purple); }
+    .flow-arrow { display: flex; align-items: center; padding: 0 4px;
+                  color: var(--gray-700); font-size: 1.3rem; flex-shrink: 0; }
+
+    /* ── Tables ── */
+    table { width: 100%; border-collapse: collapse; margin: 22px 0; font-size: .87rem; }
+    thead th {
+      background: var(--blue); color: #fff; text-align: left;
+      padding: 10px 14px; font-family: "Helvetica Neue", sans-serif;
+      font-weight: 600; font-size: .78rem; letter-spacing: .04em;
+    }
+    tbody tr:nth-child(even) { background: var(--gray-50); }
+    tbody td { padding: 9px 14px; border-bottom: 1px solid var(--gray-200); vertical-align: top; }
+    .badge {
+      display: inline-block; padding: 2px 8px; border-radius: 999px;
+      font-size: .7rem; font-weight: 700; font-family: "Helvetica Neue", sans-serif;
+    }
+    .b-blue   { background:#dbeafe; color:#1e40af; }
+    .b-red    { background:#fee2e2; color:#991b1b; }
+    .b-green  { background:#dcfce7; color:#166534; }
+    .b-amber  { background:#fef3c7; color:#92400e; }
+    .b-purple { background:#ede9fe; color:#5b21b6; }
+
+    /* ── Confusion pair card ── */
+    .confusion-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin: 26px 0; }
+    .conf-card {
+      border: 1.5px solid var(--gray-200); border-radius: var(--r);
+      padding: 16px 20px;
+    }
+    .conf-card h4 {
+      font-family: "Helvetica Neue", sans-serif; font-size: .78rem;
+      text-transform: uppercase; letter-spacing: .07em;
+      margin-bottom: 10px;
+    }
+    .conf-card.wrong h4 { color: var(--red);   border-bottom: 2px solid var(--red);   padding-bottom: 6px; }
+    .conf-card.right h4 { color: var(--green); border-bottom: 2px solid var(--green); padding-bottom: 6px; }
+    .prob-row { display: flex; justify-content: space-between;
+                font-family: "Fira Code", monospace; font-size: .83rem;
+                padding: 4px 0; border-bottom: 1px solid var(--gray-100); }
+    .prob-row .label { color: var(--gray-700); }
+    .prob-row .val   { font-weight: 700; }
+    .prob-row .val.hi { color: var(--red);   }
+    .prob-row .val.lo { color: var(--green); }
+
+    /* ── Math block ── */
+    .math-block {
+      background: #fafafa; border: 1px solid var(--gray-200);
+      border-left: 4px solid var(--purple);
+      border-radius: 0 var(--r) var(--r) 0;
+      padding: 18px 24px; margin: 22px 0;
+      font-family: "Fira Code", monospace; font-size: .9rem;
+      line-height: 2;
+    }
+    .math-block .comment { color: #6b7280; font-style: italic; font-size: .8rem; }
+
+    /* ── CSV column table ── */
+    .col-table thead th { background: var(--purple); }
+
+    /* ── Todo list ── */
+    ol.steps { padding-left: 22px; }
+    ol.steps li { margin-bottom: 8px; }
+
+    footer {
+      margin-top: 72px; padding-top: 18px;
+      border-top: 1px solid var(--gray-200);
+      font-family: "Helvetica Neue", sans-serif;
+      font-size: .76rem; color: #9ca3af;
+    }
+
+    @media (max-width: 620px) {
+      .confusion-grid { grid-template-columns: 1fr; }
+      .flow { flex-direction: column; }
+      .flow-arrow { transform: rotate(90deg); align-self: center; }
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <p class="kicker">Caleyez Capstone — QA & Evaluation Design Document</p>
+  <h1>Evaluation Pipeline &amp; Hierarchical Misclassification Analysis</h1>
+  <p class="subtitle">
+    How the full Caleyez pipeline is evaluated end-to-end, and a rigorous
+    analysis of why the XGBoost Re-Ranker favours highly confident broader
+    classes over specific sub-classes — and how to detect it.
+  </p>
+  <p class="meta">Prepared for: B.Sc. Capstone Engineering Review &nbsp;|&nbsp; May 2026</p>
+</header>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2>1. System Architecture Recap</h2>
+
+<p>
+  The Caleyez inference stack is a three-stage pipeline. Each stage adds
+  information; no stage discards the previous stage's output.
+</p>
+
+<div class="flow">
+  <div class="flow-step">
+    <span class="num-badge">1</span>
+    <span class="title">Global YOLO</span>
+    P<sub>G</sub> ∈ ℝ<sup>142</sup><br>Top-5 classes
+  </div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">
+    <span class="num-badge">2</span>
+    <span class="title">Israeli YOLO</span>
+    P<sub>I</sub> ∈ ℝ<sup>13</sup><br>Top-5 classes
+  </div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">
+    <span class="num-badge">3</span>
+    <span class="title">Candidate Merge</span>
+    5–10 unique<br>class names
+  </div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step highlight">
+    <span class="num-badge">4</span>
+    <span class="title">XGBoost Arbiter</span>
+    Scores each<br>candidate
+  </div>
+  <div class="flow-arrow">→</div>
+  <div class="flow-step">
+    <span class="num-badge">5</span>
+    <span class="title">Output</span>
+    argmax(score)<br>= final class
+  </div>
+</div>
+
+<p>
+  The evaluation script (<code>evaluate_system.py</code>) runs this full pipeline
+  on every image in the <code>test</code> splits of both datasets and records
+  the output of every stage.
+</p>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2>2. Evaluation Script — How It Works</h2>
+
+<h3>2.1 Dataset Scope</h3>
+<p>
+  Two <code>test</code> directories are evaluated together in a single pass:
+</p>
+<table>
+  <thead><tr><th>Domain</th><th>Directory</th><th>Classes</th></tr></thead>
+  <tbody>
+    <tr><td><span class="badge b-blue">global</span></td>
+        <td><code>datasets/general_model_data_set/test/</code></td><td>142</td></tr>
+    <tr><td><span class="badge b-purple">israeli</span></td>
+        <td><code>datasets/israeli-food-master/test/</code></td><td>13</td></tr>
+  </tbody>
+</table>
+
+<p>
+  Each image is tagged with its <code>domain</code> (which dataset it came from)
+  so the final accuracy summary can be broken down separately — overall system
+  accuracy, accuracy on general foods, and accuracy on Israeli foods.
+</p>
+
+<h3>2.2 Per-Image Inference Steps</h3>
+<ol class="steps">
+  <li>Run <strong>Global YOLO</strong> → extract <code>result.probs.data</code> (142-dim tensor) → take Top-5 class names by descending probability.</li>
+  <li>Run <strong>Israeli YOLO</strong> → extract <code>result.probs.data</code> (13-dim tensor) → take Top-5 class names.</li>
+  <li>Merge into ordered unique candidate set (Global first, then any additional Israeli entries).</li>
+  <li>For every candidate, query <code>global_prob</code> and <code>israeli_prob</code> via the aligned name→index lookup; zero-impute for out-of-vocabulary classes.</li>
+  <li>Build an <em>N×4</em> feature matrix (<em>N</em> = number of candidates) and score it with the XGBoost Booster.</li>
+  <li>The candidate with the highest XGBoost score is the <strong>Arbiter Final Class</strong>.</li>
+</ol>
+
+<h3>2.3 Output CSV Schema</h3>
+<table class="col-table">
+  <thead><tr><th>Column</th><th>Type</th><th>Description</th></tr></thead>
+  <tbody>
+    <tr><td><code>image_path</code></td><td>string</td><td>Full path to the evaluated image.</td></tr>
+    <tr><td><code>domain</code></td><td>global / israeli</td><td>Which dataset the image came from.</td></tr>
+    <tr><td><code>ground_truth</code></td><td>string</td><td>True class label (folder name).</td></tr>
+    <tr><td><code>global_top1_class</code></td><td>string</td><td>Global model's single best prediction.</td></tr>
+    <tr><td><code>global_top1_conf</code></td><td>float [0,1]</td><td>Global model's confidence in that prediction.</td></tr>
+    <tr><td><code>israeli_top1_class</code></td><td>string</td><td>Israeli model's single best prediction.</td></tr>
+    <tr><td><code>israeli_top1_conf</code></td><td>float [0,1]</td><td>Israeli model's confidence in that prediction.</td></tr>
+    <tr><td><code>arbiter_final_class</code></td><td>string</td><td>XGBoost Re-Ranker's final chosen class.</td></tr>
+    <tr><td><code>arbiter_final_score</code></td><td>float [0,1]</td><td>XGBoost probability score for the chosen class.</td></tr>
+    <tr><td><code>is_correct</code></td><td>0 / 1</td><td>1 if <code>arbiter_final_class == ground_truth</code>.</td></tr>
+  </tbody>
+</table>
+
+<h3>2.4 Console Summary Output</h3>
+<p>
+  After processing all images, the script prints three accuracy figures:
+  <strong>Overall</strong>, <strong>Global domain</strong>, and
+  <strong>Israeli domain</strong>. A large gap between the two domain
+  accuracies immediately signals whether the Arbiter is biased toward one
+  model's confidence scale.
+</p>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2>3. The Hierarchical Misclassification Phenomenon</h2>
+
+<h3>3.1 What Is It?</h3>
+
+<p>
+  A <strong>hierarchical misclassification</strong> occurs when the system
+  predicts a semantically correct but less specific class than the ground truth —
+  for example, predicting <em>"steak"</em> when the ground truth is
+  <em>"filet_mignon"</em>. From a human perspective this is a <em>soft error</em>;
+  from a classification metric perspective it is indistinguishable from predicting
+  <em>"sushi"</em>.
+</p>
+
+<div class="callout amber">
+  <strong>Observed example:</strong> The Global model assigned
+  <code>global_prob("steak") = 0.98</code> and
+  <code>global_prob("filet_mignon") = 0.61</code> for a filet mignon image.
+  The Israeli model had no opinion on either class (<code>israeli_prob = 0.0</code>
+  for both). The Arbiter correctly maximised expected correctness — but the
+  ground truth sub-class was never the highest-scoring candidate.
+</div>
+
+<h3>3.2 Mathematical Root Cause</h3>
+
+<p>
+  The XGBoost Re-Ranker was trained to maximise <strong>Pointwise binary
+  cross-entropy</strong> over individual candidate labels. Its score for candidate
+  <em>c</em> given image <em>x</em> is:
+</p>
+
+<div class="math-block">
+  score(c | x) = σ( F(global_prob<sub>c</sub>, israeli_prob<sub>c</sub>,
+                       is_global_top1<sub>c</sub>, is_israeli_top1<sub>c</sub>) )
+  <br>
+  <span class="comment">where F is the XGBoost ensemble and σ is the logistic sigmoid</span>
+  <br><br>
+  At training time, label(c) = 1  iff  c == ground_truth
+  <br>
+  ∴ the model learns:  high global_prob  →  high score(c)
+</div>
+
+<p>
+  For a <em>broader</em> class like "steak", the Global YOLO model has seen
+  thousands of training examples spanning multiple steak sub-types
+  (filet mignon, ribeye, T-bone…). Its softmax neuron for "steak" accumulates
+  probability mass from all of these, producing a <strong>systematically higher
+  and more confident</strong> output than the sub-class neuron.
+</p>
+
+<p>
+  Formally, let <em>C<sub>broad</sub></em> = {filet_mignon, ribeye, T-bone, …}
+  be the set of visual sub-classes that map onto the broader label "steak".
+  Because the Global model was trained on flat (non-hierarchical) labels:
+</p>
+
+<div class="math-block">
+  𝔼[ P<sub>G</sub>("steak") ]  &gt;&gt;  𝔼[ P<sub>G</sub>("filet_mignon") ]
+  <br><br>
+  <span class="comment">because "steak" is the attractor for a larger region of image space,</span><br>
+  <span class="comment">while "filet_mignon" only fires on a narrow sub-distribution.</span>
+  <br><br>
+  ∴  score("steak" | x)  &gt;  score("filet_mignon" | x)  for most steak images,<br>
+  regardless of the true sub-class label.
+</div>
+
+<h3>3.3 Why the Arbiter Cannot Fix This Alone</h3>
+
+<p>
+  The Arbiter was trained on the same flat label distribution. It learned that
+  <code>is_global_top1 = 1</code> combined with a high <code>global_prob</code>
+  is the strongest predictor of correctness — because for the vast majority of
+  training images, that combination <em>is</em> correct. The hierarchical
+  sub-class images are a small, unseen minority in the training distribution.
+</p>
+
+<div class="confusion-grid">
+  <div class="conf-card wrong">
+    <h4>❌ Arbiter Output (Wrong)</h4>
+    <div class="prob-row"><span class="label">candidate</span><span class="val">steak</span></div>
+    <div class="prob-row"><span class="label">global_prob</span><span class="val hi">0.98</span></div>
+    <div class="prob-row"><span class="label">israeli_prob</span><span class="val">0.00</span></div>
+    <div class="prob-row"><span class="label">is_global_top1</span><span class="val hi">1</span></div>
+    <div class="prob-row"><span class="label">xgb_score</span><span class="val hi">0.91</span></div>
+  </div>
+  <div class="conf-card right">
+    <h4>✅ True Label (Correct)</h4>
+    <div class="prob-row"><span class="label">candidate</span><span class="val">filet_mignon</span></div>
+    <div class="prob-row"><span class="label">global_prob</span><span class="val lo">0.61</span></div>
+    <div class="prob-row"><span class="label">israeli_prob</span><span class="val">0.00</span></div>
+    <div class="prob-row"><span class="label">is_global_top1</span><span class="val lo">0</span></div>
+    <div class="prob-row"><span class="label">xgb_score</span><span class="val lo">0.34</span></div>
+  </div>
+</div>
+
+<h3>3.4 Detecting Hierarchical Pairs in the Evaluation CSV</h3>
+
+<p>
+  After running <code>evaluate_system.py</code>, the following pandas query
+  isolates hierarchical misclassifications — rows where the Arbiter was wrong
+  but the Global model was extremely confident:
+</p>
+
+<pre><span class="kw">import</span> pandas <span class="kw">as</span> pd
+
+df = pd.<span class="fn">read_csv</span>(<span class="str">"system_evaluation_results.csv"</span>)
+
+<span class="cm"># All errors where the arbiter had very high confidence</span>
+errors = df[(df[<span class="str">"is_correct"</span>] == <span class="num">0</span>) &
+            (df[<span class="str">"arbiter_final_score"</span>] > <span class="num">0.7</span>)]
+
+<span class="cm"># Group by (predicted, truth) to find systematic confusion pairs</span>
+confusion_pairs = (
+    errors
+    .<span class="fn">groupby</span>([<span class="str">"arbiter_final_class"</span>, <span class="str">"ground_truth"</span>])
+    .<span class="fn">size</span>()
+    .<span class="fn">reset_index</span>(name=<span class="str">"count"</span>)
+    .<span class="fn">sort_values</span>(<span class="str">"count"</span>, ascending=<span class="kw">False</span>)
+)
+
+<span class="cm"># Flag likely hierarchical pairs: high global confidence on the wrong class</span>
+hierarchical = errors[
+    errors[<span class="str">"global_top1_class"</span>] == errors[<span class="str">"arbiter_final_class"</span>]
+]
+print(hierarchical[[<span class="str">"ground_truth"</span>, <span class="str">"arbiter_final_class"</span>,
+                    <span class="str">"global_top1_conf"</span>, <span class="str">"arbiter_final_score"</span>]]
+      .<span class="fn">sort_values</span>(<span class="str">"global_top1_conf"</span>, ascending=<span class="kw">False</span>)
+      .<span class="fn">head</span>(<span class="num">20</span>))</pre>
+
+<p>
+  This surfaces the top-20 cases where the Global model's top-1 prediction
+  "won" against the ground truth with high confidence — the fingerprint of
+  hierarchical misclassification.
+</p>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2>4. Re-Ranker Training — Version History &amp; Bias Correction Log</h2>
+
+<p>
+  The XGBoost Re-Ranker went through three training iterations to resolve a
+  severe domain imbalance. This section documents the exact failure mode of
+  each version and the algorithmic change made to fix it.
+</p>
+
+<h3>4.1 v1 — Baseline: Global <code>scale_pos_weight</code> only</h3>
+
+<table>
+  <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Overall Re-Rank Accuracy@1</td><td>84.90%</td></tr>
+    <tr><td>Global domain accuracy</td><td>88.19%</td></tr>
+    <tr><td>Israeli domain accuracy</td><td><span class="badge b-red">28.20% ✗</span></td></tr>
+  </tbody>
+</table>
+
+<div class="callout red">
+  <strong>Failure mode — Majority-Class Overruling Bias:</strong>
+  The training set contained ~25,000 Global-domain images vs ~1,300 Israeli images.
+  At ~9 candidate rows per image, Israeli rows were only ~5% of training data.
+  XGBoost converged on the lazy rule <em>"always trust high global_prob"</em> —
+  correct 95% of the time globally, but catastrophic for Israeli images.
+  Out of 937 Israeli test errors, the Israeli YOLO was actually correct with
+  &gt;95% confidence in 836 of them — and the Arbiter overruled it every time.
+</div>
+
+<h3>4.2 v2 — Three-Layer Instance Weighting (over-corrected)</h3>
+
+<p>
+  Three multiplicative weight layers were applied sequentially:
+  (1) domain balance factor ~15.55×,
+  (2) per-domain positive class balance,
+  (3) high-confidence Israeli multiplier ×4.0 for correct rows, ×2.0 for wrong rows.
+</p>
+
+<table>
+  <thead><tr><th>Metric</th><th>Value</th></tr></thead>
+  <tbody>
+    <tr><td>Overall Re-Rank Accuracy@1</td><td>69.53%</td></tr>
+    <tr><td>Global domain accuracy</td><td><span class="badge b-red">68.67% ✗</span></td></tr>
+    <tr><td>Israeli domain accuracy</td><td><span class="badge b-green">85.98% ✓</span></td></tr>
+  </tbody>
+</table>
+
+<div class="callout red">
+  <strong>Failure mode — Compounding Weight Inflation:</strong>
+  The three layers had no normalization guard. The observed weight diagnostics:
+  <code>sum(w_global) = 271,268</code> vs <code>sum(w_israeli) = 593,979</code>
+  — a domain ratio of 0.457, meaning Israeli rows carried <strong>2.18×</strong>
+  more gradient weight than Global rows. The Arbiter overcorrected and became
+  "paranoid", constantly discarding confident Global predictions.
+</div>
+
+<h3>4.3 v3 — Normalize-Last Weighting</h3>
+
+<p>
+  The core fix is a single mathematical guarantee appended after all multipliers:
+</p>
+
+<pre><span class="cm"># Step 1: base domain balance</span>
+weights[is_israeli] = n_global_rows / n_israeli_rows
+
+<span class="cm"># Step 2: confidence redistribution WITHIN Israeli budget (modest ×1.5)</span>
+weights[high_conf_correct_israeli] *= <span class="num">1.5</span>
+
+<span class="cm"># Step 3: HARD RENORMALIZATION — the guarantee v2 was missing</span>
+weights[is_israeli] *= <span class="fn">sum</span>(weights[is_global]) / <span class="fn">sum</span>(weights[is_israeli])
+<span class="cm"># → sum(w_israeli) == sum(w_global) EXACTLY, always, no matter what step 2 did</span></pre>
+
+<table>
+  <thead><tr><th>Parameter</th><th>v1</th><th>v2</th><th>v3 (current)</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Domain balance</td>
+      <td>None</td>
+      <td>15.55× multiplier</td>
+      <td>15.55× + hard renorm</td>
+    </tr>
+    <tr>
+      <td>Pos/neg balance</td>
+      <td>Global <code>scale_pos_weight</code></td>
+      <td>Per-domain, baked into weights</td>
+      <td>Global <code>scale_pos_weight</code> restored</td>
+    </tr>
+    <tr>
+      <td>Confidence multiplier</td>
+      <td>None</td>
+      <td>×4.0 correct, ×2.0 wrong</td>
+      <td>×1.5 correct only (redistributive)</td>
+    </tr>
+    <tr>
+      <td><code>max_delta_step</code></td>
+      <td>—</td>
+      <td>—</td>
+      <td>1 (gradient step stabiliser)</td>
+    </tr>
+    <tr>
+      <td>Domain weight ratio</td>
+      <td>~19:1 (Israeli invisible)</td>
+      <td>0.457 (Israeli 2.18× heavier)</td>
+      <td><strong>1.000 (exact parity)</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout amber">
+  <strong>v3 result — parity achieved, but still over-aggressive:</strong>
+  Exact domain parity was reached and Israeli accuracy climbed to
+  <strong>84.14%</strong>, but Global accuracy only recovered to
+  <strong>74.9%</strong>. The structural problem: with <em>only raw
+  probabilities</em> as features, the single lever available to help the Israeli
+  minority was to globally reduce trust in the Global model — a zero-sum trade
+  that necessarily damaged the majority Global domain.
+</div>
+
+<h3>4.4 v4 — Evidence-Based Routing (current)</h3>
+
+<p>
+  v4 breaks the zero-sum trade-off by changing the <em>inputs</em>, not the
+  weights. We stop fighting the imbalance with weighting tricks and instead give
+  the Arbiter engineered <strong>confusion features</strong> so it can make a
+  <em>conditional</em> trust decision rather than a blanket one.
+</p>
+
+<div class="callout purple">
+  <strong>The rule v4 lets the model learn:</strong> <em>"If
+  <code>global_entropy</code> is LOW (Global is peaked / confident) AND the
+  Global top-1 is not an Israeli class → trust Global unconditionally. Only when
+  <code>global_entropy</code> is HIGH (Global is genuinely guessing) should the
+  Israeli signal be allowed to win."</em> This is impossible to express with raw
+  probabilities alone — it requires an explicit measure of each model's certainty.
+</div>
+
+<table>
+  <thead><tr><th>New Feature (v4)</th><th>Scope</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td><code>global_entropy</code></td><td>per-image</td>
+        <td>Normalized Top-5 entropy of Global, [0,1]. Low = confident.</td></tr>
+    <tr><td><code>local_entropy</code></td><td>per-image</td>
+        <td>Normalized Top-5 entropy of Israeli, [0,1].</td></tr>
+    <tr><td><code>global_top1_vs_top2</code></td><td>per-image</td>
+        <td>Global decisiveness margin (p₁ − p₂).</td></tr>
+    <tr><td><code>local_top1_vs_top2</code></td><td>per-image</td>
+        <td>Israeli decisiveness margin (p₁ − p₂).</td></tr>
+    <tr><td><code>arbiter_dominance_score</code></td><td>per-candidate</td>
+        <td><code>global_prob − israeli_prob</code> for this candidate.</td></tr>
+  </tbody>
+</table>
+
+<div class="callout">
+  <strong>Why normalize entropy by log(k):</strong> The Global model has 142
+  classes and the Israeli model has 13, giving them very different maximum
+  entropies. Dividing each by <code>log(k)</code> places <em>both</em> on the
+  same [0,1] confusion scale — so the Arbiter can directly compare "how confused
+  is Global" against "how confused is Israeli" with a single learned threshold.
+</div>
+
+<p>
+  Crucially, the heavy-handed confidence multipliers from v2/v3 are
+  <strong>removed entirely</strong>. That signal now lives in
+  <code>global_entropy</code> / <code>local_entropy</code> in a learnable,
+  conditional form. Weighting reverts to <strong>pure 1:1 domain parity</strong>.
+</p>
+
+<table>
+  <thead><tr><th>Parameter</th><th>v1</th><th>v2</th><th>v3</th><th>v4 (current)</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Feature count</td>
+      <td>4 (raw)</td><td>4 (raw)</td><td>4 (raw)</td>
+      <td><strong>9 (raw + evidence)</strong></td>
+    </tr>
+    <tr>
+      <td>Domain weighting</td>
+      <td>None</td><td>15.55× (unguarded)</td><td>15.55× + renorm</td>
+      <td>Pure 1:1 parity</td>
+    </tr>
+    <tr>
+      <td>Confidence multiplier</td>
+      <td>None</td><td>×4.0 / ×2.0</td><td>×1.5</td>
+      <td><strong>Removed</strong></td>
+    </tr>
+    <tr>
+      <td>Domain weight ratio</td>
+      <td>~19:1</td><td>0.457</td><td>1.000</td><td>1.000</td>
+    </tr>
+  </tbody>
+</table>
+
+<table>
+  <thead><tr><th>Metric</th><th>v1</th><th>v2</th><th>v3</th><th>v4</th></tr></thead>
+  <tbody>
+    <tr>
+      <td>Overall Accuracy@1</td>
+      <td>84.90%</td><td>69.53%</td><td>—</td>
+      <td><span class="badge b-amber">TBD</span></td>
+    </tr>
+    <tr>
+      <td>Global accuracy</td>
+      <td><span class="badge b-green">88.19%</span></td>
+      <td><span class="badge b-red">68.67%</span></td>
+      <td><span class="badge b-amber">74.90%</span></td>
+      <td><span class="badge b-amber">TBD — target ≥85%</span></td>
+    </tr>
+    <tr>
+      <td>Israeli accuracy</td>
+      <td><span class="badge b-red">28.20%</span></td>
+      <td><span class="badge b-green">85.98%</span></td>
+      <td><span class="badge b-green">84.14%</span></td>
+      <td><span class="badge b-amber">TBD — target ≥85%</span></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2>6. Proposed Future Mitigations</h2>
+
+<table>
+  <thead><tr><th>Mitigation</th><th>Mechanism</th><th>When to Apply</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Class-specific score penalty</strong></td>
+      <td>Multiply the XGBoost score of known broad-class attractors by a
+          discount factor δ &lt; 1, boosting sub-class candidates.</td>
+      <td>After identifying the top confusion pairs in the CSV.</td>
+    </tr>
+    <tr>
+      <td><strong>Confidence entropy feature</strong></td>
+      <td>Add H(P<sub>G</sub>) = −Σ p log p as a feature.
+          High-confidence broad predictions have <em>low</em> entropy;
+          XGBoost can learn to discount them.</td>
+      <td>Retrain the Re-Ranker with the new feature column.</td>
+    </tr>
+    <tr>
+      <td><strong>Hierarchical label smoothing</strong></td>
+      <td>During Re-Ranker training, assign partial labels
+          (e.g., <code>target = 0.5</code>) for classes that are
+          hierarchically adjacent to the ground truth.</td>
+      <td>Requires a hand-crafted class taxonomy (JSON).</td>
+    </tr>
+    <tr>
+      <td><strong>Pairwise ranking loss</strong></td>
+      <td>Switch from Pointwise to Pairwise (XGBoost
+          <code>rank:pairwise</code>) so the model learns to order
+          sub-class above broad-class, not just score each independently.</td>
+      <td>After validating the taxonomy.</td>
+    </tr>
+  </tbody>
+</table>
+
+<div class="callout green">
+  <strong>Recommended first step:</strong> Run <code>evaluate_system.py</code>,
+  apply the pandas confusion-pair query above, then inspect the top 10 pairs
+  manually. If ≥ 5 of them are clearly hierarchical (broad vs. specific), proceed
+  with the confidence entropy feature — it requires no label changes and can be
+  validated in a single Re-Ranker retraining cycle.
+</div>
+
+
+<!-- ══════════════════════════════════════════════════════════════════════ -->
+<h2>7. Evaluation Metrics Glossary</h2>
+
+<table>
+  <thead><tr><th>Metric</th><th>Formula</th><th>Sensitivity to Hierarchy</th></tr></thead>
+  <tbody>
+    <tr>
+      <td><strong>Top-1 Accuracy</strong></td>
+      <td>#{correct} / #{total}</td>
+      <td><span class="badge b-red">High</span> — penalises all sub-class errors equally.</td>
+    </tr>
+    <tr>
+      <td><strong>Domain Accuracy</strong></td>
+      <td>Top-1 per dataset split</td>
+      <td><span class="badge b-amber">Medium</span> — reveals if Israeli foods are harder.</td>
+    </tr>
+    <tr>
+      <td><strong>High-confidence error rate</strong></td>
+      <td>#{wrong ∧ score > 0.7} / #{total}</td>
+      <td><span class="badge b-purple">Direct</span> — hierarchical errors cluster here.</td>
+    </tr>
+    <tr>
+      <td><strong>Confusion pair frequency</strong></td>
+      <td>Groupby (predicted, truth) counts</td>
+      <td><span class="badge b-purple">Direct</span> — names the exact pairs.</td>
+    </tr>
+  </tbody>
+</table>
+
+<footer>
+  Caleyez — B.Sc. Capstone Project &nbsp;|&nbsp; May 2026 &nbsp;|&nbsp;
+  Global YOLO11l-cls (142 cls) + Israeli YOLO11l-cls (13 cls) + XGBoost Re-Ranker
+</footer>
+
+</body>
+</html>

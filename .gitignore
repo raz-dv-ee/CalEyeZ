@@ -48,6 +48,7 @@ arbiter_training_dataset.csv
 *_dataset.csv
 *_training_data.csv
 *_inference_output.csv
+*_results.csv
 
 
 # ── 5. PYTHON STANDARD IGNORES ───────────────────────────────
