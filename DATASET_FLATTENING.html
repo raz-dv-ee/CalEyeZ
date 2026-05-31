@@ -59,7 +59,7 @@
     <p style="margin-top:0"><strong>Abstract.</strong> This report documents the data
     preparation pipeline applied to the global food-image dataset prior to retraining the
     baseline convolutional classifier (YOLOv11). The procedure consolidates an inconsistent
-    142-class label space into 133 well-defined classes through three operations — semantic
+    142-class label space into 132 well-defined classes through three operations — semantic
     merging, label normalization, and removal of out-of-scope or noisy classes — and then
     re-partitions the data into reproducible 70/20/10 train/validation/test splits. A
     two-stage de-duplication step (exact and perceptual) is introduced to eliminate
@@ -111,10 +111,12 @@
   </table>
 
   <h3>2.3 Removal of out-of-scope and noisy classes</h3>
-  <p>Three pork-derived classes were removed as out-of-scope. A fourth class,
-  <code>paprika</code>, was removed because the folder conflated multiple distinct concepts
-  (ground-spice powder, bell peppers, and chilli peppers), rendering the label
-  unusable as a supervised target.</p>
+  <p>Three pork-derived classes were removed as out-of-scope. The <code>paprika</code> class
+  was removed because the folder conflated multiple distinct concepts (ground-spice powder,
+  bell peppers, and chilli peppers), rendering the label unusable as a supervised target.
+  Finally, <code>soy_beans</code> was removed as semantically redundant: it denotes the same
+  food as <code>edamame</code>, which is retained, so the smaller folder was dropped to avoid
+  a duplicated label.</p>
   <table>
     <caption>Table 3. Removed classes.</caption>
     <thead><tr><th>Class removed</th><th>Reason</th><th class="r">Images removed</th></tr></thead>
@@ -123,7 +125,8 @@
       <tr><td><code>pulled_pork_sandwich</code></td><td>out of scope (pork)</td><td class="r">1,000</td></tr>
       <tr><td><code>baby_back_ribs</code></td><td>out of scope (pork)</td><td class="r">1,000</td></tr>
       <tr><td><code>paprika</code></td><td>mixed/noisy label</td><td class="r">103</td></tr>
-      <tr><td>Total</td><td></td><td class="r">3,103</td></tr>
+      <tr><td><code>soy_beans</code></td><td>redundant with <code>edamame</code></td><td class="r">117</td></tr>
+      <tr><td>Total</td><td></td><td class="r">3,220</td></tr>
     </tbody>
   </table>
 
@@ -166,21 +169,21 @@ clustering  →  partition whole clusters 70 / 20 / 10</pre>
   partition, source class, and original filename.</p>
 
   <h2>5. Results</h2>
-  <p>The consolidation reduced the label space from 142 to <strong>133</strong> classes. Of
-  the pooled images, exact de-duplication removed 1,003 byte-identical copies, and 522
+  <p>The consolidation reduced the label space from 142 to <strong>132</strong> classes. Of
+  the pooled images, exact de-duplication removed 981 byte-identical copies, and 519
   near-duplicate pairs were co-located within a single partition. The resulting dataset
-  contains 99,307 images distributed as shown in Table 4.</p>
+  contains 99,212 images distributed as shown in Table 4.</p>
   <table>
-    <caption>Table 4. Final partition sizes (disk-verified). All 133 classes are represented in every partition.</caption>
+    <caption>Table 4. Final partition sizes (disk-verified). All 132 classes are represented in every partition.</caption>
     <thead><tr><th>Partition</th><th class="r">Images</th><th class="r">Proportion</th><th class="r">Classes</th></tr></thead>
     <tbody>
-      <tr><td>Training</td><td class="r">69,491</td><td class="r">70.0%</td><td class="r">133</td></tr>
-      <tr><td>Validation</td><td class="r">19,846</td><td class="r">20.0%</td><td class="r">133</td></tr>
-      <tr><td>Test</td><td class="r">9,970</td><td class="r">10.0%</td><td class="r">133</td></tr>
-      <tr><td>Total</td><td class="r">99,307</td><td class="r">100%</td><td class="r">133</td></tr>
+      <tr><td>Training</td><td class="r">69,425</td><td class="r">70.0%</td><td class="r">132</td></tr>
+      <tr><td>Validation</td><td class="r">19,827</td><td class="r">20.0%</td><td class="r">132</td></tr>
+      <tr><td>Test</td><td class="r">9,960</td><td class="r">10.0%</td><td class="r">132</td></tr>
+      <tr><td>Total</td><td class="r">99,212</td><td class="r">100%</td><td class="r">132</td></tr>
     </tbody>
   </table>
-  <div class="callout"><strong>Integrity check.</strong> All 133 classes are present in every
+  <div class="callout"><strong>Integrity check.</strong> All 132 classes are present in every
   partition, partition proportions match the 70/20/10 target, and no image (or near-duplicate)
   is shared across partitions.</div>
 

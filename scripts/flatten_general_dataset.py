@@ -88,7 +88,9 @@ RENAME_MAP = {
 # classes dropped entirely
 #   pork_chop, pulled_pork_sandwich, baby_back_ribs : out-of-scope (pork)
 #   paprika : mixed/noisy folder (spice powder + bell peppers + chillies) -> unusable
-DELETE_CLASSES = {"pork_chop", "pulled_pork_sandwich", "baby_back_ribs", "paprika"}
+#   soy_beans : redundant with edamame (same food); the small/noisy folder is dropped
+DELETE_CLASSES = {"pork_chop", "pulled_pork_sandwich", "baby_back_ribs", "paprika",
+                  "soy_beans"}
 
 # classes worth a human eyeball (printed, NOT auto-deleted)
 AMBIGUOUS_WARN: set[str] = set()
