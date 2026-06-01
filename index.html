@@ -236,8 +236,8 @@
   <p>In the class version the router chose the old model on <b>95.0%</b> of images
     (15,877 of 16,720) and the new model only <b>5.0%</b> of the time. The new expert was
     contributing only 6.54% correct answers, so the router had almost nothing to gain by switching.
-    This is the behaviour Judge 1 flagged as "the router is not explained correctly": it was not
-    really routing, it was defaulting.</p>
+    In other words it was not really routing, it was defaulting to the larger model. The current
+    arbiter is a genuine decision maker, explained in full in the Arbiter tab.</p>
   <table>
     <thead><tr><th>Router decision (then)</th><th class="r">Count</th><th class="r">Share</th></tr></thead>
     <tbody>
@@ -310,8 +310,8 @@
   </table>
 
   <h3>Class balance (the reviewer's point)</h3>
-  <p>Judge 1 noted the classes are not balanced. They are not, and that is reported honestly rather
-    than hidden. Dish classes hold roughly 750 to 1,000 images each; ingredient classes (single
+  <p>The classes are not perfectly balanced, and that is reported honestly rather than
+    hidden. Dish classes hold roughly 750 to 1,000 images each; ingredient classes (single
     fruits, nuts) hold far fewer. The effect is confined to the smallest classes and is a small-sample
     effect, not a systematic weakness. The training uses class-aware sampling and heavy augmentation
     to compensate, and per-class recall is reported in the
@@ -462,9 +462,9 @@ model.<span class="fn">val</span>(data=<span class="st">"datasets/general_model_
     <a href="#a-why">Why XGBoost</a><a href="#a-code">Code</a><a href="#a-res">Results</a>
   </div>
 
-  <div class="callout purple"><b>Reviewer note answered here.</b> Judge 1 wrote that the router was not
-    explained correctly. This tab defines exactly what it is, what it reads, what it decides, and what
-    it cannot do, with the math for every feature.</div>
+  <div class="callout purple"><b>How the router works, in full.</b> This tab defines exactly what the
+    router is, what it reads, what it decides, and what it cannot do, with the math for every feature,
+    so there is no ambiguity about its role in the system.</div>
 
   <h3 id="a-what">What the router is, in one paragraph</h3>
   <p>The router is <b>not</b> a third food classifier. It never looks at the image. It looks only at
@@ -558,10 +558,21 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
       </tbody>
     </table>
   </div>
-  <div class="callout green"><b>Read this carefully:</b> the arbiter recovers Israeli dishes that the
-    global model scores 0% on, for a real +5.78-point coverage gain, closing 54% of the gap to oracle.
-    Israeli recall is 61% because the Israeli model's out-of-domain overconfidence sets the ceiling, not
-    the arbiter logic. Model file: <code>scripts/arbiter/arbiter_xgb.json</code>.</div>
+  <div class="callout green"><b>What these numbers mean.</b>
+    <ul style="margin:8px 0 0">
+      <li><b>Why the gain is real:</b> the global model was never trained on Israeli food, so it gets
+        those images wrong every time (0%). The only way to get them right is for the router to send
+        them to the Israeli expert. That is exactly what produces the jump from the always-global
+        baseline (77.98%) to the routed system (83.75%), a gain of <b>+5.78 points</b>.</li>
+      <li><b>How close that is to perfect:</b> a perfect router (oracle) would score 88.40%. The full
+        gap from baseline to perfect is 88.40 − 77.98 = 10.42 points; the arbiter already captured
+        5.78 of them, so 5.78 ÷ 10.42 = <b>54%</b> of the available gap is closed.</li>
+      <li><b>Why Israeli recall is only 61%:</b> of all truly-Israeli images, the router sends 61% to
+        the right expert and misses 39%. The miss is caused by the Israeli model firing high confidence
+        even on food it never saw, which makes its confidence a noisy signal. Better model calibration
+        would raise this; more router tuning would not.</li>
+    </ul>
+    Model file: <code>scripts/arbiter/arbiter_xgb.json</code>.</div>
 </section>
 
 <!-- ============ CNN VISUALIZER ============ -->
@@ -688,9 +699,9 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
 <!-- ============ VALIDATION & RISKS ============ -->
 <section class="tab" id="tab-validation">
   <h2>Validation Plan and Risk Coverage</h2>
-  <div class="callout purple"><b>Reviewer note answered here.</b> Judge 2 asked for a direct line from
-    every goal and risk to a specific test that proved it was handled. This tab is that mapping. Each
-    row pairs a risk with the concrete test that neutralises it and the evidence produced.</div>
+  <div class="callout purple"><b>Goals and risks mapped to tests.</b> Every goal and risk is traced to
+    a specific test that proved it was handled. Each row pairs a risk with the concrete test that
+    neutralises it and the evidence produced.</div>
 
   <h3>Risk → test → evidence</h3>
   <table>
@@ -733,46 +744,46 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
 
 <!-- ============ FEEDBACK ============ -->
 <section class="tab" id="tab-feedback">
-  <h2>Reviewer Response</h2>
-  <p class="lead">The two reviewers' comments from the review conference, each paired with the concrete
-    change made in response. Nothing here is rhetorical; every response points at a tab with data.</p>
+  <h2>Points Raised in Review and How We Addressed Them</h2>
+  <p class="lead">The points raised at the interim review, each paired with the concrete change made in
+    response. Nothing here is rhetorical; every response points at a tab with data.</p>
 
-  <h3>Dr. Hanan Rosenthal (Judge 1)</h3>
+  <h3>Model and system architecture</h3>
   <table>
-    <thead><tr><th>Comment</th><th>Response</th></tr></thead>
+    <thead><tr><th>Point raised</th><th>Response</th></tr></thead>
     <tbody>
-      <tr><td>"Many concepts are not explained correctly, for example, router."</td>
+      <tr><td>Some concepts, notably the router, needed clearer explanation.</td>
         <td>The <a href="#" class="goto" data-tab="arbiter">Arbiter tab</a> now defines the router
           precisely: it reads no pixels, only the two experts' confidence behaviour, and answers one
           binary domain question. Every feature has its formula, and the old "it just defaults to the
           big model" behaviour (95% of decisions) is shown and contrasted with the new domain detector.</td></tr>
-      <tr><td>"The way of working with the system is quite clumsy."</td>
+      <tr><td>The workflow was hard to follow end to end.</td>
         <td>The pipeline was rebuilt around one reproducible script per stage (flatten, train, generate
           arbiter data, train arbiter, evaluate, analyse) with a single living document. Each stage's
           code is shown in its tab.</td></tr>
-      <tr><td>"The classes are not balanced, impairs performance."</td>
+      <tr><td>The classes are not balanced, which can impair performance.</td>
         <td>Acknowledged and addressed in the <a href="#" class="goto" data-tab="dataset">Dataset tab</a>:
           imbalance is reported per class, the smallest classes are flagged, and class-aware sampling
           plus heavy augmentation compensate. Per-class recall is published rather than hidden.</td></tr>
     </tbody>
   </table>
 
-  <h3>Dr. Ronen Porat (Judge 2)</h3>
+  <h3>Testing and validation</h3>
   <table>
-    <thead><tr><th>Comment</th><th>Response</th></tr></thead>
+    <thead><tr><th>Point raised</th><th>Response</th></tr></thead>
     <tbody>
-      <tr><td>"A gap between theoretical planning and the actual execution of test validation."</td>
+      <tr><td>There was a gap between the planned test validation and what was actually executed.</td>
         <td>The <a href="#" class="goto" data-tab="validation">Validation &amp; Risks tab</a> now closes
           that gap: every test is executed and its evidence reported (held-out splits, ROC-AUC, error
           decomposition).</td></tr>
-      <tr><td>"Significant deepening regarding the connection between system goals and the test plan."</td>
+      <tr><td>The connection between system goals and the test plan needed deepening.</td>
         <td>Added an explicit risk → test → evidence table. Each goal and risk maps to one specific test
           and its measured result.</td></tr>
-      <tr><td>"Ensure every incorrect identification of a food receives a direct response in a specific test."</td>
+      <tr><td>Every incorrect food identification should map to a specific test.</td>
         <td>The <a href="#" class="goto" data-tab="analysis">System Analysis tab</a> decomposes every
           single error into routing error (4.91%) vs both-models-wrong (11.34%), with per-class recall,
           so no failure mode is untested.</td></tr>
-      <tr><td>"Sharpen how lessons are derived and integrate them into the final model's improvement."</td>
+      <tr><td>Lessons from the tests should be sharpened and tied to the final model's improvement.</td>
         <td>The <a href="#" class="goto" data-tab="thennow">Then vs Now tab</a> traces each lesson
           (leakage, router defaulting, calibration hacks) to the concrete fix and the resulting metric
           change.</td></tr>
