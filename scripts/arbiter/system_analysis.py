@@ -2,7 +2,7 @@
 Deep system error analysis — CalEyeZ (held-out TEST split).
 
 Decomposes every system error into routing errors vs. model errors, finds the worst
-class confusions, analyzes Israeli routing, and renders dark-themed figures for CALEYEZ.html.
+class confusions, analyzes Israeli routing, and renders dark-themed figures for index.html.
 Figures -> assets/.  Numbers printed for the HTML tables.
 """
 from __future__ import annotations

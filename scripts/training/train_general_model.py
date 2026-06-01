@@ -9,7 +9,7 @@ Domain       : Smartphone photos in classroom environments
 Dataset      : datasets/general_model_flattened — the cleaned, leakage-free,
                132-class label space (merged sub-classes, normalized labels,
                pork/paprika/soy_beans removed, exact+perceptual de-duplication,
-               re-split 70/20/10). See CALEYEZ.html (section 3).
+               re-split 70/20/10). See index.html (section 3).
 
 Accuracy levers applied vs the previous run:
   - imgsz 224 -> 320  (largest single gain for fine-grained food)
