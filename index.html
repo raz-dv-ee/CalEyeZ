@@ -705,6 +705,31 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
     baseline (78.0%, what you get without an arbiter) and the upper one is the oracle ceiling (88.7%, a
     perfect arbiter). The overall bar sitting at 83.8%, between those lines, is the real arbiter's
     contribution. Israeli is lower (60.8%) because those dishes are the hardest to route.</p>
+
+  <h4>The numbers behind the bars (test split, 11,265 images)</h4>
+  <table>
+    <thead><tr><th>Slice</th><th class="r">Images</th><th class="r">System correct</th><th class="r">System acc</th><th class="r">Always-global</th><th class="r">Oracle</th></tr></thead>
+    <tbody>
+      <tr><td>Global domain</td><td class="r">9,960</td><td class="r">8,641</td><td class="r">86.8%</td><td class="r">88.2%</td><td class="r">88.2%</td></tr>
+      <tr><td>Israeli domain</td><td class="r">1,305</td><td class="r">794</td><td class="r">60.8%</td><td class="r">0.0%</td><td class="r">92.3%</td></tr>
+      <tr><td>Overall system</td><td class="r">11,265</td><td class="r">9,435</td><td class="r">83.8%</td><td class="r">78.0%</td><td class="r">88.7%</td></tr>
+    </tbody>
+  </table>
+  <p><b>How the math works.</b> Each bar is simply correct images divided by total images for that slice:</p>
+  <pre>Global   : 8,641 / 9,960  = 86.8%
+Israeli  :   794 / 1,305  = 60.8%
+Overall  : 9,435 / 11,265 = 83.8%   (= (8,641 + 794) / (9,960 + 1,305))
+
+Always-global baseline : 8,784 / 11,265 = 78.0%   (global model alone on every image;
+                                                    it scores 0 of 1,305 Israeli images)
+Oracle ceiling         : 9,988 / 11,265 = 88.7%   (= 8,784 global + 1,204 Israeli that
+                                                    at least one expert got right)</pre>
+  <div class="callout"><b>Why the mix is mostly global.</b> The test split holds <b>9,960</b> global
+    images and <b>1,305</b> Israeli images (about 88% / 12%). Because Israeli is the smaller and harder
+    slice, its 60.8% pulls the overall number down only modestly, from the global 86.8% to 83.8%. The
+    always-global baseline is exactly the global model used alone: it gets 8,784 of the 9,960 global
+    images but 0 of the 1,305 Israeli images, which is why adding the Israeli expert plus the arbiter
+    lifts the system by 5.78 points (78.0% to 83.8%). Source: <code>datasets/system_evaluation.csv</code>.</div>
   <div class="two">
     <div><img class="fig" src="assets/sys_2_domain.png" alt="Accuracy by domain"><figcaption>Global 86.8%, Israeli 60.8%, overall 83.8%, vs always-global 78.0% and oracle 88.7%.</figcaption></div>
     <div><img class="fig" src="assets/sys_3_confusions.png" alt="Top confusions"><figcaption>Most common system confusions, true → predicted.</figcaption></div>
