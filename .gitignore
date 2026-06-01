@@ -111,7 +111,7 @@ desktop.ini
 
 
 # ── 7. MISC PROJECT-SPECIFIC ─────────────────────────────────
-# Claude Code internal settings
+# Local editor/tooling settings
 .claude/
 
 # Temporary / scratch files

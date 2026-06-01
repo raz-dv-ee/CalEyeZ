@@ -1275,16 +1275,6 @@ python scripts\training\train_general_model.py</pre>
           </tr>
         </tbody>
       </table>
-
-      <div class="callout" style="border-left:3px solid var(--accent3); margin-top:20px">
-        <div class="callout-icon">💡</div>
-        <div class="callout-body">
-          <strong>Resuming a crashed training run.</strong> If training stops unexpectedly, resume from
-          the last checkpoint by passing <code>model = YOLO("runs/general_model_flattened/weights/last.pt")</code>
-          and adding <code>resume=True</code> to <code>model.train()</code>. All hyperparameters and
-          augmentation settings are stored in the checkpoint and will be restored automatically.
-        </div>
-      </div>
     </section>
 
     <!-- Footer -->

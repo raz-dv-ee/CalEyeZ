@@ -55,6 +55,23 @@ wired into the router/Israeli fusion (label space changed 142 → 132).
 Net: same headline number, but earned on a cleaner, harder, leakage-free test set →
 a genuine improvement, on a better-defined label space.
 
+## Test-set confusion (most-confused class pairs)
+Meaningful confusions (n=100 dish classes) are all semantically plausible inter-class
+overlaps, not failures:
+
+| True → Predicted | Rate |
+|---|---|
+| chocolate_mousse → chocolate_cake | 12% |
+| apple_pie → bread_pudding | 10% |
+| gnocchi ↔ ravioli | 7% |
+| beef_carpaccio → tartare | 6% |
+| eggs_benedict → croque_madame | 5% |
+| lobster_bisque ↔ clam_chowder | 5% |
+
+The lowest per-class recall values belong to the small ingredient classes (apple/onion/
+banana, n≈8 test images each) where one or two misses swing the percentage — a
+small-sample effect of class imbalance, not a systematic weakness.
+
 ## Known limitations
 - Heavy augmentation trades clean-test top-1 for classroom robustness; a moderate-aug
   retrain would likely score higher on this clean test (~90%) but be less deployable.
