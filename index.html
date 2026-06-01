@@ -99,6 +99,13 @@
   .bar-in{height:100%;background:var(--accent);width:0;transition:width .6s ease}
   .legend{font-size:12px;color:var(--mut)}
   .pill{display:inline-block;font-size:11px;border:1px solid var(--line);border-radius:99px;padding:1px 8px;color:var(--mut);margin:2px}
+  .foodcard{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px}
+  .foodcard h4{margin:0 0 4px;color:var(--ink);text-transform:none;letter-spacing:0;font-size:15px}
+  .foodcard .cnt{color:var(--mut);font-size:12px;margin-bottom:10px}
+  .foodlist{columns:160px;column-gap:18px;margin:0;padding:0;list-style:none}
+  .foodlist li{font-size:12.5px;color:var(--mut);padding:2px 0;break-inside:avoid;text-transform:capitalize}
+  .foodlist.teal li{border-left:2px solid var(--teal);padding-left:8px;margin-bottom:2px}
+  .foodlist.blue li{border-left:2px solid var(--accent);padding-left:8px;margin-bottom:2px}
 </style>
 </head>
 <body>
@@ -287,16 +294,33 @@
   <table>
     <thead><tr><th>Operation</th><th class="r">Count</th><th>Detail</th><th>Reason</th></tr></thead>
     <tbody>
-      <tr><td><b>Moved to Israeli expert</b></td><td class="r">~14</td><td>baklava · bourekas · bourekas_cheese · falafel · falafel_pita · hraime · hummus · knafeh · samosa · samosas · schnitzel · shakshuka · shawarma · shawarma_pita</td><td>Local dishes left the global model and became the Israeli expert's job. They are not lost, they are handled by the other model and recovered by the arbiter</td></tr>
+      <tr><td><b>Moved to Israeli expert</b></td><td class="r">8</td><td>baklava · bourekas_cheese · falafel · hummus · samosa · schnitzel · shakshuka · shawarma. Pita and plural variants (falafel_pita, shawarma_pita, samosas, bourekas) were merged into the base dish; two very rare dishes (hraime, knafeh) were dropped for too few images.</td><td>Local dishes left the global model and became the Israeli expert's job. They are not lost, they are handled by the other model and recovered by the arbiter</td></tr>
       <tr><td>Merge</td><td class="r">8</td><td>filet_mignon + prime_rib → steak · beef_tartare + tuna_tartare → tartare · frozen_yogurt → ice_cream · dumplings → gyoza · sweetcorn → corn · capsicum → bell_pepper</td><td>Classes humans cannot reliably separate in a photo only add confusion and split training data</td></tr>
       <tr><td>Delete</td><td class="r">8</td><td>baby_back_ribs · pork_chop · pulled_pork_sandwich (pork, out of scope) · paprika (mixed/noisy) · soy_beans (redundant with edamame) · beignets · huevos_rancheros · sweetpotato</td><td>Out of scope or unusable; noisy labels lower every other class's accuracy</td></tr>
       <tr><td>Rename</td><td class="r">5</td><td>potato → baked_potato · chilli_pepper → chili_pepper · jalepeno → jalapeno · raddish → radish · edame → edamame</td><td>Casing and spelling collisions created duplicate label folders (still present, just renamed)</td></tr>
     </tbody>
   </table>
-  <div class="callout"><b>Reconciliation:</b> 158 old labels, minus about 14 moved to the Israeli expert,
-    minus 8 merged away and 8 deleted, gives the clean 132-class global label space. The renames stay
-    in place. So the "missing" classes are overwhelmingly the local dishes that now live in the Israeli
-    model, which is the whole point of the two-expert design.</div>
+  <div class="callout"><b>Reconciliation:</b> the old labels, minus the local dishes that moved to the
+    Israeli expert, minus the classes merged away and deleted, give the clean 132-class global label
+    space. The renames stay in place. So the "missing" classes are overwhelmingly the local dishes that
+    now live in the Israeli model, which is the whole point of the two-expert design.</div>
+
+  <h3>What each model is trained to recognize</h3>
+  <p>The two experts cover disjoint label spaces. The global model knows 132 international foods; the
+    Israeli model knows 13 local dishes. No class appears in both, which is why routing reduces cleanly
+    to a domain decision.</p>
+  <div class="two">
+    <div class="foodcard">
+      <h4>Global model</h4>
+      <div class="cnt">132 international classes</div>
+      <ul class="foodlist blue"><li>almonds</li><li>apple</li><li>apple pie</li><li>avocado</li><li>baked potato</li><li>banana</li><li>beef carpaccio</li><li>beet salad</li><li>beetroot</li><li>bell pepper</li><li>bibimbap</li><li>brazil nuts</li><li>bread pudding</li><li>breakfast burrito</li><li>bruschetta</li><li>cabbage</li><li>caesar salad</li><li>canned tuna</li><li>cannoli</li><li>caprese salad</li><li>carrot</li><li>carrot cake</li><li>cashews</li><li>cauliflower</li><li>ceviche</li><li>cheese plate</li><li>cheesecake</li><li>chicken curry</li><li>chicken quesadilla</li><li>chicken wings</li><li>chili pepper</li><li>chocolate cake</li><li>chocolate mousse</li><li>churros</li><li>clam chowder</li><li>club sandwich</li><li>coconut</li><li>corn</li><li>couscous</li><li>crab cakes</li><li>creme brulee</li><li>croque madame</li><li>cucumber</li><li>cup cakes</li><li>deviled eggs</li><li>donuts</li><li>edamame</li><li>eggplant</li><li>eggs benedict</li><li>escargots</li><li>fish and chips</li><li>foie gras</li><li>french fries</li><li>french onion soup</li><li>french toast</li><li>fried calamari</li><li>fried rice</li><li>garlic</li><li>garlic bread</li><li>ginger</li><li>gnocchi</li><li>grapes</li><li>greek salad</li><li>grilled cheese sandwich</li><li>grilled salmon</li><li>guacamole</li><li>gyoza</li><li>hamburger</li><li>hazelnuts</li><li>hot and sour soup</li><li>hot dog</li><li>ice cream</li><li>jalapeno</li><li>kiwi</li><li>lasagna</li><li>lemon</li><li>lettuce</li><li>lobster bisque</li><li>lobster roll sandwich</li><li>macadamia</li><li>macaroni and cheese</li><li>macarons</li><li>mango</li><li>miso soup</li><li>mussels</li><li>nachos</li><li>omelette</li><li>onion</li><li>onion rings</li><li>orange</li><li>oysters</li><li>pad thai</li><li>paella</li><li>pancakes</li><li>panna cotta</li><li>pear</li><li>peas</li><li>pecans</li><li>peking duck</li><li>pho</li><li>pine nuts</li><li>pineapple</li><li>pistachios</li><li>pizza</li><li>pomegranate</li><li>poutine</li><li>radish</li><li>ramen</li><li>ravioli</li><li>red velvet cake</li><li>risotto</li><li>sashimi</li><li>scallops</li><li>seaweed salad</li><li>shrimp and grits</li><li>spaghetti bolognese</li><li>spaghetti carbonara</li><li>spinach</li><li>spring rolls</li><li>steak</li><li>strawberry shortcake</li><li>sushi</li><li>tacos</li><li>takoyaki</li><li>tartare</li><li>tiramisu</li><li>tomato</li><li>turnip</li><li>waffles</li><li>walnuts</li><li>watermelon</li><li>white rice</li></ul>
+    </div>
+    <div class="foodcard">
+      <h4>Israeli model</h4>
+      <div class="cnt">13 local classes</div>
+      <ul class="foodlist teal"><li>baklava</li><li>bourekas cheese</li><li>falafel</li><li>hummus</li><li>jachnun</li><li>malawach</li><li>meorav yerushalmi</li><li>sabich</li><li>samosa</li><li>schnitzel</li><li>shakshuka</li><li>shawarma</li><li>sufganiyah</li></ul>
+    </div>
+  </div>
 
   <h3>De-duplication: how leakage was removed</h3>
   <p>Two stages run before splitting, so the split unit is a content cluster and never a raw file:</p>
@@ -435,13 +459,16 @@ model.<span class="fn">val</span>(data=<span class="st">"datasets/general_model_
     model can specialise hard on a narrow domain where it reaches about 92% while the global model
     scores 0% on those same classes.</p>
 
-  <h3 id="i-train">Training configuration</h3>
+  <h3 id="i-train">Training configuration and why we chose each setting</h3>
   <table>
-    <thead><tr><th>Setting</th><th>Value</th><th>Setting</th><th>Value</th></tr></thead>
+    <thead><tr><th>Setting</th><th>Value</th><th>Why this choice</th></tr></thead>
     <tbody>
-      <tr><td>classes</td><td>13</td><td>imgsz</td><td>224</td></tr>
-      <tr><td>backbone</td><td>YOLO11l-cls</td><td>epochs</td><td>63 (best 59)</td></tr>
-      <tr><td>data</td><td>datasets/israeli-food-master</td><td>best top-1</td><td>91.70%</td></tr>
+      <tr><td>backbone</td><td>YOLO11l-cls</td><td>The same backbone as the global model so both experts produce comparable confidence and embedding features, which keeps the arbiter's inputs consistent across the two models.</td></tr>
+      <tr><td>classes</td><td>13</td><td>A narrow, curated local-cuisine set. Keeping the domain small lets this expert specialise hard and reach about 92% where the global model scores 0% on the same dishes.</td></tr>
+      <tr><td>imgsz</td><td>224</td><td>Lower than the global model's 320 because the dataset is much smaller; 224 trains fast, avoids overfitting the limited data, and the local dishes are distinguishable at this resolution.</td></tr>
+      <tr><td>epochs</td><td>63 (best 59)</td><td>The small dataset converges quickly, so a short schedule is enough; best.pt is frozen at epoch 59 (the validation peak) before the noisy tail.</td></tr>
+      <tr><td>data</td><td>datasets/israeli-food-master</td><td>A dedicated, hand-collected local-food set, kept separate from the global data so adding local cuisine never degrades the global model (no catastrophic forgetting).</td></tr>
+      <tr><td>best top-1</td><td>91.70%</td><td>Strong on its own domain (top-5 about 99%), which is what makes the two-expert split worthwhile. Its out-of-domain overconfidence is handled by the arbiter, not by this model.</td></tr>
     </tbody>
   </table>
 
