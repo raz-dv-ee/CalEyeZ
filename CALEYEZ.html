@@ -57,6 +57,8 @@
   .arr{color:var(--mut)}
   ul{padding-left:22px} li{margin:4px 0}
   .todo{color:var(--amber);font-weight:600}
+  img.fig{width:100%;border:1px solid var(--line);border-radius:10px;margin:14px 0 4px;background:#0d1117}
+  figcaption{color:var(--mut);font-size:12px;margin:0 0 18px}
   .foot{color:var(--mut);font-size:12px;margin-top:50px;border-top:1px solid var(--line);padding-top:14px}
   @media(max-width:860px){.layout{grid-template-columns:1fr}.side{position:static;height:auto}}
 </style>
@@ -73,12 +75,13 @@
     <a href="#dataset">3 · Dataset <span class="status s-done">done</span></a>
     <a href="#global">4 · Global Model <span class="status s-done">done</span></a>
     <a href="#israeli">5 · Israeli Model <span class="status s-done">done</span></a>
-    <a href="#arbiter">6 · Arbiter / Router <span class="status s-wip">wip</span></a>
+    <a href="#arbiter">6 · Arbiter / Router <span class="status s-done">done</span></a>
+    <a href="#analysis">7 · System Error Analysis <span class="status s-done">done</span></a>
     <div class="navlbl">Weight & Nutrition</div>
-    <a href="#weight">7 · Weight Estimation <span class="status s-wip">wip</span></a>
-    <a href="#nutrition">8 · Nutrition Fusion <span class="status s-wip">wip</span></a>
+    <a href="#weight">8 · Weight Estimation <span class="status s-wip">wip</span></a>
+    <a href="#nutrition">9 · Nutrition Fusion <span class="status s-wip">wip</span></a>
     <div class="navlbl">Meta</div>
-    <a href="#changelog">9 · Changelog</a>
+    <a href="#changelog">10 · Changelog</a>
   </nav>
 
   <main>
@@ -276,7 +279,73 @@ winner   (global / israeli / none)</pre>
       requirement on a strictly held-out, leakage-free basis.</p>
 
     <!-- 7 -->
-    <h2 id="weight">7 · Weight Estimation — Approaches Evaluated &amp; Rejected <span class="status s-wip">wip</span></h2>
+    <h2 id="analysis">7 · System Error Analysis <span class="status s-done">done</span></h2>
+    <p>Every error of the full routed system was decomposed on the held-out test set
+      (11,265 images). This separates errors the router could fix from errors no router can fix.</p>
+
+    <h3>7.1 Error decomposition</h3>
+    <img class="fig" src="assets/sys_1_outcome.png" alt="System outcome decomposition">
+    <figcaption>System correct vs. routing error vs. both-models-wrong.</figcaption>
+    <table>
+      <thead><tr><th>Outcome</th><th class="r">Images</th><th class="r">Share</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>System correct</td><td class="r">9,435</td><td class="r">83.75%</td><td>routed to the right model and it was right</td></tr>
+        <tr><td>Routing error</td><td class="r">553</td><td class="r">4.91%</td><td>a correct model existed, the router chose the other</td></tr>
+        <tr><td>Both models wrong</td><td class="r">1,277</td><td class="r">11.34%</td><td>unfixable by any router — needs better models</td></tr>
+      </tbody>
+    </table>
+    <div class="callout green"><b>Key finding:</b> of the 16.25% system errors, only <b>4.91%
+      are routing errors</b> (potentially recoverable by a better router) — <b>11.34% are
+      model errors</b> where both models were wrong, which <i>no</i> router can fix. So ~70% of
+      all system errors are bounded by model quality, not by the arbiter. The arbiter is
+      already operating close to its useful limit; further gains require better base models.</div>
+
+    <h3>7.2 Accuracy by domain</h3>
+    <img class="fig" src="assets/sys_2_domain.png" alt="System accuracy by domain">
+    <figcaption>Global 86.8%, Israeli 60.8%, overall 83.8% — vs. always-global (78.0%) and oracle (88.7%).</figcaption>
+
+    <h3>7.3 Most common system confusions</h3>
+    <img class="fig" src="assets/sys_3_confusions.png" alt="Top system confusions">
+    <figcaption>True → predicted, ranked by frequency among test errors.</figcaption>
+    <p>The dominant system errors are <b>Israeli dishes misrouted to the global model</b> and
+      labelled as their nearest visual global match — all semantically plausible:</p>
+    <table>
+      <thead><tr><th>True → Predicted</th><th class="r">Count</th></tr></thead>
+      <tbody>
+        <tr><td>falafel → crab_cakes</td><td class="r">60</td></tr>
+        <tr><td>samosa → spring_rolls</td><td class="r">37</td></tr>
+        <tr><td>baklava → apple_pie</td><td class="r">28</td></tr>
+        <tr><td>samosa → french_fries</td><td class="r">18</td></tr>
+        <tr><td>falafel → tacos</td><td class="r">14</td></tr>
+        <tr><td>chocolate_mousse → chocolate_cake</td><td class="r">12</td></tr>
+      </tbody>
+    </table>
+
+    <h3>7.4 Israeli dish routing — recovered vs missed</h3>
+    <img class="fig" src="assets/sys_4_israeli.png" alt="Israeli dish recovery">
+    <figcaption>Per-dish: green = correctly recovered by the router, red = missed (sent to global).</figcaption>
+    <p>The router handles most Israeli dishes well (sufganiyah 89%, jachnun 83%, shakshuka
+      76%, baklava 72%, hummus 69%) but struggles on dishes that strongly resemble global foods:
+      <b>sabich 14%</b>, <b>shawarma 26%</b>, <b>falafel 43%</b>. These are the dishes whose
+      visual features overlap the global label space (falafel↔crab_cakes/tacos), so the router
+      cannot confidently separate them — the limiting factor is feature overlap, not the
+      arbiter logic.</p>
+
+    <h3>7.5 Routing separability</h3>
+    <img class="fig" src="assets/sys_5_separability.png" alt="Routing separability">
+    <figcaption>Arbiter P(israeli) for true-global vs true-israeli images. The overlap near the
+      threshold is the source of the 0.93 ROC-AUC ceiling.</figcaption>
+
+    <h3>7.6 Lowest-accuracy major classes</h3>
+    <img class="fig" src="assets/sys_6_worstclasses.png" alt="Worst major classes">
+    <figcaption>System accuracy for classes with ≥100 test images (excludes small-sample noise).</figcaption>
+
+    <p class="meta">Reproduce: <code>scripts/arbiter/system_analysis.py</code> (reads
+      <code>arbiter_dataset.csv</code>, applies the arbiter, renders all figures to
+      <code>assets/</code>).</p>
+
+    <!-- 8 -->
+    <h2 id="weight">8 · Weight Estimation — Approaches Evaluated &amp; Rejected <span class="status s-wip">wip</span></h2>
     <p>Determining food mass from a photo was investigated thoroughly before the final design.
       Each vision approach failed for a specific, measured reason, motivating the pivot to a
       direct hardware reading.</p>
@@ -302,16 +371,16 @@ winner   (global / israeli / none)</pre>
       only worked in controlled lighting. Reading mass directly via BLE removes both failure
       modes — an evidence-driven pivot, not a guess.</div>
 
-    <!-- 8 -->
-    <h2 id="nutrition">8 · Nutrition Fusion <span class="status s-wip">wip</span></h2>
+    <!-- 9 -->
+    <h2 id="nutrition">9 · Nutrition Fusion <span class="status s-wip">wip</span></h2>
     <p>Final values combine the recognized class and the measured weight via the USDA
       FoodData Central database:</p>
     <pre>value_total = (value_per_100g / 100) · weight_grams</pre>
     <p><span class="todo">[TODO: USDA query/heuristic filtering, local caching, error handling,
       GUI report.]</span></p>
 
-    <!-- 9 -->
-    <h2 id="changelog">9 · Changelog</h2>
+    <!-- 10 -->
+    <h2 id="changelog">10 · Changelog</h2>
     <ul>
       <li><b>2026-06-01</b> — Flattened dataset to 132 clean classes (merges, renames,
         deletions, exact+perceptual de-dup, 70/20/10). Retrained Global model (YOLO11l-cls,
