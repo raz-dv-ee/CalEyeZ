@@ -858,10 +858,6 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
 <!-- ============ SYSTEM LIMITATIONS & FUTURE WORK ============ -->
 <section class="tab" id="tab-future">
   <h2>System Limitations and Future Work (V2 Architecture)</h2>
-  <p class="lead">An external architectural review credited the engineering execution (data hygiene,
-    perceptual de-duplication, the systems pivot to BLE) but raised three valid limitations in the ML
-    architecture. We accept all three. This section states each limit precisely, separates what each
-    fix can and cannot change, and specifies the V2 design.</p>
 
   <div class="callout purple"><b>The governing distinction.</b> System errors split into two pools:
     <b>routing error (4.91%)</b>, where a correct expert existed but was not selected, and
@@ -886,8 +882,8 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
     <thead><tr><th>Backbone</th><th class="r">Params</th><th class="r">IN-1k top-1</th><th>Note</th></tr></thead>
     <tbody>
       <tr><td>YOLO11l-cls (current)</td><td class="r">~13M</td><td class="r">good</td><td>single exportable training and inference stack</td></tr>
-      <tr><td>Swin-T (Liu et al., ICCV 2021)</td><td class="r">~28M</td><td class="r">81.3%</td><td>shifted-window attention, hierarchical</td></tr>
-      <tr><td>ConvNeXt-T (Liu et al., CVPR 2022)</td><td class="r">~28M</td><td class="r">82.1%</td><td>modernized ConvNet, strong inductive bias</td></tr>
+      <tr><td>Swin-T (<a href="https://arxiv.org/abs/2103.14030" target="_blank" rel="noopener">Liu et al., ICCV 2021</a>)</td><td class="r">~28M</td><td class="r">81.3%</td><td>shifted-window attention, hierarchical</td></tr>
+      <tr><td>ConvNeXt-T (<a href="https://arxiv.org/abs/2201.03545" target="_blank" rel="noopener">Liu et al., CVPR 2022</a>)</td><td class="r">~28M</td><td class="r">82.1%</td><td>modernized ConvNet, strong inductive bias</td></tr>
     </tbody>
   </table>
   <div class="callout"><b>Honest scope.</b> The expected gain is a few points of clean top-1, not a
@@ -929,10 +925,10 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
     <thead><tr><th>Method</th><th>Mechanism</th><th>Reference</th></tr></thead>
     <tbody>
       <tr><td>Background / "unknown" class</td><td>Add a class of global foods so the softmax has a sink for OOD</td><td>standard practice</td></tr>
-      <tr><td>Outlier Exposure</td><td>Train against an auxiliary OOD set to flatten OOD confidence</td><td>Hendrycks et al., ICLR 2019</td></tr>
-      <tr><td>Energy-based OOD</td><td>Score by free energy of logits; cleaner separation than softmax</td><td>Liu et al., NeurIPS 2020</td></tr>
-      <tr><td>OpenMax</td><td>Recalibrate logits with extreme-value theory to expose unknowns</td><td>Bendale &amp; Boult, CVPR 2016</td></tr>
-      <tr><td>MSP baseline</td><td>Maximum softmax probability as an OOD score</td><td>Hendrycks &amp; Gimpel, ICLR 2017</td></tr>
+      <tr><td>Outlier Exposure</td><td>Train against an auxiliary OOD set to flatten OOD confidence</td><td><a href="https://arxiv.org/abs/1812.04606" target="_blank" rel="noopener">Hendrycks et al., ICLR 2019</a></td></tr>
+      <tr><td>Energy-based OOD</td><td>Score by free energy of logits; cleaner separation than softmax</td><td><a href="https://arxiv.org/abs/2010.03759" target="_blank" rel="noopener">Liu et al., NeurIPS 2020</a></td></tr>
+      <tr><td>OpenMax</td><td>Recalibrate logits with extreme-value theory to expose unknowns</td><td><a href="https://arxiv.org/abs/1511.06233" target="_blank" rel="noopener">Bendale &amp; Boult, CVPR 2016</a></td></tr>
+      <tr><td>MSP baseline</td><td>Maximum softmax probability as an OOD score</td><td><a href="https://arxiv.org/abs/1610.02136" target="_blank" rel="noopener">Hendrycks &amp; Gimpel, ICLR 2017</a></td></tr>
     </tbody>
   </table>
   <div class="callout green"><b>Why this is the most elegant fix.</b> If the Israeli expert natively
@@ -953,11 +949,11 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
       <tr><td>OSR on the Israeli expert</td><td>routing error + Israeli recall</td><td>up, toward oracle</td><td>unchanged</td></tr>
     </tbody>
   </table>
-  <div class="callout"><b>Conclusion.</b> The review is architecturally sound. The disciplined reading is
-    that the embeddings arbiter and OSR are necessary to <i>realize</i> the accuracy the current models
-    already make possible, while a stronger backbone and harder, larger data are the only path to
-    <i>raise</i> the oracle beyond 88.4%. V2 commits to both axes so that the two are not confused, which
-    was itself one of the more subtle points the review surfaced.</div>
+  <div class="callout"><b>Conclusion.</b> These limitations are architecturally sound. The disciplined
+    reading is that the embeddings arbiter and OSR are necessary to <i>realize</i> the accuracy the
+    current models already make possible, while a stronger backbone and harder, larger data are the only
+    path to <i>raise</i> the oracle beyond 88.4%. V2 commits to both axes so that the two are not
+    confused.</div>
 
   <div class="foot">CalEyeZ · single living project document · Raz Dvora &amp; Roi Tzur · Shenkar.</div>
 </section>
