@@ -120,6 +120,7 @@
     <button data-tab="analysis">System Analysis</button>
     <button data-tab="validation">Validation &amp; Risks</button>
     <button data-tab="feedback">Reviewer Response</button>
+    <button data-tab="future">Limitations &amp; V2</button>
   </div>
 </header>
 
@@ -850,6 +851,113 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
     honest one. Leakage was removed, the old defaulting router was replaced by a real arbiter (a domain
     detector) and fully explained,
     every error class is tested, and class imbalance is reported instead of hidden.</div>
+
+  <div class="foot">CalEyeZ · single living project document · Raz Dvora &amp; Roi Tzur · Shenkar.</div>
+</section>
+
+<!-- ============ SYSTEM LIMITATIONS & FUTURE WORK ============ -->
+<section class="tab" id="tab-future">
+  <h2>System Limitations and Future Work (V2 Architecture)</h2>
+  <p class="lead">An external architectural review credited the engineering execution (data hygiene,
+    perceptual de-duplication, the systems pivot to BLE) but raised three valid limitations in the ML
+    architecture. We accept all three. This section states each limit precisely, separates what each
+    fix can and cannot change, and specifies the V2 design.</p>
+
+  <div class="callout purple"><b>The governing distinction.</b> System errors split into two pools:
+    <b>routing error (4.91%)</b>, where a correct expert existed but was not selected, and
+    <b>both-experts-wrong (11.34%)</b>, where no selection could have helped. A better arbiter and OSR
+    attack only the first pool, so they raise the realized accuracy <i>toward</i> the 88.4% oracle but
+    cannot exceed it. Only a stronger backbone and harder data attack the second pool, which is the only
+    way to <i>raise</i> the oracle itself. V2 therefore pursues both axes deliberately.</div>
+
+  <div class="grid g3">
+    <div class="stat"><div class="n">4.91%</div><div class="l">routing error (closes to oracle)</div></div>
+    <div class="stat"><div class="n">11.34%</div><div class="l">both-wrong (raises oracle)</div></div>
+    <div class="stat good"><div class="n">88.4%</div><div class="l">current oracle ceiling</div></div>
+  </div>
+
+  <!-- Limitation 1 -->
+  <h3>Limitation 1 · Classification backbone is not Pareto-optimal</h3>
+  <p>The Global and Israeli experts use <code>YOLO11l-cls</code>. In its classification variant this is a
+    legitimate classifier (the detection head is removed), but the C3k2 backbone is co-designed for
+    multi-scale detection feature reuse, which is not the accuracy-per-FLOP optimum for single-label
+    classification. On ImageNet-1k, hierarchical and isotropic classifiers occupy a stronger frontier.</p>
+  <table>
+    <thead><tr><th>Backbone</th><th class="r">Params</th><th class="r">IN-1k top-1</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td>YOLO11l-cls (current)</td><td class="r">~13M</td><td class="r">good</td><td>single exportable training and inference stack</td></tr>
+      <tr><td>Swin-T (Liu et al., ICCV 2021)</td><td class="r">~28M</td><td class="r">81.3%</td><td>shifted-window attention, hierarchical</td></tr>
+      <tr><td>ConvNeXt-T (Liu et al., CVPR 2022)</td><td class="r">~28M</td><td class="r">82.1%</td><td>modernized ConvNet, strong inductive bias</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>Honest scope.</b> The expected gain is a few points of clean top-1, not a
+    transformation, and the "smaller footprint" claim is workload-dependent (ConvNeXt-T has more
+    parameters than the current backbone; the advantage is accuracy per FLOP and inductive bias). Because
+    this is the only change that reduces the <b>both-wrong</b> pool, it is also the only change that can
+    move the 88.4% oracle. <b>V2 action:</b> fine-tune ConvNeXt-T or Swin-T under the identical
+    leakage-free 132-class protocol and re-measure the oracle.</div>
+
+  <!-- Limitation 2 -->
+  <h3>Limitation 2 · The arbiter is information-starved (logits-only features)</h3>
+  <p>The current arbiter consumes only scalar summaries of each expert's softmax: confidence, entropy,
+    and margin. These are a deterministic, lossy function of the penultimate 1280-D embedding. By the
+    <b>data processing inequality</b>, the embedding carries at least as much label-relevant information
+    as any function of it:</p>
+  <pre>I(domain ; conf, entropy, margin)  &le;  I(domain ; embedding_1280)</pre>
+  <p>The information we discard is exactly the visual-feature overlap that defeats margin-based routing
+    (falafel vs crab_cakes, sabich vs global dishes). A multimodal arbiter on the concatenated
+    penultimate embeddings of both experts routes on visual evidence, not probability shape alone.</p>
+  <div class="flow">
+    <span class="box hl">Global embed (1280-D)</span><span class="arr">||</span>
+    <span class="box teal">Israeli embed (1280-D)</span><span class="arr">→</span>
+    <span class="box">2560-D fused vector</span><span class="arr">→</span>
+    <span class="box amber">PCA / small MLP arbiter</span><span class="arr">→</span>
+    <span class="box">P(israeli)</span>
+  </div>
+  <div class="callout amber"><b>Constraint we must engineer around.</b> 2560 dimensions against roughly
+    32k rows invites overfitting, and the Israeli embedding is least reliable out-of-domain. <b>V2
+    action:</b> reduce with PCA or a learned projection, regularize a shallow MLP head, and validate on
+    the same held-out test rows. <b>Ceiling reminder:</b> this attacks only the 4.91% routing pool, so
+    its maximum benefit is bounded by the oracle; it closes the gap, it does not raise it.</div>
+
+  <!-- Limitation 3 -->
+  <h3>Limitation 3 · No native Open Set Recognition for out-of-domain inputs</h3>
+  <p>The Israeli expert is overconfident on food it never saw, and we delegated the entire correction to
+    the downstream arbiter. This treats the symptom. The Open Set Recognition literature provides
+    root-cause fixes that force low confidence on non-Israeli inputs natively:</p>
+  <table>
+    <thead><tr><th>Method</th><th>Mechanism</th><th>Reference</th></tr></thead>
+    <tbody>
+      <tr><td>Background / "unknown" class</td><td>Add a class of global foods so the softmax has a sink for OOD</td><td>standard practice</td></tr>
+      <tr><td>Outlier Exposure</td><td>Train against an auxiliary OOD set to flatten OOD confidence</td><td>Hendrycks et al., ICLR 2019</td></tr>
+      <tr><td>Energy-based OOD</td><td>Score by free energy of logits; cleaner separation than softmax</td><td>Liu et al., NeurIPS 2020</td></tr>
+      <tr><td>OpenMax</td><td>Recalibrate logits with extreme-value theory to expose unknowns</td><td>Bendale &amp; Boult, CVPR 2016</td></tr>
+      <tr><td>MSP baseline</td><td>Maximum softmax probability as an OOD score</td><td>Hendrycks &amp; Gimpel, ICLR 2017</td></tr>
+    </tbody>
+  </table>
+  <div class="callout green"><b>Why this is the most elegant fix.</b> If the Israeli expert natively
+    reports low confidence on non-Israeli food, the arbitration problem nearly dissolves: a calibrated
+    confidence gate becomes viable, and the learned arbiter is reduced to a tie-breaker rather than the
+    sole defense. <b>V2 action:</b> retrain the Israeli expert with a background class plus Outlier
+    Exposure, and report an OOD detection curve (AUROC, FPR at 95% TPR) as a first-class metric.
+    <b>Scope:</b> this raises Israeli recall and shrinks routing error, but, like the embeddings arbiter,
+    it operates inside the oracle and does not by itself lift the 88.4% ceiling.</div>
+
+  <!-- Synthesis -->
+  <h3>V2 synthesis: which lever moves which number</h3>
+  <table>
+    <thead><tr><th>V2 change</th><th>Error pool attacked</th><th>Effect on realized acc</th><th>Effect on oracle</th></tr></thead>
+    <tbody>
+      <tr><td>ConvNeXt-T / Swin-T backbone</td><td>both-experts-wrong (11.34%)</td><td>up</td><td><b>raises it</b></td></tr>
+      <tr><td>Embeddings arbiter (2560-D)</td><td>routing error (4.91%)</td><td>up, toward oracle</td><td>unchanged</td></tr>
+      <tr><td>OSR on the Israeli expert</td><td>routing error + Israeli recall</td><td>up, toward oracle</td><td>unchanged</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>Conclusion.</b> The review is architecturally sound. The disciplined reading is
+    that the embeddings arbiter and OSR are necessary to <i>realize</i> the accuracy the current models
+    already make possible, while a stronger backbone and harder, larger data are the only path to
+    <i>raise</i> the oracle beyond 88.4%. V2 commits to both axes so that the two are not confused, which
+    was itself one of the more subtle points the review surfaced.</div>
 
   <div class="foot">CalEyeZ · single living project document · Raz Dvora &amp; Roi Tzur · Shenkar.</div>
 </section>
