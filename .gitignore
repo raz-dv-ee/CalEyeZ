@@ -52,6 +52,7 @@ runs/general_model_flattened/weights/last.pt
 # Code files (.py) that generate them are kept.
 arbiter_training_dataset.csv
 *_dataset.csv
+*_evaluation.csv
 *_training_data.csv
 *_inference_output.csv
 *_results.csv
