@@ -98,19 +98,23 @@ for i,n in enumerate(counts): ax.text(n+0.3,i,str(n),va="center",color=INK,fonts
 ax.set_title("Top system confusions  (true → predicted, test errors)"); ax.grid(axis="x",alpha=.3)
 save(fig,"sys_3_confusions.png")
 
-# ===== FIG 4: Israeli dishes routed correct vs missed =====
+# ===== FIG 4: Israeli dishes routed correct vs missed (NORMALIZED to 100%) =====
 isr=df[df.domain=="israeli"]
 dishes=sorted(isr.true_class.unique())
-corr=[((isr.true_class==d)&fc).sum() for d in dishes]
-miss=[((isr.true_class==d)&(~fc)).sum() for d in dishes]
-order=np.argsort([c/(c+m) if (c+m) else 0 for c,m in zip(corr,miss)])
-dishes=[dishes[i] for i in order]; corr=[corr[i] for i in order]; miss=[miss[i] for i in order]
+corr=np.array([((isr.true_class==d)&fc).sum() for d in dishes])
+miss=np.array([((isr.true_class==d)&(~fc)).sum() for d in dishes])
+tot=corr+miss; recall=np.where(tot>0, corr/tot*100, 0)
+order=np.argsort(recall)                 # worst at bottom
+dishes=[dishes[i] for i in order]; recall=recall[order]; tot=tot[order]
 fig,ax=plt.subplots(figsize=(8,5))
-ax.barh(dishes,corr,color=GREEN,label="system correct")
-ax.barh(dishes,miss,left=corr,color=RED,label="missed (routed to global)")
-for i,(c,m) in enumerate(zip(corr,miss)):
-    tot=c+m; ax.text(tot+0.5,i,f"{c/tot*100:.0f}%" if tot else "",va="center",color=MUT,fontsize=8)
-ax.set_title("Israeli dishes: recovered vs missed by the router"); ax.legend(frameon=False,labelcolor=INK,loc="lower right")
+ax.barh(dishes,recall,color=GREEN,label="recovered (system correct)")
+ax.barh(dishes,100-recall,left=recall,color=RED,alpha=.85,label="missed (routed to global)")
+for i,(r,n) in enumerate(zip(recall,tot)):
+    ax.text(2,i,f"{r:.0f}%",va="center",ha="left",color="#06240f",fontsize=9,fontweight="bold")
+    ax.text(101,i,f"n={n}",va="center",color=MUT,fontsize=8)
+ax.set_xlim(0,100); ax.set_xlabel("share of that dish's test images (%)")
+ax.set_title("Israeli dish routing recall  (each bar = 100% of that dish)")
+ax.legend(frameon=False,labelcolor=INK,loc="upper center",bbox_to_anchor=(0.5,-0.13),ncol=2)
 ax.grid(axis="x",alpha=.3)
 save(fig,"sys_4_israeli.png")
 
