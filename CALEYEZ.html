@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CalEyeZ — Project Documentation</title>
+<style>
+  :root{
+    --bg:#0d1117; --panel:#161b22; --line:#30363d; --ink:#e6edf3; --mut:#8b949e;
+    --accent:#58a6ff; --green:#3fb950; --amber:#d29922; --red:#f85149; --purple:#bc8cff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.65 -apple-system,BlinkMacSystemFont,"Segoe UI",Helvetica,Arial,sans-serif;}
+  a{color:var(--accent);text-decoration:none}
+  .layout{display:grid;grid-template-columns:240px 1fr;min-height:100vh}
+  /* sidebar */
+  .side{position:sticky;top:0;height:100vh;overflow-y:auto;background:var(--panel);
+    border-right:1px solid var(--line);padding:24px 16px}
+  .brand{font-weight:700;font-size:15px;letter-spacing:.02em}
+  .brand span{color:var(--mut);font-weight:400;font-size:12px;display:block;margin-top:2px}
+  .navlbl{font-size:10.5px;text-transform:uppercase;letter-spacing:.12em;color:var(--mut);
+    margin:18px 0 6px 6px}
+  .side a{display:block;padding:6px 10px;border-radius:6px;color:var(--mut);font-size:13.5px}
+  .side a:hover{background:#1f2633;color:var(--ink)}
+  .status{font-size:10px;padding:1px 7px;border-radius:99px;margin-left:6px;font-weight:700}
+  .s-done{background:rgba(63,185,80,.15);color:var(--green)}
+  .s-wip{background:rgba(210,153,34,.15);color:var(--amber)}
+  /* main */
+  main{padding:44px 48px 100px;max-width:900px}
+  h1{font-size:30px;margin:0 0 6px;letter-spacing:-.3px}
+  .sub{color:var(--mut);margin:0 0 6px}
+  .meta{color:var(--mut);font-size:13px;margin-top:10px}
+  h2{font-size:22px;margin:46px 0 12px;padding-bottom:7px;border-bottom:1px solid var(--line)}
+  h3{font-size:16px;margin:24px 0 8px;color:var(--accent)}
+  p{margin:11px 0}
+  code{background:rgba(110,118,129,.16);padding:2px 6px;border-radius:6px;
+    font-family:ui-monospace,Consolas,monospace;font-size:13px}
+  pre{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:14px 16px;
+    overflow:auto;font-family:ui-monospace,Consolas,monospace;font-size:12.5px}
+  table{border-collapse:collapse;width:100%;margin:14px 0;font-size:14px}
+  th,td{text-align:left;padding:7px 11px;border-bottom:1px solid var(--line)}
+  thead th{color:var(--mut);font-size:11.5px;text-transform:uppercase;letter-spacing:.5px}
+  td.r,th.r{text-align:right;font-variant-numeric:tabular-nums}
+  tbody tr:last-child td{border-top:1px solid var(--line);font-weight:600}
+  .callout{border:1px solid var(--line);border-left:3px solid var(--accent);background:var(--panel);
+    padding:12px 16px;border-radius:0 8px 8px 0;margin:16px 0;font-size:14px}
+  .callout.green{border-left-color:var(--green)} .callout.amber{border-left-color:var(--amber)}
+  .callout.red{border-left-color:var(--red)}
+  .callout b{color:var(--accent)} .callout.green b{color:var(--green)}
+  .callout.amber b{color:var(--amber)} .callout.red b{color:var(--red)}
+  .grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}
+  .stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px;text-align:center}
+  .stat .n{font-size:22px;font-weight:700;color:var(--accent)} .stat .l{font-size:12px;color:var(--mut)}
+  .flow{display:flex;flex-wrap:wrap;gap:6px;align-items:center;margin:12px 0;font-size:13px}
+  .box{background:#1f2633;border:1px solid var(--line);border-radius:7px;padding:6px 11px}
+  .arr{color:var(--mut)}
+  ul{padding-left:22px} li{margin:4px 0}
+  .todo{color:var(--amber);font-weight:600}
+  .foot{color:var(--mut);font-size:12px;margin-top:50px;border-top:1px solid var(--line);padding-top:14px}
+  @media(max-width:860px){.layout{grid-template-columns:1fr}.side{position:static;height:auto}}
+</style>
+</head>
+<body>
+<div class="layout">
+
+  <nav class="side">
+    <div class="brand">CalEyeZ<span>Project Documentation</span></div>
+    <div class="navlbl">System</div>
+    <a href="#overview">1 · Overview</a>
+    <a href="#architecture">2 · Architecture</a>
+    <div class="navlbl">Vision</div>
+    <a href="#dataset">3 · Dataset <span class="status s-done">done</span></a>
+    <a href="#global">4 · Global Model <span class="status s-done">done</span></a>
+    <a href="#israeli">5 · Israeli Model <span class="status s-done">done</span></a>
+    <a href="#arbiter">6 · Arbiter / Router <span class="status s-wip">wip</span></a>
+    <div class="navlbl">Weight & Nutrition</div>
+    <a href="#weight">7 · Weight Estimation <span class="status s-wip">wip</span></a>
+    <a href="#nutrition">8 · Nutrition Fusion <span class="status s-wip">wip</span></a>
+    <div class="navlbl">Meta</div>
+    <a href="#changelog">9 · Changelog</a>
+  </nav>
+
+  <main>
+    <h1>CalEyeZ</h1>
+    <p class="sub">Automated nutritional analysis via sensor fusion — dual-model food
+      recognition + BLE gravimetric weight + USDA nutrient lookup.</p>
+    <p class="meta">Electrical &amp; Electronic Engineering B.Sc. Final Project · Shenkar ·
+      Raz Dvora &amp; Roi Tzur · Supervisors: Dr. Gabriela Dorfman Furman, Dr. Zeev Weissman</p>
+    <div class="callout"><b>Living document.</b> Single source of truth for the whole
+      project. Sections are marked <span class="status s-done">done</span> /
+      <span class="status s-wip">wip</span> and updated as work progresses.</div>
+
+    <!-- 1 -->
+    <h2 id="overview">1 · Overview</h2>
+    <p>CalEyeZ removes the friction from nutrition tracking: place food on a scale, take a
+      photo, and receive a calorie + macronutrient breakdown automatically. It solves two
+      independent engineering problems:</p>
+    <ul>
+      <li><b>"What?"</b> — identifying the food, including local Israeli dishes that standard
+        models miss, without catastrophic forgetting of international foods. Solved with a
+        <b>hybrid Global + Local model pair routed by an arbiter</b>.</li>
+      <li><b>"How much?"</b> — obtaining an accurate weight. Solved by <b>reading the mass
+        directly from a reverse-engineered BLE scale</b>, after vision-based volume estimation
+        was evaluated and rejected (§7).</li>
+    </ul>
+
+    <!-- 2 -->
+    <h2 id="architecture">2 · Architecture</h2>
+    <div class="flow">
+      <span class="box">📷 Camera</span><span class="arr">→</span>
+      <span class="box">Global model (132)</span><span class="arr">+</span>
+      <span class="box">Israeli model (13)</span><span class="arr">→</span>
+      <span class="box">XGBoost Router</span><span class="arr">→</span>
+      <span class="box">class</span>
+    </div>
+    <div class="flow">
+      <span class="box">⚖️ BLE Scale</span><span class="arr">→</span>
+      <span class="box">weight (g)</span><span class="arr">→</span>
+      <span class="box">Fusion (class × weight)</span><span class="arr">→</span>
+      <span class="box">USDA API</span><span class="arr">→</span>
+      <span class="box">kcal + macros</span>
+    </div>
+    <p>Edge-computing desktop application (Python). Inference runs locally on an NVIDIA GPU;
+      only the nutrient lookup touches the network.</p>
+
+    <!-- 3 -->
+    <h2 id="dataset">3 · Dataset <span class="status s-done">done</span></h2>
+    <p>The global dataset was consolidated from an inconsistent 142-class set into a clean,
+      leakage-free <b>132-class</b> label space, then re-split 70/20/10. Pipeline:
+      <code>scripts/flatten_general_dataset.py</code>.</p>
+    <div class="grid">
+      <div class="stat"><div class="n">142→132</div><div class="l">classes</div></div>
+      <div class="stat"><div class="n">99,307</div><div class="l">images</div></div>
+      <div class="stat"><div class="n">981</div><div class="l">exact dups dropped</div></div>
+      <div class="stat"><div class="n">0</div><div class="l">cross-split leaks</div></div>
+    </div>
+    <h3>Label-space changes</h3>
+    <table>
+      <thead><tr><th>Operation</th><th>Detail</th></tr></thead>
+      <tbody>
+        <tr><td>Merge</td><td>filet_mignon+prime_rib→steak · frozen_yogurt→ice_cream · dumplings→gyoza · beef_tartare+tuna_tartare→tartare</td></tr>
+        <tr><td>Rename</td><td>Baked_Potato→baked_potato · chilli pepper→chili_pepper · jalepeno→jalapeno · raddish→radish</td></tr>
+        <tr><td>Delete</td><td>pork_chop, pulled_pork_sandwich, baby_back_ribs (pork) · paprika (mixed/noisy) · soy_beans (redundant w/ edamame)</td></tr>
+      </tbody>
+    </table>
+    <h3>De-duplication (leakage prevention)</h3>
+    <p>Two stages before splitting, so the split unit is a content cluster, never a raw file:
+      <b>exact</b> (SHA-1 of bytes — duplicates dropped) and <b>near-duplicate</b> (64-bit
+      dHash, Hamming ≤ 5 — clustered and kept within one split). Guarantee verified: no image
+      or near-twin appears in two splits.</p>
+    <table>
+      <thead><tr><th>Split</th><th class="r">Images</th><th class="r">Share</th><th class="r">Classes</th></tr></thead>
+      <tbody>
+        <tr><td>train</td><td class="r">69,491</td><td class="r">70.0%</td><td class="r">132</td></tr>
+        <tr><td>val</td><td class="r">19,827</td><td class="r">20.0%</td><td class="r">132</td></tr>
+        <tr><td>test</td><td class="r">9,960</td><td class="r">10.0%</td><td class="r">132</td></tr>
+        <tr><td>total</td><td class="r">99,307</td><td class="r">100%</td><td class="r">132</td></tr>
+      </tbody>
+    </table>
+
+    <!-- 4 -->
+    <h2 id="global">4 · Global Model <span class="status s-done">done</span></h2>
+    <p><b>YOLO11l-cls</b> (Ultralytics, ImageNet-1k pretrained, ~13M params), fine-tuned on the
+      132-class set. Run: <code>runs/general_model_flattened/</code>.</p>
+    <table>
+      <thead><tr><th>Setting</th><th>Value</th><th>Setting</th><th>Value</th></tr></thead>
+      <tbody>
+        <tr><td>imgsz</td><td>320</td><td>optimizer</td><td>AdamW, cosine</td></tr>
+        <tr><td>batch</td><td>16</td><td>lr0 / lrf</td><td>1e-3 / 0.01</td></tr>
+        <tr><td>epochs</td><td>150 (stopped 116)</td><td>dropout / smooth</td><td>0.2 / 0.1</td></tr>
+        <tr><td>AMP</td><td>on (~2.2 GB)</td><td>augmentation</td><td>heavy domain-shift</td></tr>
+      </tbody>
+    </table>
+    <h3>Results (best.pt, epoch 73)</h3>
+    <div class="grid">
+      <div class="stat"><div class="n">88.18%</div><div class="l">test top-1</div></div>
+      <div class="stat"><div class="n">96.94%</div><div class="l">test top-5</div></div>
+      <div class="stat"><div class="n">88.16%</div><div class="l">val top-1</div></div>
+      <div class="stat"><div class="n">≥80%</div><div class="l">requirement (FRS)</div></div>
+    </div>
+    <div class="callout green"><b>Trustworthy number.</b> val (88.16%) ≈ test (88.18%) — the
+      splits agree, confirming the de-duplication removed leakage. The previous model showed a
+      ~4-pt val/test gap (83.89% vs 88.19%) that was leakage inflating the test score. The FRS
+      ≥80% requirement is exceeded by ~8 points, on the Global model alone.</div>
+    <h3>Most-confused class pairs (test)</h3>
+    <p>All meaningful confusions are semantically plausible inter-class overlaps, not failures:</p>
+    <table>
+      <thead><tr><th>True → Predicted</th><th class="r">Rate</th></tr></thead>
+      <tbody>
+        <tr><td>chocolate_mousse → chocolate_cake</td><td class="r">12%</td></tr>
+        <tr><td>apple_pie → bread_pudding</td><td class="r">10%</td></tr>
+        <tr><td>gnocchi ↔ ravioli</td><td class="r">7%</td></tr>
+        <tr><td>beef_carpaccio → tartare</td><td class="r">6%</td></tr>
+        <tr><td>lobster_bisque ↔ clam_chowder</td><td class="r">5%</td></tr>
+      </tbody>
+    </table>
+    <p class="meta">Lowest per-class recall belongs to tiny ingredient classes (apple/onion,
+      n≈8 test images) — a small-sample effect of class imbalance, not systematic weakness.</p>
+
+    <!-- 5 -->
+    <h2 id="israeli">5 · Israeli Model <span class="status s-done">done</span></h2>
+    <p><b>YOLO11l-cls</b>, 13 Israeli classes (baklava, bourekas_cheese, falafel, hummus,
+      jachnun, malawach, meorav_yerushalmi, sabich, samosa, schnitzel, shakshuka, shawarma,
+      sufganiyah). Run: <code>runs/israeli_food_yolo11l/</code>, imgsz 224. Strong on its own
+      domain (~93%) where the Global model scores 0% — this validates the specialized model.</p>
+    <div class="callout amber"><b>Known behaviour:</b> the Israeli model is overconfident on
+      out-of-domain food (it can fire &gt;0.9 on a non-Israeli image), so a naive confidence
+      gate cannot route domains. This is the core difficulty the arbiter must learn around.</div>
+
+    <!-- 6 -->
+    <h2 id="arbiter">6 · Arbiter / Router <span class="status s-wip">wip</span></h2>
+    <p>The router decides, per image, which expert to trust — enabling local-cuisine coverage
+      without retraining or degrading the Global model (solving catastrophic forgetting). Its
+      value is <b>coverage</b>, not raw accuracy: a perfect router caps system accuracy at
+      ~88.4% (the Global model's own ceiling on ~93% of the data).</p>
+    <h3>Training-data generation</h3>
+    <p>Generator: <code>scripts/arbiter/generate_arbiter_dataset.py</code>. Both models run over
+      the <b>held-out val+test</b> images of <b>both domains</b> (~32k images) — train images
+      are excluded because the Global model overfits them, which would miscalibrate the
+      confidence features. One row per image:</p>
+    <pre>image_path, domain, true_class,
+g_top1..g_top5, g_conf1..g_conf5, g_entropy, g_margin, g_correct,
+i_top1..i_top5, i_conf1..i_conf5, i_entropy, i_margin, i_correct,
+winner   (global / israeli / none)</pre>
+    <p>Label spaces are disjoint, so at most one model is correct → a clean routing target.
+      <span class="todo">[TODO: routing-label summary table — global%/israeli%/none% and
+      oracle ceiling — from the full generation run.]</span></p>
+    <h3>Arbiter training</h3>
+    <p><span class="todo">[TODO: XGBoost re-ranker — 15-feature design (probs, entropy, margins,
+      interaction terms), domain-weight α dial, results.]</span></p>
+
+    <!-- 7 -->
+    <h2 id="weight">7 · Weight Estimation — Approaches Evaluated &amp; Rejected <span class="status s-wip">wip</span></h2>
+    <p>Determining food mass from a photo was investigated thoroughly before the final design.
+      Each vision approach failed for a specific, measured reason, motivating the pivot to a
+      direct hardware reading.</p>
+    <table>
+      <thead><tr><th>Approach</th><th>Principle</th><th>Why rejected</th></tr></thead>
+      <tbody>
+        <tr><td>Coin fiducial + HoughCircles</td><td>₪1 coin (18 mm) detected → pixels→cm scale</td><td>Calibrates the 2-D plane only; no object height</td></tr>
+        <tr><td>MiDaS depth</td><td>Monocular relative depth → integrate to volume</td><td>Scale-ambiguous, noisy on small objects; needs fiducial every shot</td></tr>
+        <tr><td>Shadow geometry</td><td>height = L<sub>shadow</sub> · tan(α), α = light angle</td><td>Depends on a known light-elevation assumption; lighting-sensitive</td></tr>
+        <tr><td>Volume → mass</td><td>mass = volume · density</td><td><b>Density problem:</b> fluffy vs. dense foods of equal volume differ greatly</td></tr>
+        <tr><td>OCR of scale display</td><td>Read the 7-segment readout (Tesseract/EasyOCR)</td><td>Glare/angle/lighting fragility on the LCD</td></tr>
+        <tr><td><b>BLE (final)</b></td><td>Read the weight packet at the source</td><td><b>Selected — deterministic, robust, no vision error</b></td></tr>
+      </tbody>
+    </table>
+    <h3>Ground-truth validation (Archimedes)</h3>
+    <p>Vision volume estimates were validated against water-displacement (true volume).
+      Example (apple, ₪1 fiducial): MiDaS pipeline estimated <b>139.3 cm³</b>; Archimedes
+      displacement (300 ml → <span class="todo">[TODO: final ml]</span>) gives the true volume.
+      <span class="todo">[TODO: error table — apple &amp; can: estimated vs true volume, %
+      error.]</span></p>
+    <div class="callout"><b>The argument:</b> even when volume estimation was accurate against
+      the gold standard, the volume→mass conversion still fails on density, and the pipeline
+      only worked in controlled lighting. Reading mass directly via BLE removes both failure
+      modes — an evidence-driven pivot, not a guess.</div>
+
+    <!-- 8 -->
+    <h2 id="nutrition">8 · Nutrition Fusion <span class="status s-wip">wip</span></h2>
+    <p>Final values combine the recognized class and the measured weight via the USDA
+      FoodData Central database:</p>
+    <pre>value_total = (value_per_100g / 100) · weight_grams</pre>
+    <p><span class="todo">[TODO: USDA query/heuristic filtering, local caching, error handling,
+      GUI report.]</span></p>
+
+    <!-- 9 -->
+    <h2 id="changelog">9 · Changelog</h2>
+    <ul>
+      <li><b>2026-06-01</b> — Flattened dataset to 132 clean classes (merges, renames,
+        deletions, exact+perceptual de-dup, 70/20/10). Retrained Global model (YOLO11l-cls,
+        320px): test top-1 88.18%. Built arbiter dataset generator (val+test, both domains).</li>
+      <li><b>Earlier</b> — Original 142-class YOLO models, XGBoost router (v1→v5), BLE scale
+        reverse-engineering, weight-estimation R&amp;D (coin/MiDaS/shadow/Archimedes/OCR).</li>
+    </ul>
+
+    <div class="foot">
+      CalEyeZ · single living project document · update sections as work progresses.
+    </div>
+  </main>
+</div>
+</body>
+</html>

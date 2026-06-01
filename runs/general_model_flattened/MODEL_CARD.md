@@ -16,7 +16,7 @@ wired into the router/Israeli fusion (label space changed 142 → 132).
 
 ## Training data
 - **Dataset:** `datasets/general_model_flattened` — produced by
-  `scripts/flatten_general_dataset.py` (see `DATASET_FLATTENING.html`).
+  `scripts/flatten_general_dataset.py` (see `CALEYEZ.html`, section 3).
 - **Classes:** 132 (from the original 142: merged sub-classes, normalized labels,
   removed pork / paprika / soy_beans).
 - **Images:** 99,307 total → train 69,491 / val 19,827 / test 9,960 (70/20/10).
