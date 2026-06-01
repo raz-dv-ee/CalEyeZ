@@ -240,11 +240,35 @@ winner   (global / israeli / none)</pre>
       to domain detection</b>; the 3,711 "none" cases are unfixable by any router (the correct
       model exists but mis-predicted the image).</div>
     <h3>Arbiter training</h3>
-    <p>Target: <code>route_to_israeli = (domain == israeli)</code>, using both models'
-      confidence / entropy / margin features. The Israeli class is ~7% of rows, so class
-      weighting (the α domain dial) is required to prevent an always-"global" collapse.
-      <span class="todo">[TODO: XGBoost results — routing accuracy, ROC-AUC, final routed
-      system top-1 vs the 88.4% ceiling.]</span></p>
+    <p>XGBoost classifier (<code>scripts/arbiter/train_arbiter_xgb.py</code>). Target:
+      <code>route_to_israeli = (domain == israeli)</code>. Features: both models' top-5
+      confidences, entropy, margin + interaction terms (conf_gap, conf_ratio, entropy_gap,
+      margin_gap). Trained on val-derived rows, evaluated on test-derived rows (held out).
+      Israeli minority (~7%) handled with <code>scale_pos_weight</code> (α dial).</p>
+    <table>
+      <thead><tr><th>Routing metric (test)</th><th class="r">Value</th></tr></thead>
+      <tbody>
+        <tr><td>Routing accuracy</td><td class="r">93.40%</td></tr>
+        <tr><td>ROC-AUC</td><td class="r">0.933</td></tr>
+        <tr><td>Israeli recall</td><td class="r">61.3%</td></tr>
+        <tr><td>Global recall</td><td class="r">97.6%</td></tr>
+      </tbody>
+    </table>
+    <table>
+      <thead><tr><th>Final routed system top-1 (combined-domain test)</th><th class="r">Value</th></tr></thead>
+      <tbody>
+        <tr><td>Always-global baseline</td><td class="r">77.98%</td></tr>
+        <tr><td>Arbiter (routed)</td><td class="r">83.75%</td></tr>
+        <tr><td>Oracle ceiling</td><td class="r">88.66%</td></tr>
+        <tr><td>Arbiter gain</td><td class="r">+5.78 pts</td></tr>
+      </tbody>
+    </table>
+    <div class="callout"><b>Read:</b> the arbiter recovers Israeli dishes (which the Global
+      model scores 0% on) for a real <b>+5.78-pt</b> coverage gain, closing 54% of the gap to
+      oracle. ROC-AUC 0.93 reproduces the earlier router exactly. Israeli recall is 61% — the
+      ceiling is set by the Israeli model's out-of-domain overconfidence, not the arbiter.
+      Top features (entropy_gap, conf_gap, conf_ratio) confirm it routes on <i>relative</i>
+      confidence, not raw Israeli confidence. Model: <code>scripts/arbiter/arbiter_xgb.json</code>.</div>
 
     <!-- 7 -->
     <h2 id="weight">7 · Weight Estimation — Approaches Evaluated &amp; Rejected <span class="status s-wip">wip</span></h2>
