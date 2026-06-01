@@ -120,5 +120,9 @@ desktop.ini
 *.log
 *.bak
 
+# Local-only working notes (never publish)
+PROJECT_LOG.md
+CONVERSATION_HANDOFF.md
+
 # Accidental nested clone of this repo
 CalEyeZ/
