@@ -115,7 +115,7 @@
     <button data-tab="dataset">Dataset</button>
     <button data-tab="global">Global Model</button>
     <button data-tab="israeli">Israeli Model</button>
-    <button data-tab="arbiter">Arbiter / Router</button>
+    <button data-tab="arbiter">Arbiter</button>
     <button data-tab="cnn">CNN Visualizer</button>
     <button data-tab="analysis">System Analysis</button>
     <button data-tab="validation">Validation &amp; Risks</button>
@@ -135,7 +135,7 @@
   <div class="grid">
     <div class="stat good"><div class="n">88.18%</div><div class="l">Global model top-1 (clean test)</div></div>
     <div class="stat good"><div class="n">83.75%</div><div class="l">full routed system top-1</div></div>
-    <div class="stat"><div class="n">93.4%</div><div class="l">router accuracy (ROC-AUC 0.93)</div></div>
+    <div class="stat"><div class="n">93.4%</div><div class="l">arbiter accuracy (ROC-AUC 0.93)</div></div>
     <div class="stat"><div class="n">132 + 13</div><div class="l">global + Israeli classes</div></div>
   </div>
 
@@ -191,7 +191,7 @@
       <tr><td>Catastrophic forgetting when adding local food</td><td>One combined model lost accuracy on both old and new classes</td><td><span class="t-now">controlled</span> by the two-expert split</td></tr>
       <tr><td>Data leakage inflating accuracy</td><td>Duplicate images across splits make the test score a lie</td><td><span class="t-now">removed</span> by exact + perceptual de-dup</td></tr>
       <tr><td>Class imbalance hurting rare classes</td><td>Ingredient classes have far fewer images than dishes</td><td><span class="t-now">measured</span> and reported per class</td></tr>
-      <tr><td>Router sending the image to the wrong expert</td><td>Misrouting wastes a correct prediction</td><td><span class="t-now">4.91%</span> of images, fully decomposed</td></tr>
+      <tr><td>Arbiter sending the image to the wrong expert</td><td>A wrong decision wastes a correct prediction</td><td><span class="t-now">4.91%</span> of images, fully decomposed</td></tr>
       <tr><td>Weight error from vision volume estimation</td><td>Volume to mass fails on density</td><td><span class="t-now">avoided</span> by direct BLE reading</td></tr>
     </tbody>
   </table>
@@ -209,7 +209,7 @@
 
   <div class="callout amber"><b>The headline is not the system percentage, it is trust.</b>
     The old 80.30% sat on a dataset with cross-split leakage and a router that almost never used the
-    second expert. The new 83.75% sits on a de-duplicated, leakage-free split, with a router that
+    second expert. The new 83.75% sits on a de-duplicated, leakage-free split, with a true arbiter that
     genuinely recovers Israeli dishes. The new number is both higher and honest.</div>
 
   <h3>Headline comparison</h3>
@@ -219,7 +219,7 @@
       <tr><td>Full system top-1</td><td class="r">80.30%</td><td class="r">83.75%</td><td class="r"><span class="delta-up">+3.45</span></td><td>and now on clean data</td></tr>
       <tr><td>Global model top-1 (own domain)</td><td class="r">84.6%</td><td class="r">88.18%</td><td class="r"><span class="delta-up">+3.58</span></td><td>apples to apples: each model on its own classes (158 then, 132 now). 84.6% is the as-presented figure; recomputed on this CSV it is 82.2%</td></tr>
       <tr><td>Always-global baseline (full mix)</td><td class="r">76.43%</td><td class="r">77.98%</td><td class="r"><span class="delta-up">+1.55</span></td><td>using only the global model on every image, including Israeli food it scores 0% on</td></tr>
-      <tr><td>Oracle ceiling (best possible router)</td><td class="r">82.97%</td><td class="r">88.40%</td><td class="r"><span class="delta-up">+5.43</span></td><td>headroom the models allow</td></tr>
+      <tr><td>Oracle ceiling (best possible arbiter)</td><td class="r">82.97%</td><td class="r">88.40%</td><td class="r"><span class="delta-up">+5.43</span></td><td>headroom the models allow</td></tr>
       <tr><td>Classes (global)</td><td class="r">158 to 161</td><td class="r">132</td><td class="r"><span class="delta-dn">cleaned</span></td><td>merged, renamed, de-duplicated</td></tr>
       <tr><td>Israeli expert classes</td><td class="r">8</td><td class="r">13</td><td class="r"><span class="delta-up">+5</span></td><td>broader local coverage</td></tr>
       <tr><td>Router accuracy / ROC-AUC</td><td class="r">78.7%</td><td class="r">93.4% / 0.93</td><td class="r"><span class="delta-up">better</span></td><td>this is the router (XGBoost), not the food model; now reported as ROC-AUC, not raw accuracy</td></tr>
@@ -249,7 +249,8 @@
     (<code>route_to_israeli = (domain == israeli)</code>), reaches Israeli recall of 61% with global
     recall 97.6%, and the
     <a href="#" class="goto" data-tab="arbiter">Arbiter tab</a> explains exactly which features drive
-    each decision. That is the direct answer to the "router not explained" comment.</p>
+    each decision. It is also why the current component is correctly called an <b>arbiter</b>, not a
+    router: it adjudicates between two experts that have already run, rather than forwarding by a rule.</p>
 
   <h3>What changed structurally</h3>
   <table>
@@ -279,15 +280,22 @@
     <div class="stat good"><div class="n">0</div><div class="l">cross-split leaks</div></div>
   </div>
 
-  <h3>Why we cleaned the labels (and why it matters)</h3>
+  <h3>Where the classes went (158 to 132, fully accounted)</h3>
+  <p>The reduction is not deletion of useful classes. Most removed labels either moved to the Israeli
+    expert or were folded into a class they were visually identical to. Here is every change.</p>
   <table>
-    <thead><tr><th>Operation</th><th>Detail</th><th>Reason</th></tr></thead>
+    <thead><tr><th>Operation</th><th class="r">Count</th><th>Detail</th><th>Reason</th></tr></thead>
     <tbody>
-      <tr><td>Merge</td><td>filet_mignon + prime_rib → steak · frozen_yogurt → ice_cream · dumplings → gyoza · beef_tartare + tuna_tartare → tartare</td><td>Classes humans cannot reliably separate in a photo only add confusion and split training data</td></tr>
-      <tr><td>Rename</td><td>Baked_Potato → baked_potato · chilli pepper → chili_pepper · jalepeno → jalapeno · raddish → radish</td><td>Casing and spelling collisions created duplicate label folders</td></tr>
-      <tr><td>Delete</td><td>pork_chop, pulled_pork_sandwich, baby_back_ribs (pork) · paprika (mixed/noisy) · soy_beans (redundant with edamame)</td><td>Out of scope or unusable; noisy labels lower every other class's accuracy</td></tr>
+      <tr><td><b>Moved to Israeli expert</b></td><td class="r">~14</td><td>baklava · bourekas · bourekas_cheese · falafel · falafel_pita · hraime · hummus · knafeh · samosa · samosas · schnitzel · shakshuka · shawarma · shawarma_pita</td><td>Local dishes left the global model and became the Israeli expert's job. They are not lost, they are handled by the other model and recovered by the arbiter</td></tr>
+      <tr><td>Merge</td><td class="r">8</td><td>filet_mignon + prime_rib → steak · beef_tartare + tuna_tartare → tartare · frozen_yogurt → ice_cream · dumplings → gyoza · sweetcorn → corn · capsicum → bell_pepper</td><td>Classes humans cannot reliably separate in a photo only add confusion and split training data</td></tr>
+      <tr><td>Delete</td><td class="r">8</td><td>baby_back_ribs · pork_chop · pulled_pork_sandwich (pork, out of scope) · paprika (mixed/noisy) · soy_beans (redundant with edamame) · beignets · huevos_rancheros · sweetpotato</td><td>Out of scope or unusable; noisy labels lower every other class's accuracy</td></tr>
+      <tr><td>Rename</td><td class="r">5</td><td>potato → baked_potato · chilli_pepper → chili_pepper · jalepeno → jalapeno · raddish → radish · edame → edamame</td><td>Casing and spelling collisions created duplicate label folders (still present, just renamed)</td></tr>
     </tbody>
   </table>
+  <div class="callout"><b>Reconciliation:</b> 158 old labels, minus about 14 moved to the Israeli expert,
+    minus 8 merged away and 8 deleted, gives the clean 132-class global label space. The renames stay
+    in place. So the "missing" classes are overwhelmingly the local dishes that now live in the Israeli
+    model, which is the whole point of the two-expert design.</div>
 
   <h3>De-duplication: how leakage was removed</h3>
   <p>Two stages run before splitting, so the split unit is a content cluster and never a raw file:</p>
@@ -336,7 +344,7 @@
       <tr><td>YOLO11l-cls backbone</td><td>YOLOv8-cls (previous), ResNet-50, EfficientNet</td><td>Newer C3k2 backbone gave a higher clean top-1 at the same VRAM budget; classification head is simple to fine-tune and export</td></tr>
       <tr><td>imgsz 320 (was 224)</td><td>224, 416, 640</td><td>320 lifted top-1 over 224 while still fitting batch 16 in about 2.2 GB; 640 gave no measurable gain for far more compute</td></tr>
       <tr><td>Heavy augmentation</td><td>light / default aug</td><td>Deliberate trade: a moderate-aug retrain scores about 90% on this clean test but is more brittle in the classroom. Robustness was chosen on purpose</td></tr>
-      <tr><td>Two experts, not one</td><td>single 145-class model</td><td>The single combined model lost accuracy on both old and new classes (catastrophic forgetting). Two experts plus a router avoid it</td></tr>
+      <tr><td>Two experts, not one</td><td>single 145-class model</td><td>The single combined model lost accuracy on both old and new classes (catastrophic forgetting). Two experts plus an arbiter avoid it</td></tr>
     </tbody>
   </table>
 
@@ -416,7 +424,7 @@ model.<span class="fn">val</span>(data=<span class="st">"datasets/general_model_
   <h3 id="i-why">Why a second, separate expert</h3>
   <p>The first attempt added Israeli food to the global model and retrained. The combined model got
     confused: it lost accuracy on both the international classes it already knew and the new local ones.
-    This is catastrophic forgetting, and it was the trigger for the whole router architecture. Keeping
+    This is catastrophic forgetting, and it was the trigger for the whole arbiter architecture. Keeping
     the Israeli dishes in their own small expert means the global model never degrades, and the local
     model can specialise hard on a narrow domain where it reaches about 92% while the global model
     scores 0% on those same classes.</p>
@@ -456,18 +464,25 @@ model.<span class="fn">val</span>(data=<span class="st">"datasets/general_model_
 
 <!-- ============ ARBITER ============ -->
 <section class="tab" id="tab-arbiter">
-  <h2>Arbiter / Router <span class="tag t-now">acc 93.4%, ROC-AUC 0.93</span></h2>
+  <h2>Arbiter <span class="tag t-now">acc 93.4%, ROC-AUC 0.93</span></h2>
   <div class="sub-nav">
-    <a href="#a-what">What it actually is</a><a href="#a-feat">Features</a>
+    <a href="#a-name">Arbiter, not router</a><a href="#a-what">What it actually is</a><a href="#a-feat">Features</a>
     <a href="#a-why">Why XGBoost</a><a href="#a-code">Code</a><a href="#a-res">Results</a>
   </div>
 
-  <div class="callout purple"><b>How the router works, in full.</b> This tab defines exactly what the
-    router is, what it reads, what it decides, and what it cannot do, with the math for every feature,
+  <div class="callout purple"><b>How the arbiter works, in full.</b> This tab defines exactly what the
+    arbiter is, what it reads, what it decides, and what it cannot do, with the math for every feature,
     so there is no ambiguity about its role in the system.</div>
 
-  <h3 id="a-what">What the router is, in one paragraph</h3>
-  <p>The router is <b>not</b> a third food classifier. It never looks at the image. It looks only at
+  <h3 id="a-name">Why we call it an arbiter, not a router</h3>
+  <p>A <b>router</b> would forward the image to one model based on a fixed rule before seeing any
+    result. Our component does the opposite: it <b>runs both experts first</b>, then weighs their
+    competing evidence (confidence, entropy, margin) and <b>adjudicates</b> which one to trust. That is
+    arbitration, not routing. The distinction matters because the decision is made on the models' actual
+    behaviour for this specific image, not on a prior guess about where the image should go.</p>
+
+  <h3 id="a-what">What the arbiter is, in one paragraph</h3>
+  <p>The arbiter is <b>not</b> a third food classifier. It never looks at the image. It looks only at
     the two experts' output behaviour for that image (their confidences, how spread out their guesses
     are, how decisive each one is) and answers a single yes/no question: <b>does this image belong to
     the Israeli expert's domain?</b> If yes, the system returns the Israeli model's label; if no, it
@@ -496,7 +511,7 @@ model.<span class="fn">val</span>(data=<span class="st">"datasets/general_model_
     </tbody>
   </table>
   <p>Top features by importance are <code>entropy_gap</code>, <code>conf_gap</code> and
-    <code>conf_ratio</code>. The router decides on <i>relative</i> confidence between the experts,
+    <code>conf_ratio</code>. The arbiter decides on <i>relative</i> confidence between the experts,
     not on the Israeli model's raw confidence, which is exactly why it survives that model's
     out-of-domain overconfidence.</p>
 
@@ -538,6 +553,10 @@ clf.<span class="fn">fit</span>(X[train], y[train], eval_set=[(X[test], y[test])
 clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter_xgb.json"</span>)</pre>
 
   <h3 id="a-res">Results</h3>
+  <p class="legend"><b>ROC-AUC in one line:</b> the probability that the arbiter gives a randomly chosen
+    Israeli image a higher P(israeli) than a randomly chosen global image. 1.0 is perfect separation,
+    0.5 is a coin flip. 0.93 means it ranks the two domains correctly 93% of the time. Recall = the
+    share of each domain it actually catches.</p>
   <div class="two">
     <table>
       <thead><tr><th>Routing metric (test)</th><th class="r">Value</th></tr></thead>
@@ -561,16 +580,16 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
   <div class="callout green"><b>What these numbers mean.</b>
     <ul style="margin:8px 0 0">
       <li><b>Why the gain is real:</b> the global model was never trained on Israeli food, so it gets
-        those images wrong every time (0%). The only way to get them right is for the router to send
+        those images wrong every time (0%). The only way to get them right is for the arbiter to send
         them to the Israeli expert. That is exactly what produces the jump from the always-global
         baseline (77.98%) to the routed system (83.75%), a gain of <b>+5.78 points</b>.</li>
-      <li><b>How close that is to perfect:</b> a perfect router (oracle) would score 88.40%. The full
+      <li><b>How close that is to perfect:</b> a perfect arbiter (oracle) would score 88.40%. The full
         gap from baseline to perfect is 88.40 − 77.98 = 10.42 points; the arbiter already captured
         5.78 of them, so 5.78 ÷ 10.42 = <b>54%</b> of the available gap is closed.</li>
-      <li><b>Why Israeli recall is only 61%:</b> of all truly-Israeli images, the router sends 61% to
+      <li><b>Why Israeli recall is only 61%:</b> of all truly-Israeli images, the arbiter sends 61% to
         the right expert and misses 39%. The miss is caused by the Israeli model firing high confidence
         even on food it never saw, which makes its confidence a noisy signal. Better model calibration
-        would raise this; more router tuning would not.</li>
+        would raise this; more arbiter tuning would not.</li>
     </ul>
     Model file: <code>scripts/arbiter/arbiter_xgb.json</code>.</div>
 </section>
@@ -658,7 +677,7 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
 <section class="tab" id="tab-analysis">
   <h2>System Error Analysis</h2>
   <p class="lead">Every error of the full routed system was decomposed on the held-out test set
-    (11,265 images). This separates errors a better router could fix from errors no router can fix.
+    (11,265 images). This separates errors a better arbiter could fix from errors no arbiter can fix.
     Reproduce with <code>scripts/arbiter/system_analysis.py</code>.</p>
 
   <h3>Error decomposition</h3>
@@ -668,28 +687,64 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
     <thead><tr><th>Outcome</th><th class="r">Images</th><th class="r">Share</th><th>Meaning</th></tr></thead>
     <tbody>
       <tr><td>System correct</td><td class="r">9,435</td><td class="r">83.75%</td><td>routed to the right model and it was right</td></tr>
-      <tr><td>Routing error</td><td class="r">553</td><td class="r">4.91%</td><td>a correct model existed, the router chose the other</td></tr>
-      <tr><td>Both models wrong</td><td class="r">1,277</td><td class="r">11.34%</td><td>unfixable by any router, needs better models</td></tr>
+      <tr><td>Routing error</td><td class="r">553</td><td class="r">4.91%</td><td>a correct model existed, the arbiter chose the other</td></tr>
+      <tr><td>Both models wrong</td><td class="r">1,277</td><td class="r">11.34%</td><td>unfixable by any arbiter, needs better models</td></tr>
     </tbody>
   </table>
   <div class="callout green"><b>Key finding:</b> of the 16.25% system errors, only 4.91% are routing
-    errors that a better router could recover. The other 11.34% are images where both models were
-    wrong, which no router can fix. So about 70% of all system errors are bounded by model quality,
+    errors that a better arbiter could recover. The other 11.34% are images where both models were
+    wrong, which no arbiter can fix. So about 70% of all system errors are bounded by model quality,
     not by the arbiter. The arbiter is already near its useful limit; further gains require better
     base models.</div>
 
+  <h3>Accuracy by domain</h3>
+  <p><b>How to read this chart.</b> Each bar is the system's top-1 accuracy on a slice of the test set.
+    "Global domain" = international foods, "Israeli domain" = the 13 local dishes, "Overall system" =
+    everything combined. The two dashed lines are reference levels: the lower one is the always-global
+    baseline (78.0%, what you get without an arbiter) and the upper one is the oracle ceiling (88.7%, a
+    perfect arbiter). The overall bar sitting at 83.8%, between those lines, is the real arbiter's
+    contribution. Israeli is lower (60.8%) because those dishes are the hardest to route.</p>
   <div class="two">
     <div><img class="fig" src="assets/sys_2_domain.png" alt="Accuracy by domain"><figcaption>Global 86.8%, Israeli 60.8%, overall 83.8%, vs always-global 78.0% and oracle 88.7%.</figcaption></div>
     <div><img class="fig" src="assets/sys_3_confusions.png" alt="Top confusions"><figcaption>Most common system confusions, true → predicted.</figcaption></div>
   </div>
+
+  <h3>How decisively the arbiter separates the two domains</h3>
+  <p><b>How to read this chart.</b> For every test image the arbiter outputs one number: P(israeli), its
+    estimated probability that the image belongs to the Israeli expert (0 on the left, 1 on the right).
+    The histogram counts how many images fall at each value, on a log scale. <b>Blue</b> bars are images
+    that are truly global, <b>purple</b> are truly Israeli. A good arbiter pushes blue to the left (low
+    P) and purple to the right (high P). The dashed line at 0.5 is the decision threshold: anything to
+    its right is sent to the Israeli model. The clean separation (blue piled near 0, purple piled near 1)
+    is what a 0.93 ROC-AUC looks like; the small amount of blue and purple that overlap in the middle is
+    exactly the 7% of routing the arbiter cannot get perfectly right.</p>
   <div class="two">
-    <div><img class="fig" src="assets/sys_4_israeli.png" alt="Israeli recovery"><figcaption>Each bar is 100% of a dish's test images: green recovered, red missed.</figcaption></div>
-    <div><img class="fig" src="assets/sys_5_separability.png" alt="Routing separability"><figcaption>Arbiter P(israeli) for true-global vs true-israeli; the overlap is the 0.93 ROC-AUC ceiling.</figcaption></div>
+    <div><img class="fig" src="assets/sys_4_israeli.png" alt="Israeli recovery"><figcaption>Each bar is 100% of a dish's test images: green recovered (sent to the right expert), red missed.</figcaption></div>
+    <div><img class="fig" src="assets/sys_5_separability.png" alt="Routing separability"><figcaption>Histogram of the arbiter's P(israeli) for true-global (blue) vs true-israeli (purple). Overlap near 0.5 is the source of the 0.93 ROC-AUC ceiling.</figcaption></div>
   </div>
   <img class="fig" src="assets/sys_6_worstclasses.png" alt="Worst major classes">
   <figcaption>System accuracy for classes with at least 100 test images (excludes small-sample noise).</figcaption>
 
-  <h3>Where the router still misses</h3>
+  <h3>Case study: the sufganiyah vs donuts confusion, solved</h3>
+  <p>At the previous review this pair was one of the worst failures in the whole system. A sufganiyah
+    (Israeli jam doughnut) and an American donut look almost identical, and the old single-model setup
+    constantly mixed them up. The two-expert split plus a clean visual cue fixed it.</p>
+  <div class="callout green"><b>The cue that made it work:</b> in the rebuilt data, <b>donuts</b> in the
+    global model are always a ring of dough <b>with a hole</b>, while <b>sufganiyah</b> in the Israeli
+    model is a filled ball of dough <b>with no hole</b>. That single consistent difference gives each
+    expert a clean, separable signature, so the arbiter can tell which one it is instead of guessing.</p>
+  <table>
+    <thead><tr><th>Class</th><th class="r">Then accuracy</th><th class="r">Now accuracy</th><th>Confusion with the other</th></tr></thead>
+    <tbody>
+      <tr><td>sufganiyah</td><td class="r">58.3%</td><td class="r"><b>88.9%</b></td><td>82 images read as donuts then → only <b>2</b> now</td></tr>
+      <tr><td>donuts</td><td class="r">77.3%</td><td class="r"><b>91.3%</b></td><td>improved, only 5 read as sufganiyah now</td></tr>
+    </tbody>
+  </table>
+  <p class="legend">Source: old confusion from <code>FINAL_REPORT_v3_results.csv</code>, current from
+    <code>datasets/system_evaluation.csv</code> (test split). This is a concrete lesson from the prior
+    tests carried into the final model, exactly the kind of improvement the review asked us to surface.</p>
+
+  <h3>Where the arbiter still misses</h3>
   <p>It handles most Israeli dishes well (sufganiyah 89%, jachnun 83%, shakshuka 76%, baklava 72%,
     hummus 69%) but struggles where a dish strongly resembles a global food: <b>sabich 14%</b>,
     <b>shawarma 26%</b>, <b>falafel 43%</b>. The dominant single confusion is falafel → crab_cakes
@@ -709,7 +764,7 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
     <tbody>
       <tr><td>Test accuracy is inflated by data leakage</td><td>Recompute val and test top-1 after SHA-1 + perceptual de-dup; compare the two</td><td>val 88.16 vs test 88.18 (gap 0.02). Leakage removed</td></tr>
       <tr><td>Adding local food breaks the global model (catastrophic forgetting)</td><td>Compare combined-model accuracy against the two-expert split</td><td>Two-expert split keeps global at 88.18% with no degradation</td></tr>
-      <tr><td>The router defaults instead of routing</td><td>Count router decisions and measure per-domain recall and ROC-AUC</td><td>Israeli recall 61%, global recall 97.6%, ROC-AUC 0.93; +5.78 pts over always-global</td></tr>
+      <tr><td>The arbiter defaults to one model instead of truly deciding</td><td>Count arbiter decisions and measure per-domain recall and ROC-AUC</td><td>Israeli recall 61%, global recall 97.6%, ROC-AUC 0.93; +5.78 pts over always-global</td></tr>
       <tr><td>A wrong food identification goes unnoticed</td><td>Per-image error decomposition into routing error vs both-wrong; per-class recall</td><td>4.91% routing / 11.34% both-wrong, every class measured (System Analysis tab)</td></tr>
       <tr><td>Class imbalance silently hurts rare classes</td><td>Per-class recall reported, smallest classes flagged</td><td>Effect confined to ingredient classes with n≈8; reported, not hidden</td></tr>
       <tr><td>Weight from vision volume is unreliable</td><td>Volume estimates validated against Archimedes water displacement</td><td>Volume to mass fails on density even when volume is right; pivot to BLE</td></tr>
@@ -721,7 +776,7 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
   <table>
     <thead><tr><th>Type</th><th>What was validated</th><th>How</th></tr></thead>
     <tbody>
-      <tr><td>Engineering validation</td><td>Each model and the router meet their numeric targets on held-out, leakage-free data</td><td>Held-out test split, ROC-AUC, error decomposition, confusion matrices</td></tr>
+      <tr><td>Engineering validation</td><td>Each model and the arbiter meet their numeric targets on held-out, leakage-free data</td><td>Held-out test split, ROC-AUC, error decomposition, confusion matrices</td></tr>
       <tr><td>Product validation</td><td>The end user gets a correct food name and weight without manual entry</td><td>End-to-end run: photo → class → BLE grams → USDA kcal/macros in the GUI</td></tr>
     </tbody>
   </table>
@@ -752,11 +807,12 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
   <table>
     <thead><tr><th>Point raised</th><th>Response</th></tr></thead>
     <tbody>
-      <tr><td>Some concepts, notably the router, needed clearer explanation.</td>
-        <td>The <a href="#" class="goto" data-tab="arbiter">Arbiter tab</a> now defines the router
-          precisely: it reads no pixels, only the two experts' confidence behaviour, and answers one
-          binary domain question. Every feature has its formula, and the old "it just defaults to the
-          big model" behaviour (95% of decisions) is shown and contrasted with the new domain detector.</td></tr>
+      <tr><td>Some concepts, notably the routing component, needed clearer explanation.</td>
+        <td>The <a href="#" class="goto" data-tab="arbiter">Arbiter tab</a> now defines it precisely, and
+          names it correctly: it is an <b>arbiter</b> (it runs both experts and adjudicates), not a
+          router. It reads no pixels, only the two experts' confidence behaviour, and answers one binary
+          domain question. Every feature has its formula, and the old "it just defaults to the big model"
+          behaviour (95% of decisions) is shown and contrasted with the new arbiter.</td></tr>
       <tr><td>The workflow was hard to follow end to end.</td>
         <td>The pipeline was rebuilt around one reproducible script per stage (flatten, train, generate
           arbiter data, train arbiter, evaluate, analyse) with a single living document. Each stage's
@@ -791,7 +847,8 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
   </table>
 
   <div class="callout green"><b>Net effect.</b> The system did not just get a higher number; it got an
-    honest one. Leakage was removed, the router was turned into a real domain detector and explained,
+    honest one. Leakage was removed, the old defaulting router was replaced by a real arbiter (a domain
+    detector) and fully explained,
     every error class is tested, and class imbalance is reported instead of hidden.</div>
 
   <div class="foot">CalEyeZ · single living project document · Raz Dvora &amp; Roi Tzur · Shenkar.</div>
