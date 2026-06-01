@@ -1,14 +1,13 @@
 """
 Full-system evaluation — CalEyeZ.
 
-Applies the trained arbiter to EVERY row of the generated dataset (the entire held-out
-val + test of both domains) and records, per image, the routing decision and the final
-system prediction. Writes a per-image CSV and prints the overall system top-1.
+Applies the trained arbiter to the TEST split only and records, per image, the routing
+decision and the final system prediction. Writes a per-image CSV and prints the overall
+system top-1.
 
-IMPORTANT — what is a valid generalization number:
-  - TEST rows  : held out from BOTH the global model and the arbiter -> VALID system metric.
-  - VAL rows   : used to TRAIN the arbiter -> optimistic, NOT a generalization metric
-                 (reported only for completeness / transparency).
+Why TEST only: the arbiter was TRAINED on the val rows, so val is not a valid
+generalization metric. The test split is held out from BOTH the global model and the
+arbiter -> the system top-1 here is the honest, reportable number.
 
 No GPU needed: both models' outputs are already in arbiter_dataset.csv; we only apply
 the arbiter's routing decision on top.
@@ -48,6 +47,7 @@ def summarize(d: pd.DataFrame, label: str) -> None:
 def main() -> None:
     df = pd.read_csv(CSV)
     df["split"] = np.where(df["image_path"].str.contains(r"[\\/]val[\\/]"), "val", "test")
+    df = df[df.split == "test"].reset_index(drop=True)   # TEST only (held out)
     feat = add_features(df)
 
     clf = xgb.XGBClassifier()
@@ -62,11 +62,9 @@ def main() -> None:
               "route", "route_prob_israeli", "final_pred", "final_correct",
               "g_correct", "i_correct"]]
     out.to_csv(OUT, index=False)
-    print(f"Wrote per-image evaluation -> {OUT}  ({len(out)} rows)")
+    print(f"Wrote per-image evaluation -> {OUT}  ({len(out)} rows, TEST only)")
 
-    summarize(df[df.split == "test"], "TEST  (held out — VALID system metric)")
-    summarize(df[df.split == "val"],  "VAL   (arbiter training data — optimistic, NOT valid)")
-    summarize(df, "ALL val+test combined (mixed; test portion is the valid part)")
+    summarize(df, "TEST  (held out from global model + arbiter — VALID system metric)")
 
 
 if __name__ == "__main__":

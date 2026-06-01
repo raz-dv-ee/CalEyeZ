@@ -269,6 +269,11 @@ winner   (global / israeli / none)</pre>
       ceiling is set by the Israeli model's out-of-domain overconfidence, not the arbiter.
       Top features (entropy_gap, conf_gap, conf_ratio) confirm it routes on <i>relative</i>
       confidence, not raw Israeli confidence. Model: <code>scripts/arbiter/arbiter_xgb.json</code>.</div>
+    <p><b>System top-1 (held-out test): 83.75%</b> over 11,265 images. Full per-image
+      evaluation: <code>scripts/arbiter/evaluate_system.py</code> →
+      <code>datasets/system_evaluation.csv</code>. Evaluated on the TEST split only — the val
+      rows trained the arbiter, so they are excluded from the metric. Exceeds the FRS ≥80%
+      requirement on a strictly held-out, leakage-free basis.</p>
 
     <!-- 7 -->
     <h2 id="weight">7 · Weight Estimation — Approaches Evaluated &amp; Rejected <span class="status s-wip">wip</span></h2>
