@@ -349,14 +349,19 @@
     </tbody>
   </table>
 
-  <h3 id="g-train">Training configuration</h3>
+  <h3 id="g-train">Training configuration and why we chose each setting</h3>
   <table>
-    <thead><tr><th>Setting</th><th>Value</th><th>Setting</th><th>Value</th></tr></thead>
+    <thead><tr><th>Setting</th><th>Value</th><th>Why this choice</th></tr></thead>
     <tbody>
-      <tr><td>imgsz</td><td>320</td><td>optimizer</td><td>AdamW, cosine LR</td></tr>
-      <tr><td>batch</td><td>16</td><td>lr0 / lrf</td><td>1e-3 / 0.01</td></tr>
-      <tr><td>epochs</td><td>150 (early-stopped 116, patience 30)</td><td>dropout / label smooth</td><td>0.2 / 0.1</td></tr>
-      <tr><td>AMP</td><td>on (about 2.2 GB used)</td><td>best epoch</td><td>73</td></tr>
+      <tr><td>imgsz</td><td>320</td><td>Food is a fine-texture problem (rice grains, crumbs, sauce sheen). 320 beat the default 224 on top-1 while still fitting batch 16 on an 8 GB GPU; 640 gave no measurable gain for far more compute.</td></tr>
+      <tr><td>batch</td><td>16</td><td>The largest batch that fits comfortably at 320 px with AMP headroom, large enough for stable batch-norm and gradient estimates without gradient accumulation.</td></tr>
+      <tr><td>optimizer</td><td>AdamW + cosine LR</td><td>AdamW decouples weight decay from the adaptive step, which fine-tunes a pretrained backbone reliably; cosine annealing lowers the LR smoothly to a good minimum with no hand-tuned step schedule.</td></tr>
+      <tr><td>lr0 / lrf</td><td>1e-3 / 0.01</td><td>1e-3 is the standard AdamW base for fine-tuning an ImageNet-pretrained backbone; lrf 0.01 decays to 1% of that by the end so late epochs refine the weights instead of thrashing them.</td></tr>
+      <tr><td>epochs / patience</td><td>150, patience 30 (stopped 116)</td><td>A generous cap so the model is never under-trained, with early stopping so it does not waste compute; patience 30 tolerates the noisy validation plateau before stopping.</td></tr>
+      <tr><td>dropout</td><td>0.2</td><td>Regularises against overfitting the large dish classes (about 1,000 images each) given the heavy class imbalance.</td></tr>
+      <tr><td>label smoothing</td><td>0.1</td><td>Stops the model becoming over-certain on visually ambiguous pairs (mousse vs cake), which improves probability calibration. Better-calibrated confidences directly feed the arbiter's features.</td></tr>
+      <tr><td>AMP (mixed precision)</td><td>on (~2.2 GB)</td><td>Halves memory and speeds training with no accuracy loss, leaving VRAM headroom on the 8 GB card for the 320 px / batch 16 setup.</td></tr>
+      <tr><td>best epoch</td><td>73</td><td>best.pt is frozen at the validation peak, so the mild overfit that begins after about epoch 60 (train loss down, val loss up) never affects the reported number.</td></tr>
     </tbody>
   </table>
 
