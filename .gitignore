@@ -33,12 +33,18 @@ runs/*/
 !runs/israeli_food_yolo11l/
 !runs/israeli_food_yolo11l/**
 
+# New Global baseline on the cleaned, leakage-free 132-class dataset.
+!runs/general_model_flattened/
+!runs/general_model_flattened/**
+
 # Step C: Re-apply .pt exclusion inside those whitelisted runs
 #         (epoch checkpoints are large and unnecessary on GitHub).
 runs/general_model_yolo11l5/weights/epoch*.pt
 runs/general_model_yolo11l5/weights/last.pt
 runs/israeli_food_yolo11l/weights/epoch*.pt
 runs/israeli_food_yolo11l/weights/last.pt
+runs/general_model_flattened/weights/epoch*.pt
+runs/general_model_flattened/weights/last.pt
 
 
 # ── 4. LARGE CSV DATA FILES ───────────────────────────────────
