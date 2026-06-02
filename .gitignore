@@ -129,3 +129,7 @@ CalEyeZ/
 
 # original unsorted scripts (local only, not part of the clean repo)
 SCRIPTS (UNCLEANED)/
+
+# demo runtime artifacts
+nutrition_log.csv
+temp.jpg
