@@ -70,8 +70,24 @@ python scripts/demo/caleyez_demo.py
 - Press **Save to log** to add the meal. The day's table and macro totals update in place;
   rows are colour-coded by which expert produced them (blue global, teal Israeli).
 
+## If the scale shows "BLE off" or stays at 0 g
+
+The weight comes from `bleak`. If the chip reads `BLE off (pip install bleak)`, then `bleak` is not
+installed in the **same** Python environment you launched the demo from (it can be present in another
+venv and still be missing here). Fix:
+
+```bash
+pip install bleak
+```
+
+The demo never blocks on this: when the scale is not connected it automatically uses the **manual g**
+field next to the weight readout, so you can type the grams and continue. The chip always states which
+source is live (BLE or manual).
+
 ## Notes
 
 - Inference runs on a worker thread, so the preview and weight never freeze.
+- Lighting handling is CLAHE (contrast only) plus test-time averaging of the raw and CLAHE views.
+  We deliberately do NOT use gray-world white balance, which distorts the hue of dominant-colour foods.
 - `nutrition_log.csv` and `temp.jpg` are written at the repo root and are gitignored.
 - First run downloads nothing extra if the weights are present; model load takes a few seconds.
