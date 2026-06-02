@@ -127,6 +127,7 @@
     <button data-tab="analysis">System Analysis</button>
     <button data-tab="validation">Validation &amp; Risks</button>
     <button data-tab="ble">BLE Scale</button>
+    <button data-tab="demo">Live Demo</button>
     <button data-tab="feedback">Reviewer Response</button>
     <button data-tab="future">Limitations &amp; V2</button>
   </div>
@@ -947,6 +948,114 @@ sticky_high = <span class="st">0</span>
     <a href="#" class="goto" data-tab="validation">Validation &amp; Risks</a> tab). BLE removes the
     measurement from the vision path entirely. Source: <code>gui_scale.py</code>, used live in
     <code>DEMO.py</code>.</div>
+</section>
+
+<!-- ============ LIVE DEMO ============ -->
+<section class="tab" id="tab-demo">
+  <h2>Live Demo: the End-to-End Application</h2>
+  <p class="lead">The demo ties everything together: a webcam frame becomes a food class, a BLE weight,
+    and a full nutrition breakdown, live. It runs the current Global and Israeli models behind the
+    XGBoost arbiter, with a Gemini vision fallback for the cases the experts cannot handle. Every design
+    choice below is made for one goal: a correct result in the room, under any camera and any light, as
+    often as the score promises. Source: <code>scripts/demo/caleyez_demo.py</code>.</p>
+
+  <div class="sub-nav">
+    <a href="#d-pipe">Pipeline</a><a href="#d-robust">Robustness</a><a href="#d-roi">ROI choice</a>
+    <a href="#d-arb">Arbiter wiring</a><a href="#d-fall">Gemini fallback</a><a href="#d-ui">UI / UX</a>
+  </div>
+
+  <h3 id="d-pipe">The pipeline per capture</h3>
+  <div class="flow">
+    <span class="box">📷 frame (any res)</span><span class="arr">→</span>
+    <span class="box">center ROI crop</span><span class="arr">→</span>
+    <span class="box amber">lighting normalise</span><span class="arr">→</span>
+    <span class="box hl">Global 132</span><span class="arr">+</span>
+    <span class="box teal">Israeli 13</span><span class="arr">→</span>
+    <span class="box">19 features</span><span class="arr">→</span>
+    <span class="box amber">arbiter P(israeli)</span><span class="arr">→</span>
+    <span class="box">expert pick</span><span class="arr">→</span>
+    <span class="box purple">gate? Gemini</span><span class="arr">→</span>
+    <span class="box">USDA / local DB × grams</span>
+  </div>
+
+  <h3 id="d-robust">Why it survives any camera and any light</h3>
+  <p>A score measured on a clean test set only transfers to the room if the live input is brought into
+    the same distribution the models expect. Two steps do that.</p>
+  <table>
+    <thead><tr><th>Problem in the room</th><th>What we do</th><th>Why it works</th></tr></thead>
+    <tbody>
+      <tr><td>Every webcam has a different resolution and aspect ratio</td><td>Run inference through Ultralytics <code>predict()</code>, which letterboxes internally to the model's <code>imgsz</code> (320 global, 224 Israeli)</td><td>The model always sees the exact geometry it trained on, so a 720p and a 4K camera produce the same tensor. We never hand-resize and distort the aspect ratio.</td></tr>
+      <tr><td>Warm bulbs, window light and shadows shift colour and contrast</td><td><b>Gray-world white balance</b> then <b>CLAHE</b> on the luminance channel before inference</td><td>Gray-world removes the colour cast (the average of the scene is forced back to neutral gray); CLAHE equalises local contrast. The same dish then looks the same to the model regardless of the bulb. This is the single biggest lever for stable predictions.</td></tr>
+    </tbody>
+  </table>
+  <pre><span class="cm"># lighting normalisation (scripts/demo/caleyez_demo.py)</span>
+img *= (gray / channel_means)              <span class="cm"># gray-world white balance, kills colour cast</span>
+l = CLAHE(clip=2.0, tiles=8x8).apply(l)    <span class="cm"># equalise local contrast on the L channel</span></pre>
+
+  <h3 id="d-roi">Why a fixed center ROI, not automatic plate detection</h3>
+  <p>The earlier demo tried to find the plate with <code>HoughCircles</code> and contour detection. For a
+    live demo that is the wrong trade.</p>
+  <table>
+    <thead><tr><th>Approach</th><th>Behaviour</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td>Automatic (HoughCircles / contours)</td><td>Depends on a clean round plate, even light and a plain background; fails silently on clutter and returns a wrong crop</td><td>Unpredictable on stage</td></tr>
+      <tr><td><b>Fixed center ROI (chosen)</b></td><td>A drawn "place food here" box; we always crop that square</td><td><b>Deterministic, scale-consistent, no silent failures</b></td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>The reasoning.</b> The fixed ROI also fixes the object scale: the food fills a
+    known fraction of the frame on every camera, which removes a second source of variance. We trade a
+    little framing freedom for a result that behaves identically every single time, which is exactly what
+    a demo needs.</div>
+
+  <h3 id="d-arb">Wiring the real arbiter (not a re-implementation)</h3>
+  <p>The demo computes the <b>same 19 features</b> the arbiter was trained on, in the same order, and
+    loads the exact saved model. Nothing is approximated.</p>
+  <pre>g = expert(global_model, roi, imgsz=<span class="st">320</span>)   <span class="cm"># top-5 conf, entropy, margin</span>
+i = expert(israeli_model, roi, imgsz=<span class="st">224</span>)
+X = [g_conf1..5, g_entropy, g_margin,
+     i_conf1..5, i_entropy, i_margin,
+     conf_gap, conf_ratio, entropy_gap, margin_gap, both_unsure]
+p_israeli = arbiter.<span class="fn">predict_proba</span>(X)[<span class="st">1</span>]     <span class="cm"># scripts/arbiter/arbiter_xgb.json</span>
+route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
+  <div class="callout green"><b>Why this matters.</b> Because the features and weights are identical to
+    training, the live router behaves exactly like the 93.4%-accurate arbiter in the evaluation, not a
+    look-alike. The decision panel in the UI shows both experts' top guess and the live P(israeli), so
+    the routing is visible, not hidden.</div>
+
+  <h3 id="d-fall">The Gemini fallback: covering the cases no expert can win</h3>
+  <p>About 11% of system errors are images where <b>both experts are wrong</b> (the both-wrong pool from
+    the System Analysis tab). No amount of routing fixes those. The demo detects that situation and asks
+    a cloud vision model instead, which is the honest way to push realized accuracy past the local
+    ceiling on hard inputs.</p>
+  <table>
+    <thead><tr><th>Trigger</th><th>Condition</th><th>Meaning</th></tr></thead>
+    <tbody>
+      <tr><td>Weak chosen expert</td><td>chosen top-1 below its gate (0.45 global, 0.60 Israeli)</td><td>The selected model is not confident enough to trust</td></tr>
+      <tr><td>Both experts unsure</td><td>both top-1 below 0.50 (<code>both_unsure</code>)</td><td>The input is likely out of both label spaces</td></tr>
+    </tbody>
+  </table>
+  <p>The two gates differ on purpose: the Global model spreads probability over 132 classes, so a modest
+    top-1 is still meaningful, while the Israeli model has only 13 classes and must clear a higher bar to
+    be believed. When either trigger fires, the ROI crop is sent to <b>Gemini</b> and its label drives the
+    nutrition lookup. The UI marks these results so the source is never ambiguous.</p>
+
+  <h3 id="d-ui">UI and UX choices</h3>
+  <table>
+    <thead><tr><th>Choice</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Tkinter desktop app</td><td>The system is an edge device: models, camera and BLE all run locally with no server. Tkinter ships with Python, starts instantly, and binds cleanly to the OpenCV camera loop and the BLE thread, which a browser UI cannot do without extra bridges.</td></tr>
+      <tr><td>Live decision panel</td><td>Two confidence bars (Global, Israeli) plus the live P(israeli) make the routing visible while you demo. The reviewer point that the router was unclear is answered on screen: you watch it decide.</td></tr>
+      <tr><td>Embedded interactive log, not popups</td><td>The day's meals live in a table inside the main window with running calorie and macro totals, colour-coded by which expert produced each row (blue global, teal Israeli). Add and delete update in place, so logging is part of the flow rather than a separate dialog.</td></tr>
+      <tr><td>Threaded inference</td><td>Inference runs on a worker thread so the camera preview and weight readout never freeze while the models think.</td></tr>
+      <tr><td>Weight colour state</td><td>The big weight readout turns teal only when the BLE stream is stable (last ten samples within 2 g), so you capture on a settled reading, not a bouncing one.</td></tr>
+      <tr><td>API keys from the environment</td><td>USDA and Gemini keys are read from environment variables, never hard-coded, so the public repo carries no secrets.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>Result.</b> The same pipeline that scores 83.75% on the held-out test now runs
+    live, with the routing on display, robustness baked into the input path, and a cloud fallback for the
+    inputs the local models genuinely cannot win. Source: <code>scripts/demo/caleyez_demo.py</code>.</div>
+
+  <div class="foot">CalEyeZ · single living project document · Raz Dvora &amp; Roi Tzur · Shenkar.</div>
 </section>
 
 <!-- ============ FEEDBACK ============ -->
