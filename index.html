@@ -1266,6 +1266,50 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
     <b>Scope:</b> this raises Israeli recall and shrinks routing error, but, like the embeddings arbiter,
     it operates inside the oracle and does not by itself lift the 88.4% ceiling.</div>
 
+  <!-- Fine-tune experiment -->
+  <h3 id="v2-ft">A real attempt: fine-tuning on tagged demo images (and why it failed)</h3>
+  <p>The data-tagging flywheel in the live demo produces labelled real-world captures, so the obvious next
+    step is to fine-tune the Israeli expert on them. We tried it <b>four times</b> on the worst real-world
+    class, <code>hummus</code>, with a safety harness that never touches the production weights, holds out
+    part of the tagged set, and re-validates on the original clean test split. <b>Every run made the model
+    worse</b>, and the regression guard correctly refused to recommend all four.</p>
+  <table>
+    <thead><tr><th>Run</th><th>Setup</th><th>Clean test top-1 (was 92.26%)</th><th>Change</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>15 epochs, AdamW, lr 1e-4, full fine-tune, 21 tagged images ×8 aug</td><td>49.89%</td><td>−42.4 pts</td></tr>
+      <tr><td>2</td><td>25 epochs (longer)</td><td>23.37%</td><td>−68.9 pts (collapsed, never improved)</td></tr>
+      <tr><td>3</td><td>20 epochs, lr 1e-4, 72 tagged ×2 aug</td><td>66.21%</td><td>−26.1 pts (least bad)</td></tr>
+      <tr><td>4</td><td>15 epochs, lower lr 5e-5, 72 tagged ×1 aug</td><td>52.64%</td><td>−39.6 pts</td></tr>
+    </tbody>
+  </table>
+  <div class="callout amber"><b>The diagnosis.</b> The held-out real-world hummus accuracy actually <i>rose</i>
+    during training, so the model did learn the new images, yet the clean test accuracy across all 13 classes
+    collapsed. Two things happened at once. (1) <b>Catastrophic forgetting</b>: a small, single-class batch
+    with no rehearsal of the original data overwrote shared features. (2) The decisive one, in the user's own
+    words: <b>the tagged hummus images were too visually similar to neighbouring classes.</b> Overhead shots of
+    a beige dip look like other spreads and pastes in the set, so training pulled those neighbours' decision
+    boundaries into "hummus". The model relabelled its neighbours as hummus and their test accuracy cratered.
+    More epochs (run 2) and a lower learning rate (run 4) did not help, because the problem is the data, not
+    the optimiser.</div>
+  <h4>What would actually fix it</h4>
+  <table>
+    <thead><tr><th>Fix</th><th>Why it addresses the failure</th></tr></thead>
+    <tbody>
+      <tr><td>Rehearsal / replay</td><td>Mix the original balanced training data back in (not just the new class) so shared features are not overwritten. Naive fine-tuning on one class guarantees forgetting.</td></tr>
+      <tr><td>Freeze the backbone, train the head only (or LoRA)</td><td>All four runs fine-tuned every layer. Freezing the feature extractor and adapting only the classifier (or low-rank adapters) keeps the learned representation intact and needs far less data.</td></tr>
+      <tr><td>Hard negatives for the look-alike neighbours</td><td>Since the new hummus images resemble their neighbours, add labelled examples of those neighbours (or a contrastive / triplet objective) so the boundary is sharpened instead of swallowed.</td></tr>
+      <tr><td>Curate, do not just collect</td><td>Drop ambiguous borderline captures; keep class-balanced sampling so the new images do not dominate. A heavy augmentation multiplier on a tiny, ambiguous set (run 1, ×8) makes the overfitting worse.</td></tr>
+      <tr><td>Early-stop on the clean-test metric</td><td>Select the checkpoint by overall held-out accuracy, not by the new class's accuracy, so a gain on one class can never be bought with a loss everywhere else.</td></tr>
+      <tr><td>Fix the root cause at the data level</td><td>The binding constraint is training viewpoint, not one class. The durable answer is multi-viewpoint (including top-down) data for <i>all</i> classes plus a stronger backbone, not patching a single class after the fact.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout green"><b>The honest takeaway.</b> The flywheel works as an experiment harness: it caught
+    a real, repeatable failure before any production weight was touched. The lesson is that more labelled data
+    is not automatically better. Data that is ambiguous with its neighbours, fed without rehearsal or a frozen
+    backbone, actively degrades a model. This is exactly the kind of negative result the reviewers asked us to
+    surface, and it sharpens the V2 plan: representation-preserving fine-tuning, hard negatives, and broader
+    data, rather than naive single-class retraining.</div>
+
   <!-- Synthesis -->
   <h3>V2 synthesis: which lever moves which number</h3>
   <table>
