@@ -985,12 +985,17 @@ sticky_high = <span class="st">0</span>
     <thead><tr><th>Problem in the room</th><th>What we do</th><th>Why it works</th></tr></thead>
     <tbody>
       <tr><td>Every webcam has a different resolution and aspect ratio</td><td>Run inference through Ultralytics <code>predict()</code>, which letterboxes internally to the model's <code>imgsz</code> (320 global, 224 Israeli)</td><td>The model always sees the exact geometry it trained on, so a 720p and a 4K camera produce the same tensor. We never hand-resize and distort the aspect ratio.</td></tr>
-      <tr><td>Warm bulbs, window light and shadows shift colour and contrast</td><td><b>Gray-world white balance</b> then <b>CLAHE</b> on the luminance channel before inference</td><td>Gray-world removes the colour cast (the average of the scene is forced back to neutral gray); CLAHE equalises local contrast. The same dish then looks the same to the model regardless of the bulb. This is the single biggest lever for stable predictions.</td></tr>
+      <tr><td>Dim, harsh or warm light flattens contrast</td><td><b>CLAHE</b> on the luminance (L) channel, plus <b>test-time averaging</b> of the raw and CLAHE views</td><td>CLAHE equalises local contrast while leaving the colour channels untouched, so the dish looks consistent under different light without any hue shift. Averaging two hue-preserving views means no single transform can dominate the decision.</td></tr>
     </tbody>
   </table>
-  <pre><span class="cm"># lighting normalisation (scripts/demo/caleyez_demo.py)</span>
-img *= (gray / channel_means)              <span class="cm"># gray-world white balance, kills colour cast</span>
-l = CLAHE(clip=2.0, tiles=8x8).apply(l)    <span class="cm"># equalise local contrast on the L channel</span></pre>
+  <div class="callout amber"><b>Lesson from a live mistake.</b> An earlier version also ran gray-world white
+    balance, which assumes the scene averages to neutral gray. When one coloured object fills the ROI
+    (a red pepper, a tomato) gray-world desaturates it and shifts its hue, which made the model read a
+    red bell pepper as a beige pastry. We removed gray-world and kept only the hue-preserving CLAHE step.
+    This is a concrete example of a lesson derived from testing and folded back into the system.</div>
+  <pre><span class="cm"># inference robustness (scripts/demo/caleyez_demo.py)</span>
+l = CLAHE(clip=2.0, tiles=8x8).apply(l)    <span class="cm"># contrast only, hue preserved (no white balance)</span>
+probs = mean(predict(raw_roi), predict(clahe_roi))   <span class="cm"># test-time averaging</span></pre>
 
   <h3 id="d-roi">Why a fixed center ROI, not automatic plate detection</h3>
   <p>The earlier demo tried to find the plate with <code>HoughCircles</code> and contour detection. For a
@@ -1048,6 +1053,7 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
       <tr><td>Embedded interactive log, not popups</td><td>The day's meals live in a table inside the main window with running calorie and macro totals, colour-coded by which expert produced each row (blue global, teal Israeli). Add and delete update in place, so logging is part of the flow rather than a separate dialog.</td></tr>
       <tr><td>Threaded inference</td><td>Inference runs on a worker thread so the camera preview and weight readout never freeze while the models think.</td></tr>
       <tr><td>Weight colour state</td><td>The big weight readout turns teal only when the BLE stream is stable (last ten samples within 2 g), so you capture on a settled reading, not a bouncing one.</td></tr>
+      <tr><td>Manual weight fallback</td><td>If the BLE scale is not connected, a small "manual g" field is used automatically, so a flaky Bluetooth link can never block the demo. The app states which source is live.</td></tr>
       <tr><td>API keys from the environment</td><td>USDA and Gemini keys are read from environment variables, never hard-coded, so the public repo carries no secrets.</td></tr>
     </tbody>
   </table>

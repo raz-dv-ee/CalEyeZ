@@ -55,8 +55,13 @@ except Exception:
 try:
     from bleak import BleakScanner, BleakClient
     _BLE_OK = True
-except Exception:
+    _BLE_ERR = ""
+except Exception as e:
     _BLE_OK = False
+    _BLE_ERR = str(e)
+    print(f"[WARN] bleak unavailable, BLE weight disabled: {e}\n"
+          f"       install it in THIS python env:  pip install bleak\n"
+          f"       (you can still demo by typing the weight in the box).")
 
 # ==========================================================================================
 # 0 · CONFIG
@@ -154,20 +159,16 @@ def center_roi(bgr: np.ndarray) -> np.ndarray:
     return bgr[y0:y0 + s, x0:x0 + s].copy()
 
 
-def normalize_lighting(bgr: np.ndarray) -> np.ndarray:
-    """Gray-world white balance + CLAHE on the luminance channel.
+def clahe_luma(bgr: np.ndarray) -> np.ndarray:
+    """Equalise local contrast on the luminance (L) channel only.
 
-    Why: the models were trained with heavy colour/brightness augmentation, but a live kitchen
-    still drifts (warm bulbs, window light, shadows). Gray-world removes the colour cast and
-    CLAHE equalises local contrast, so the same dish looks the same to the model under different
-    light. This is the single biggest lever for stable predictions across environments.
+    Why this and NOT gray-world white balance: gray-world assumes the average of the scene is
+    neutral gray, which is false when one coloured object fills the ROI (a red pepper, a tomato).
+    There gray-world desaturates the object and changes its hue, which can flip the prediction
+    (a red pepper read as a beige pastry). CLAHE works on L in LAB space and leaves the colour
+    channels (a, b) untouched, so it fixes contrast under dim or harsh light WITHOUT shifting hue.
     """
-    img = bgr.astype(np.float32)
-    means = img.reshape(-1, 3).mean(0) + 1e-6          # gray-world: scale each channel to a common gray
-    gray = means.mean()
-    img *= (gray / means)
-    img = np.clip(img, 0, 255).astype(np.uint8)
-    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
     l, a, b = cv2.split(lab)
     l = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(l)
     return cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
@@ -177,20 +178,33 @@ def normalize_lighting(bgr: np.ndarray) -> np.ndarray:
 # 3 · INFERENCE  (features computed identically to generate_arbiter_dataset.py)
 # ==========================================================================================
 def expert_features(model, bgr: np.ndarray, imgsz: int) -> dict:
-    """Top-5 conf, entropy, margin from one expert. predict() letterboxes -> resolution independent."""
-    r = model.predict(bgr, imgsz=imgsz, verbose=False)[0]
-    probs = r.probs
-    top5_idx = list(probs.top5)
-    conf = [float(c) for c in probs.top5conf.tolist()]
+    """Top-5 conf, entropy, margin from one expert.
+
+    Two robustness measures:
+      - predict() letterboxes internally, so the result is resolution independent.
+      - test-time averaging: we average the softmax of the raw ROI and a CLAHE-enhanced copy.
+        Averaging two hue-preserving views is more stable than betting on a single transform,
+        and guarantees a bad enhancement can never dominate the decision.
+    """
+    names = None
+    acc = None
+    for view in (bgr, clahe_luma(bgr)):
+        r = model.predict(view, imgsz=imgsz, verbose=False)[0]
+        names = r.names
+        p = r.probs.data.detach().cpu().numpy().astype(np.float64)
+        acc = p if acc is None else acc + p
+    full = acc / 2.0
+    full = full / (full.sum() + 1e-12)
+    order = np.argsort(-full)[:5]
+    conf = [float(full[i]) for i in order]
     while len(conf) < 5:
         conf.append(0.0)
-    full = probs.data.detach().cpu().numpy().astype(np.float64)
-    full = np.clip(full, 1e-12, 1.0)
-    entropy = float(-(full * np.log(full)).sum())
+    fc = np.clip(full, 1e-12, 1.0)
+    entropy = float(-(fc * np.log(fc)).sum())
     margin = float(conf[0] - conf[1])
-    label = r.names[int(top5_idx[0])]
+    label = names[int(order[0])]
     return {"label": label, "conf": conf, "entropy": entropy, "margin": margin,
-            "top5": [(r.names[int(i)], float(c)) for i, c in zip(top5_idx, conf)]}
+            "top5": [(names[int(i)], float(full[i])) for i in order]}
 
 
 def build_feature_row(g: dict, i: dict) -> pd.DataFrame:
@@ -211,9 +225,8 @@ def build_feature_row(g: dict, i: dict) -> pd.DataFrame:
 def predict(bgr: np.ndarray) -> dict:
     """Full edge decision. Returns everything the UI needs to explain itself."""
     roi = center_roi(bgr)
-    norm = normalize_lighting(roi)
-    g = expert_features(model_g, norm, GLOBAL_IMGSZ)
-    i = expert_features(model_i, norm, ISRAELI_IMGSZ)
+    g = expert_features(model_g, roi, GLOBAL_IMGSZ)
+    i = expert_features(model_i, roi, ISRAELI_IMGSZ)
 
     X = build_feature_row(g, i)
     p_israeli = float(arbiter.predict_proba(X)[0, 1])
@@ -283,9 +296,15 @@ def nutrition(label: str, grams: int) -> dict:
 # ==========================================================================================
 weight_buffer = deque([0] * MAX_HISTORY, maxlen=MAX_HISTORY)
 current_weight = 0
+manual_weight = 0          # used when the BLE scale is not connected
 sticky_high = 0
 ble_status = "no BLE" if not _BLE_OK else "scanning"
 stable = False
+
+
+def get_weight() -> int:
+    """Live BLE weight when connected, otherwise the value typed in the UI."""
+    return int(current_weight) if ble_status == "connected" else int(manual_weight)
 
 
 def on_notify(_sender, data):
@@ -417,6 +436,16 @@ class CalEyeZDemo:
         self.ble_lbl = self._chip(right, "scanning", MUT)
         self.ble_lbl.pack()
 
+        # manual weight fallback (used automatically when the scale is not connected)
+        man = tk.Frame(right, bg=PANEL)
+        man.pack(pady=(6, 0))
+        tk.Label(man, text="manual g:", bg=PANEL, fg=MUT, font=("Segoe UI", 9)).pack(side="left")
+        self.manual_var = tk.StringVar(value="0")
+        e = tk.Entry(man, textvariable=self.manual_var, width=7, justify="center",
+                     bg=CARD, fg=INK, insertbackground=INK, relief="flat")
+        e.pack(side="left", padx=6)
+        e.bind("<KeyRelease>", self._set_manual)
+
         ctl = tk.Frame(right, bg=PANEL)
         ctl.pack(fill="x", padx=24, pady=12)
         tk.Label(ctl, text="Preparation", bg=PANEL, fg=MUT, font=("Segoe UI", 9)).pack(anchor="w")
@@ -481,12 +510,25 @@ class CalEyeZDemo:
             self.video.configure(image=tkimg)
         self.root.after(30, self._tick_camera)
 
+    def _set_manual(self, _evt=None):
+        global manual_weight
+        try:
+            manual_weight = max(0, int(float(self.manual_var.get() or 0)))
+        except ValueError:
+            manual_weight = 0
+
     def _tick_weight(self):
         if not self.running:
             return
-        self.weight_lbl.config(text=f"{int(current_weight)} g", fg=TEAL if stable else AMBER)
-        color = {"connected": GREEN}.get(ble_status, MUT)
-        self.ble_lbl.config(text=f"BLE: {ble_status}" + ("  (stable)" if stable else ""), fg=color)
+        connected = ble_status == "connected"
+        self.weight_lbl.config(text=f"{get_weight()} g",
+                               fg=TEAL if (connected and stable) else AMBER)
+        if connected:
+            self.ble_lbl.config(text="BLE: connected" + ("  (stable)" if stable else ""), fg=GREEN)
+        elif not _BLE_OK:
+            self.ble_lbl.config(text="BLE off (pip install bleak) - using manual g", fg=AMBER)
+        else:
+            self.ble_lbl.config(text=f"BLE: {ble_status} - using manual g", fg=MUT)
         self.root.after(120, self._tick_weight)
 
     # ---------- analyze ----------
@@ -497,7 +539,7 @@ class CalEyeZDemo:
         self.btn.config(state="disabled", text="THINKING...", bg=MUT)
         self.result.config(text="Running edge inference...")
         threading.Thread(target=self._analyze_worker,
-                         args=(self.frame_bgr.copy(), int(current_weight), self.prep.get()),
+                         args=(self.frame_bgr.copy(), get_weight(), self.prep.get()),
                          daemon=True).start()
 
     def _analyze_worker(self, bgr, grams, prep):
