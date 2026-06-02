@@ -915,25 +915,30 @@ weight = low + high * 256                  <span class="cm"># little-endian, gra
     on this unit a high-order carry can appear in the status byte rather than byte 5, so we OR them
     together (masking off the low status bit) to get the true high byte.</p>
 
-  <h3>Step 4 · Robust decode in software</h3>
-  <p>A live scale flickers as it settles, and the high byte can momentarily read 0 during a refresh,
-    which would make a 532 g reading drop to 20 g for one frame. We added a <b>sticky high byte</b> (hold
-    the last non-zero carry, reset it only when the load genuinely returns to near zero) plus a software
-    stability gate (a reading is "stable" once the last ten samples vary by no more than 2 g). This is
-    the actual handler from <code>gui_scale.py</code>:</p>
+  <h3>Step 4 · Robust decode in software (a lesson from a real bug)</h3>
+  <p>A live scale flickers as it settles, and the high byte can momentarily read wrong during a refresh,
+    which would make a 532 g reading drop to 20 g for one frame. Our first attempt held the high byte with
+    a <b>sticky latch</b>. That was a mistake: a single transient overshoot (pressing down so it briefly
+    reads above 255 g) latched a permanent <b>+256 g</b> offset that never cleared, so a load removed and
+    replaced read <i>double</i> (200 g, then 400 g). The latch also refused to return to 0 if the scale
+    stopped sending a clean zero packet.</p>
+  <div class="callout amber"><b>The fix.</b> Drop the latch and take the <b>median of the last few raw
+    decodes</b>. A single bad frame (flicker or momentary overshoot) is outvoted by the others, so it
+    never shows, and the reading follows the scale all the way back down to 0. No state is held between
+    loads, so weights cannot accumulate. A separate stability gate marks a reading "stable" once the last
+    ten samples vary by no more than 2 g.</div>
   <pre><span class="kw">from</span> bleak <span class="kw">import</span> BleakScanner, BleakClient
+<span class="kw">from</span> collections <span class="kw">import</span> deque
 NOTIFY_UUID = <span class="st">"0000ffb2-0000-1000-8000-00805f9b34fb"</span>
-sticky_high = <span class="st">0</span>
+raw = deque(maxlen=<span class="st">5</span>)
 
 <span class="kw">def</span> <span class="fn">on_notify</span>(sender, data):
-    <span class="kw">global</span> sticky_high
     b = <span class="fn">list</span>(data)
     <span class="kw">if</span> <span class="fn">len</span>(b) &lt; <span class="st">8</span>: <span class="kw">return</span>
     low  = b[<span class="st">4</span>]
     high = b[<span class="st">5</span>] | (b[<span class="st">3</span>] &amp; <span class="st">0xFE</span>)
-    <span class="kw">if</span> high &gt; <span class="st">0</span>: sticky_high = high          <span class="cm"># remember the carry</span>
-    <span class="kw">if</span> low &lt; <span class="st">5</span> <span class="kw">and</span> high == <span class="st">0</span>: sticky_high = <span class="st">0</span>  <span class="cm"># real return to zero</span>
-    weight = low + <span class="fn">max</span>(high, sticky_high) * <span class="st">256</span>
+    raw.<span class="fn">append</span>(low + high * <span class="st">256</span>)
+    weight = <span class="fn">sorted</span>(raw)[<span class="fn">len</span>(raw) // <span class="st">2</span>]   <span class="cm"># median: no latch, returns to 0, rejects spikes</span>
     <span class="cm"># ... push to UI, mark STABLE when last 10 samples vary &le; 2 g</span>
 
 <span class="kw">async def</span> <span class="fn">run</span>():

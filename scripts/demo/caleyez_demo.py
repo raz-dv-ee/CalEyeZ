@@ -338,9 +338,9 @@ def nutrition(label: str, grams: int) -> dict:
 # 5 · BLE WEIGHT  (protocol recovered by reverse engineering; see scripts/ble/scale_reader.py)
 # ==========================================================================================
 weight_buffer = deque([0] * MAX_HISTORY, maxlen=MAX_HISTORY)
+raw_buffer = deque(maxlen=5)   # last few raw decodes, median-filtered to reject flicker/overshoot
 current_weight = 0
 manual_weight = 0          # used when the BLE scale is not connected
-sticky_high = 0
 ble_status = "no BLE" if not _BLE_OK else "scanning"
 stable = False
 
@@ -351,21 +351,28 @@ def get_weight() -> int:
 
 
 def on_notify(_sender, data):
-    global current_weight, sticky_high, ble_status, stable
+    """Decode one packet to grams.
+
+    weight = low_byte + high_byte * 256, with the high byte recovered as in the reverse-engineered
+    protocol. We do NOT latch the high byte (the old "sticky high" hack caused a transient overshoot
+    to add a permanent +256 g offset, so a removed-then-replaced load read double). Instead we take
+    the MEDIAN of the last few raw decodes: a single bad frame (flicker or momentary overshoot) is
+    outvoted, and the reading follows the scale all the way back down to 0.
+    """
+    global current_weight, ble_status, stable
     b = list(data)
     if len(b) < 8:
         return
     low = b[4]
     high = b[5] | (b[3] & 0xFE)
-    if high > 0:
-        sticky_high = high
-    if low < 5 and high == 0:
-        sticky_high = 0
-    w = low + max(high, sticky_high) * 256
+    raw = low + high * 256
+    raw_buffer.append(raw)
+    s = sorted(raw_buffer)
+    w = s[len(s) // 2]                 # median of the last few raw decodes
     current_weight = w
     weight_buffer.append(w)
-    s = list(weight_buffer)[-10:]
-    stable = (max(s) - min(s)) <= 2 and len(s) == 10
+    last10 = list(weight_buffer)[-10:]
+    stable = len(last10) == 10 and (max(last10) - min(last10)) <= 2
     ble_status = "connected"
 
 

@@ -51,22 +51,25 @@ stability_buffer = deque([0] * STABILITY_WINDOW, maxlen=STABILITY_WINDOW)  # ב�
 current_weight = 0
 current_status = "CONNECTING..."
 is_stable_flag = False  # יחושב ע"י התוכנה
-sticky_high_byte = 0
+raw_buffer = deque(maxlen=5)  # median filter: rejects single-frame flicker AND transient overshoot
 
 
 # --- לוגיקת בלוטוס ---
 def notification_handler(sender, data):
-    global current_weight, current_status, is_stable_flag, sticky_high_byte
+    # weight = low + high*256. We median-filter the last few raw decodes instead of latching the
+    # high byte: a "sticky high" latch makes a transient overshoot add a permanent +256g offset
+    # (a removed-then-replaced load reads double), and never returns to 0. The median follows the
+    # scale back down and outvotes a single bad frame.
+    global current_weight, current_status, is_stable_flag
     hex_data = list(data)
     if len(hex_data) < 8: return
 
     # פיענוח משקל (V6 Protocol)
     low_byte = hex_data[4]
-    current_high_byte = hex_data[5] | (hex_data[3] & 0xFE)
-    if current_high_byte > 0: sticky_high_byte = current_high_byte
-    if low_byte < 5 and current_high_byte == 0: sticky_high_byte = 0
-    final_high = max(current_high_byte, sticky_high_byte)
-    weight = low_byte + (final_high * 256)
+    high_byte = hex_data[5] | (hex_data[3] & 0xFE)
+    raw_buffer.append(low_byte + high_byte * 256)
+    srt = sorted(raw_buffer)
+    weight = srt[len(srt) // 2]   # median of last few raw decodes
 
     # --- חישוב יציבות בתוכנה (Software Stability) ---
     stability_buffer.append(weight)
