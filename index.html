@@ -1024,19 +1024,21 @@ probs = mean(predict(raw_roi), predict(clahe_roi))   <span class="cm"># test-tim
     cause: the box still contained the dark scale, wood grain and a hand, and that clutter, not the
     pepper, drove the prediction. The models were trained on tight food crops, so the live input was out
     of distribution.</p>
-  <p>The fix is a training-free segmentation step. We estimate the background colour from the ROI
-    border (almost always table or scale), keep the largest region that differs from it, and crop to that
-    blob. The live preview draws this "food" box so the user sees exactly what will be classified. If the
-    detected region is implausible (too small or nearly the whole frame) we keep the full ROI instead of
-    guessing.</p>
+  <p>A first attempt subtracted a single background colour estimated from the ROI border. That failed on
+    a real table, because the scene has <b>two</b> backgrounds (the brown wood and the dark scale glass),
+    so the scale leaked into the crop and the food was still read as macarons or hummus. The working fix
+    is <b>GrabCut</b> foreground extraction: it models foreground and background as colour mixtures and,
+    seeded with a centre rectangle (the food sits in the guide box), pulls the food out from both the
+    scale and the table. It runs on a downscaled copy for speed; the live preview draws the resulting
+    "food" box. If the detection is implausible (too small or nearly the whole frame) we keep the full
+    ROI instead of guessing.</p>
   <pre><span class="cm"># food isolation (scripts/demo/caleyez_demo.py)</span>
-bg   = median(border pixels of the ROI)          <span class="cm"># the table / scale colour</span>
-mask = distance(pixel, bg) &gt; threshold            <span class="cm"># food = what differs from background</span>
-crop = bounding box of the largest mask blob     <span class="cm"># fall back to full ROI if implausible</span></pre>
+cv2.<span class="fn">grabCut</span>(roi, mask, centre_rect, ..., GC_INIT_WITH_RECT)  <span class="cm"># 2-background safe</span>
+crop = bounding box of the largest foreground blob       <span class="cm"># fall back to full ROI if implausible</span></pre>
   <div class="callout green"><b>Why this is the real fix.</b> It brings the live crop back into the
-    tight-food distribution the models were trained on, which is what the clean-image score assumes. It
-    needs no training and makes no plate or shape assumption, so it survives arbitrary backgrounds and
-    light. This is a direct example of a test result feeding back into the design.</div>
+    tight-food distribution the models were trained on, which is what the clean-image score assumes.
+    GrabCut needs no training and makes no plate or shape assumption, so it survives the two-background
+    table and changing light. This is a direct example of a test result feeding back into the design.</div>
 
   <h3 id="d-arb">Wiring the real arbiter (not a re-implementation)</h3>
   <p>The demo computes the <b>same 19 features</b> the arbiter was trained on, in the same order, and

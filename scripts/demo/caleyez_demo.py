@@ -160,36 +160,44 @@ def center_roi(bgr: np.ndarray) -> np.ndarray:
 
 
 def food_bbox(roi: np.ndarray):
-    """Bounding box of the food object inside the ROI, in ROI coordinates, or None.
+    """Bounding box of the food object inside the ROI (ROI coordinates), or None.
 
-    Why this is the key fix: the models were trained on images where the food fills most of the
-    frame. A fixed ROI on a real table still contains a lot of non-food context (the dark scale
-    glass, wood grain, a hand), and that clutter dominates the prediction, producing confident
-    nonsense. We isolate the food as the region whose colour differs from the ROI border (which is
-    almost always background), take the largest such blob, and crop to it. If the mask looks
-    implausible (too small or nearly the whole frame), we return None and keep the full ROI rather
-    than guess. No training and no plate assumption, so it is robust to lighting and background.
+    Why GrabCut and not a simple background-colour subtraction: on a real table the scene has TWO
+    backgrounds (the brown wood and the dark scale glass), so a single border-colour estimate cannot
+    separate the food from both, and the scale leaks into the crop. GrabCut models foreground and
+    background as colour mixtures and refines a mask: seeded with a centre rectangle (the food is
+    placed in the guide box), it cleanly pulls the food out from both the scale and the table.
+
+    Runs on a downscaled copy for speed, then scales the box back. Returns None if the result is
+    implausible (too small or nearly the whole frame), so we fall back to the full ROI rather than
+    guess. No training, no plate or shape assumption.
     """
     h, w = roi.shape[:2]
-    lab = cv2.cvtColor(roi, cv2.COLOR_BGR2LAB).astype(np.float32)
-    bw = max(4, int(min(h, w) * 0.08))
-    border = np.concatenate([lab[:bw].reshape(-1, 3), lab[-bw:].reshape(-1, 3),
-                             lab[:, :bw].reshape(-1, 3), lab[:, -bw:].reshape(-1, 3)])
-    bg = np.median(border, axis=0)
-    dist = np.linalg.norm(lab - bg, axis=2)
-    mask = (dist > 22).astype(np.uint8) * 255
-    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
-    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8))
-    cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    sc = 320.0 / max(h, w) if max(h, w) > 320 else 1.0
+    small = cv2.resize(roi, (max(1, int(w * sc)), max(1, int(h * sc)))) if sc < 1.0 else roi.copy()
+    sh, sw = small.shape[:2]
+    rect = (int(sw * 0.12), int(sh * 0.12), int(sw * 0.76), int(sh * 0.76))
+    mask = np.zeros((sh, sw), np.uint8)
+    bgd = np.zeros((1, 65), np.float64)
+    fgd = np.zeros((1, 65), np.float64)
+    try:
+        cv2.grabCut(small, mask, rect, bgd, fgd, 5, cv2.GC_INIT_WITH_RECT)
+    except Exception:
+        return None
+    fg = (((mask == 1) | (mask == 3)).astype(np.uint8)) * 255
+    fg = cv2.morphologyEx(fg, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
+    cnts, _ = cv2.findContours(fg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     if not cnts:
         return None
     c = max(cnts, key=cv2.contourArea)
     area = cv2.contourArea(c)
-    if area < 0.05 * h * w or area > 0.95 * h * w:   # implausible mask -> keep full ROI
+    if area < 0.04 * sh * sw or area > 0.95 * sh * sw:   # implausible mask -> keep full ROI
         return None
-    x, y, bw2, bh2 = cv2.boundingRect(c)
-    pad = int(0.10 * max(bw2, bh2))
-    return (max(0, x - pad), max(0, y - pad), min(w, x + bw2 + pad), min(h, y + bh2 + pad))
+    x, y, bw, bh = cv2.boundingRect(c)
+    inv = 1.0 / sc
+    pad = int(0.08 * max(bw, bh))
+    return (int(max(0, x - pad) * inv), int(max(0, y - pad) * inv),
+            int(min(sw, x + bw + pad) * inv), int(min(sh, y + bh + pad) * inv))
 
 
 def tighten_to_food(roi: np.ndarray) -> np.ndarray:
@@ -553,9 +561,9 @@ class CalEyeZDemo:
             cv2.rectangle(frame, (x0, y0), (x0 + s, y0 + s), (204, 255, 0), 2)
             cv2.putText(frame, "PLACE FOOD HERE", (x0, y0 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (204, 255, 0), 2)
-            # live "detected food" box: shows exactly what will be classified (throttled)
+            # live "detected food" box: shows exactly what will be classified (throttled; GrabCut is heavy)
             self._fc = getattr(self, "_fc", 0) + 1
-            if self._fc % 3 == 0:
+            if self._fc % 12 == 0:
                 self._food_box = food_bbox(self.frame_bgr[y0:y0 + s, x0:x0 + s])
             bb = getattr(self, "_food_box", None)
             if bb is not None:
