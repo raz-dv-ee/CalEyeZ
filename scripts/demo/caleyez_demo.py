@@ -22,6 +22,7 @@ import asyncio
 import csv
 import os
 import threading
+import time
 from collections import deque
 from datetime import datetime
 
@@ -90,6 +91,14 @@ LOG_FILE = os.path.join(ROOT, "nutrition_log.csv")
 NOTIFY_UUID = "0000ffb2-0000-1000-8000-00805f9b34fb"   # SWAN scale notify characteristic
 MAX_HISTORY = 100
 
+# Data-tagging tool: every tagged shot becomes (1) a labelled image for fine-tuning, (2) a real-world
+# verification row, and (3) the 512-D penultimate embedding ("DNA") of each model for an
+# embeddings-router / OSR study. Layout is ImageFolder-compatible so the images are training-ready.
+TAG_DIR = os.path.join(ROOT, "tagging_data")
+TAG_IMG_DIR = os.path.join(TAG_DIR, "images")
+TAG_EMB_DIR = os.path.join(TAG_DIR, "embeddings")
+TAG_CSV = os.path.join(TAG_DIR, "tagging_log.csv")
+
 # theme
 BG, PANEL, CARD, INK, MUT = "#0d1117", "#161b22", "#1c2230", "#e6edf3", "#8b949e"
 ACCENT, GREEN, AMBER, RED, TEAL, PURPLE = "#58a6ff", "#3fb950", "#d29922", "#f85149", "#39d0c4", "#bc8cff"
@@ -114,6 +123,25 @@ LOCAL_DB = {
     "samosa": ("Samosa, fried savory pastry", 262, 5.0, 32.0, 13.0),
     "schnitzel": ("Chicken schnitzel", 290, 18.0, 16.0, 16.0),
     "shawarma": ("Shawarma, spiced rotisserie meat", 250, 17.0, 5.0, 18.0),
+    # common global foods so the demo shows macros even with no API keys configured
+    "bell_pepper": ("Bell pepper, raw", 26, 1.0, 6.0, 0.3),
+    "tomato": ("Tomato, raw", 18, 0.9, 3.9, 0.2),
+    "cucumber": ("Cucumber, raw", 15, 0.7, 3.6, 0.1),
+    "apple": ("Apple, raw", 52, 0.3, 14.0, 0.2),
+    "banana": ("Banana, raw", 89, 1.1, 23.0, 0.3),
+    "orange": ("Orange, raw", 47, 0.9, 12.0, 0.1),
+    "carrot": ("Carrot, raw", 41, 0.9, 10.0, 0.2),
+    "potato": ("Potato, raw", 77, 2.0, 17.0, 0.1),
+    "egg": ("Egg, whole", 143, 13.0, 1.1, 9.5),
+    "pizza": ("Pizza, cheese", 266, 11.0, 33.0, 10.0),
+    "hamburger": ("Hamburger", 295, 17.0, 24.0, 14.0),
+    "french_fries": ("French fries", 312, 3.4, 41.0, 15.0),
+    "rice": ("White rice, cooked", 130, 2.7, 28.0, 0.3),
+    "white_rice": ("White rice, cooked", 130, 2.7, 28.0, 0.3),
+    "bread": ("Bread, white", 265, 9.0, 49.0, 3.2),
+    "steak": ("Beef steak, cooked", 271, 25.0, 0.0, 19.0),
+    "sushi": ("Sushi", 150, 5.8, 30.0, 0.5),
+    "chocolate_cake": ("Chocolate cake", 371, 5.0, 50.0, 16.0),
 }
 
 # ==========================================================================================
@@ -130,6 +158,11 @@ if _ML_OK:
         print("[SYSTEM] models + arbiter ready.")
     except Exception as e:
         print(f"[SYSTEM ERROR] could not load models: {e}")
+
+# Every class both models know (132 global + 13 Israeli) -> autocomplete for the tagging field.
+ALL_CLASSES = []
+if model_g is not None:
+    ALL_CLASSES = sorted(set(model_g.names.values()) | set(model_i.names.values()))
 
 if genai and GEMINI_API_KEY:
     try:
@@ -159,102 +192,47 @@ def center_roi(bgr: np.ndarray) -> np.ndarray:
     return bgr[y0:y0 + s, x0:x0 + s].copy()
 
 
-def food_bbox(roi: np.ndarray):
-    """Bounding box of the food object inside the ROI (ROI coordinates), or None.
-
-    Why GrabCut and not a simple background-colour subtraction: on a real table the scene has TWO
-    backgrounds (the brown wood and the dark scale glass), so a single border-colour estimate cannot
-    separate the food from both, and the scale leaks into the crop. GrabCut models foreground and
-    background as colour mixtures and refines a mask: seeded with a centre rectangle (the food is
-    placed in the guide box), it cleanly pulls the food out from both the scale and the table.
-
-    Runs on a downscaled copy for speed, then scales the box back. Returns None if the result is
-    implausible (too small or nearly the whole frame), so we fall back to the full ROI rather than
-    guess. No training, no plate or shape assumption.
-    """
-    h, w = roi.shape[:2]
-    sc = 320.0 / max(h, w) if max(h, w) > 320 else 1.0
-    small = cv2.resize(roi, (max(1, int(w * sc)), max(1, int(h * sc)))) if sc < 1.0 else roi.copy()
-    sh, sw = small.shape[:2]
-    rect = (int(sw * 0.12), int(sh * 0.12), int(sw * 0.76), int(sh * 0.76))
-    mask = np.zeros((sh, sw), np.uint8)
-    bgd = np.zeros((1, 65), np.float64)
-    fgd = np.zeros((1, 65), np.float64)
-    try:
-        cv2.grabCut(small, mask, rect, bgd, fgd, 5, cv2.GC_INIT_WITH_RECT)
-    except Exception:
-        return None
-    fg = (((mask == 1) | (mask == 3)).astype(np.uint8)) * 255
-    fg = cv2.morphologyEx(fg, cv2.MORPH_OPEN, np.ones((3, 3), np.uint8))
-    cnts, _ = cv2.findContours(fg, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    if not cnts:
-        return None
-    c = max(cnts, key=cv2.contourArea)
-    area = cv2.contourArea(c)
-    if area < 0.04 * sh * sw or area > 0.95 * sh * sw:   # implausible mask -> keep full ROI
-        return None
-    x, y, bw, bh = cv2.boundingRect(c)
-    inv = 1.0 / sc
-    pad = int(0.08 * max(bw, bh))
-    return (int(max(0, x - pad) * inv), int(max(0, y - pad) * inv),
-            int(min(sw, x + bw + pad) * inv), int(min(sh, y + bh + pad) * inv))
-
-
-def tighten_to_food(roi: np.ndarray) -> np.ndarray:
-    bb = food_bbox(roi)
-    if bb is None:
-        return roi
-    x0, y0, x1, y1 = bb
-    crop = roi[y0:y1, x0:x1]
-    return crop if crop.size else roi
-
-
-def clahe_luma(bgr: np.ndarray) -> np.ndarray:
-    """Equalise local contrast on the luminance (L) channel only.
-
-    Why this and NOT gray-world white balance: gray-world assumes the average of the scene is
-    neutral gray, which is false when one coloured object fills the ROI (a red pepper, a tomato).
-    There gray-world desaturates the object and changes its hue, which can flip the prediction
-    (a red pepper read as a beige pastry). CLAHE works on L in LAB space and leaves the colour
-    channels (a, b) untouched, so it fixes contrast under dim or harsh light WITHOUT shifting hue.
-    """
-    lab = cv2.cvtColor(bgr, cv2.COLOR_BGR2LAB)
-    l, a, b = cv2.split(lab)
-    l = cv2.createCLAHE(clipLimit=2.0, tileGridSize=(8, 8)).apply(l)
-    return cv2.cvtColor(cv2.merge((l, a, b)), cv2.COLOR_LAB2BGR)
+# NOTE on approaches tried and removed (kept here as a record, because both looked reasonable but
+# measurably HURT and were cut after testing):
+#   - GrabCut food segmentation: the models are robust to background (a pepper scores 99.97% on a
+#     dark or wood background), and GrabCut crops were unreliable - a clean hummus at 96% dropped to
+#     malawach at 92% after GrabCut. Removed; we feed the plain centre ROI.
+#   - Test-time augmentation (averaging raw + CLAHE softmax): it shifted the confidence values away
+#     from the distribution the arbiter was trained on and broke routing (confident Israeli dishes
+#     were sent to the global model). Removed; features now come from a single predict(), exactly as
+#     in generate_arbiter_dataset.py.
 
 
 # ==========================================================================================
 # 3 · INFERENCE  (features computed identically to generate_arbiter_dataset.py)
 # ==========================================================================================
+# Ultralytics models are NOT thread-safe: a predict()/embed() from the tag worker overlapping one from
+# the analyze worker (or a re-entrant click) deadlocks the shared predictor. This lock serialises every
+# model call so only one runs at a time, which is what made tagging hang after the first sample.
+MODEL_LOCK = threading.Lock()
+
+
 def expert_features(model, bgr: np.ndarray, imgsz: int) -> dict:
     """Top-5 conf, entropy, margin from one expert.
 
-    Two robustness measures:
-      - predict() letterboxes internally, so the result is resolution independent.
-      - test-time averaging: we average the softmax of the raw ROI and a CLAHE-enhanced copy.
-        Averaging two hue-preserving views is more stable than betting on a single transform,
-        and guarantees a bad enhancement can never dominate the decision.
+    Computed with a SINGLE predict() exactly as in generate_arbiter_dataset.py, because the arbiter is
+    a precise function of these confidence values. Test-time averaging (raw + CLAHE) was tried and
+    removed: averaging shifts the confidences away from the distribution the arbiter was trained on and
+    broke routing (it sent confident Israeli dishes to the global model). predict() also letterboxes
+    internally, so the result is already resolution independent.
     """
-    names = None
-    acc = None
-    for view in (bgr, clahe_luma(bgr)):
-        r = model.predict(view, imgsz=imgsz, verbose=False)[0]
-        names = r.names
-        p = r.probs.data.detach().cpu().numpy().astype(np.float64)
-        acc = p if acc is None else acc + p
-    full = acc / 2.0
-    full = full / (full.sum() + 1e-12)
-    order = np.argsort(-full)[:5]
-    conf = [float(full[i]) for i in order]
+    with MODEL_LOCK:
+        r = model.predict(bgr, imgsz=imgsz, verbose=False)[0]
+    p = r.probs
+    order = list(p.top5)
+    conf = [float(c) for c in p.top5conf.tolist()]
     while len(conf) < 5:
         conf.append(0.0)
-    fc = np.clip(full, 1e-12, 1.0)
-    entropy = float(-(fc * np.log(fc)).sum())
+    full = np.clip(p.data.detach().cpu().numpy().astype(np.float64), 1e-12, 1.0)
+    entropy = float(-(full * np.log(full)).sum())
     margin = float(conf[0] - conf[1])
-    label = names[int(order[0])]
-    return {"label": label, "conf": conf, "entropy": entropy, "margin": margin,
-            "top5": [(names[int(i)], float(full[i])) for i in order]}
+    return {"label": r.names[int(order[0])], "conf": conf, "entropy": entropy, "margin": margin,
+            "top5": [(r.names[int(i)], float(c)) for i, c in zip(order, conf)]}
 
 
 def build_feature_row(g: dict, i: dict) -> pd.DataFrame:
@@ -272,12 +250,33 @@ def build_feature_row(g: dict, i: dict) -> pd.DataFrame:
     return pd.DataFrame([row], columns=FEATS)
 
 
+def embed_vectors(roi: np.ndarray):
+    """Penultimate 512-D embeddings ('DNA') of both experts for one image, as numpy arrays.
+
+    These are the features just before each model's classifier. Stored per tagged sample, they let us
+    later train an embeddings-based router or an OSR detector (the V2 directions) on real-world data.
+    """
+    with MODEL_LOCK:
+        g = model_g.embed(roi, imgsz=GLOBAL_IMGSZ, verbose=False)[0].detach().cpu().numpy().astype(np.float32)
+        i = model_i.embed(roi, imgsz=ISRAELI_IMGSZ, verbose=False)[0].detach().cpu().numpy().astype(np.float32)
+        # CRITICAL: embed() leaves model.predictor in 'embed' mode, so the NEXT predict() would return
+        # raw tensors (probs=None) and every later analyze/tag would fail. Reset so predict() rebuilds a
+        # classification predictor. This is the real cause of "tagging hangs after the first sample".
+        model_g.predictor = None
+        model_i.predictor = None
+    return g, i
+
+
 def predict(bgr: np.ndarray) -> dict:
     """Full edge decision. Returns everything the UI needs to explain itself."""
+    # Feed the plain centre ROI. We do NOT segment the food with GrabCut: testing showed the models
+    # are robust to background (a pepper scores 99.97% on a dark or wood background), while GrabCut
+    # crops were unreliable and actively harmful (a clean hummus at 96% became malawach at 92% after
+    # GrabCut). The simplest crop is the most accurate here.
     roi = center_roi(bgr)
-    food = tighten_to_food(roi)          # crop to the food object, drop scale/table/hand clutter
-    g = expert_features(model_g, food, GLOBAL_IMGSZ)
-    i = expert_features(model_i, food, ISRAELI_IMGSZ)
+    food = roi
+    g = expert_features(model_g, roi, GLOBAL_IMGSZ)
+    i = expert_features(model_i, roi, ISRAELI_IMGSZ)
 
     X = build_feature_row(g, i)
     p_israeli = float(arbiter.predict_proba(X)[0, 1])
@@ -290,7 +289,28 @@ def predict(bgr: np.ndarray) -> dict:
 
     return {"global": g, "israeli": i, "p_israeli": p_israeli, "route_israeli": route_israeli,
             "chosen": chosen, "label": chosen["label"], "conf": chosen["conf"][0],
-            "confident": confident, "both_unsure": both_unsure, "roi": roi, "food": food}
+            "confident": confident, "both_unsure": both_unsure, "roi": roi, "food": food,
+            "features": {f: float(X.iloc[0][f]) for f in FEATS},
+            "reasons": arbiter_reasons(X)}
+
+
+def arbiter_reasons(X: pd.DataFrame, k: int = 5):
+    """Per-prediction feature contributions (TreeSHAP from the XGBoost booster).
+
+    pred_contribs returns, for this single image, how many log-odds each feature added toward the
+    'route to Israeli' decision. Positive pushes toward Israeli, negative toward Global. This is the
+    exact, faithful 'why' behind the routing, not a global importance average.
+    """
+    try:
+        booster = arbiter.get_booster()
+        dm = xgb.DMatrix(X, feature_names=FEATS)
+        contribs = booster.predict(dm, pred_contribs=True)[0]   # len = n_features + 1 (bias last)
+        pairs = [(f, float(c)) for f, c in zip(FEATS, contribs[:-1])]
+        pairs.sort(key=lambda kv: -abs(kv[1]))
+        return [(f, c, "Israeli" if c > 0 else "Global") for f, c in pairs[:k]]
+    except Exception as e:
+        print(f"[WARN] arbiter_reasons failed: {e}")
+        return []
 
 
 def gemini_identify(bgr: np.ndarray) -> str | None:
@@ -310,33 +330,69 @@ def gemini_identify(bgr: np.ndarray) -> str | None:
 # ==========================================================================================
 # 4 · NUTRITION
 # ==========================================================================================
+def _usda_lookup(query: str):
+    """Return (desc, cal, pro, carb, fat) per 100 g from USDA, or None."""
+    if not (requests and USDA_API_KEY):
+        return None
+    try:
+        r = requests.get("https://api.nal.usda.gov/fdc/v1/foods/search",
+                         params={"api_key": USDA_API_KEY, "query": query, "pageSize": 5,
+                                 "dataType": ["Foundation", "SR Legacy"]}, timeout=8)
+        foods = r.json().get("foods", [])
+        if not foods:
+            return None
+        ids = {1008: "cal", 2047: "cal", 1003: "pro", 1005: "carb", 1004: "fat"}
+        got = {}
+        for n in foods[0]["foodNutrients"]:
+            nm = ids.get(n.get("nutrientId"))
+            if nm and nm not in got:
+                got[nm] = n.get("value", 0)
+        if not got.get("cal"):
+            return None
+        return (foods[0]["description"], got.get("cal", 0), got.get("pro", 0),
+                got.get("carb", 0), got.get("fat", 0))
+    except Exception as e:
+        print(f"[WARN] USDA failed: {e}")
+        return None
+
+
+def _gemini_nutrition(query: str):
+    """Ask Gemini for per-100 g macros when local DB and USDA both miss. Returns tuple or None."""
+    if gemini is None:
+        return None
+    try:
+        import json
+        resp = gemini.generate_content(
+            f"Give typical nutrition per 100 g of '{query.replace('_', ' ')}'. "
+            f"Reply ONLY as compact JSON: {{\"cal\":<kcal>,\"pro\":<g>,\"carb\":<g>,\"fat\":<g>}}.")
+        txt = resp.text.strip().strip("`")
+        txt = txt[txt.find("{"):txt.rfind("}") + 1]
+        d = json.loads(txt)
+        return (query.replace("_", " ").title() + " (est.)",
+                float(d["cal"]), float(d["pro"]), float(d["carb"]), float(d["fat"]))
+    except Exception as e:
+        print(f"[WARN] Gemini nutrition failed: {e}")
+        return None
+
+
 def nutrition(label: str, grams: int) -> dict:
+    """Resolve macros: local DB -> USDA -> Gemini estimate. Always returns numbers if any source works."""
     key = label.lower().replace(" ", "_")
     ratio = max(grams, 0) / 100.0
     if key in LOCAL_DB:
         desc, cal, pro, carb, fat = LOCAL_DB[key]
         src = "local DB"
     else:
-        cal = pro = carb = fat = 0
-        desc = label.replace("_", " ").title()
+        res = _usda_lookup(label.replace("_", " "))
         src = "USDA"
-        if requests and USDA_API_KEY:
-            try:
-                r = requests.get("https://api.nal.usda.gov/fdc/v1/foods/search",
-                                 params={"api_key": USDA_API_KEY, "query": desc, "pageSize": 5,
-                                         "dataType": ["Foundation", "SR Legacy"]}, timeout=8)
-                foods = r.json().get("foods", [])
-                if foods:
-                    desc = foods[0]["description"]
-                    ids = {1008: "cal", 2047: "cal", 1003: "pro", 1005: "carb", 1004: "fat"}
-                    got = {}
-                    for n in foods[0]["foodNutrients"]:
-                        nm = ids.get(n.get("nutrientId"))
-                        if nm and nm not in got:
-                            got[nm] = n.get("value", 0)
-                    cal, pro, carb, fat = got.get("cal", 0), got.get("pro", 0), got.get("carb", 0), got.get("fat", 0)
-            except Exception as e:
-                print(f"[WARN] USDA failed: {e}")
+        if res is None:
+            res = _gemini_nutrition(label)   # cloud estimate so the demo never shows blank macros
+            src = "Gemini est."
+        if res is None:
+            desc, cal, pro, carb, fat = label.replace("_", " ").title(), 0, 0, 0, 0
+            src = "no source (set USDA_API_KEY / GEMINI_API_KEY)"
+        else:
+            desc, cal, pro, carb, fat = res
     return {"name": label.replace("_", " ").title(), "desc": desc, "src": src, "weight": grams,
             "cal": int(cal * ratio), "pro": round(pro * ratio, 1),
             "carb": round(carb * ratio, 1), "fat": round(fat * ratio, 1)}
@@ -351,6 +407,8 @@ current_weight = 0
 manual_weight = 0          # used when the BLE scale is not connected
 ble_status = "no BLE" if not _BLE_OK else "scanning"
 stable = False
+last_rx = 0.0              # time of the last notification, for the staleness watchdog
+STALE_SEC = 4.0           # no packets for this long -> force a reconnect
 
 
 def get_weight() -> int:
@@ -367,7 +425,7 @@ def on_notify(_sender, data):
     the MEDIAN of the last few raw decodes: a single bad frame (flicker or momentary overshoot) is
     outvoted, and the reading follows the scale all the way back down to 0.
     """
-    global current_weight, ble_status, stable
+    global current_weight, ble_status, stable, last_rx
     b = list(data)
     if len(b) < 8:
         return
@@ -382,18 +440,29 @@ def on_notify(_sender, data):
     last10 = list(weight_buffer)[-10:]
     stable = len(last10) == 10 and (max(last10) - min(last10)) <= 2
     ble_status = "connected"
+    last_rx = time.time()
 
 
 async def _ble_loop():
-    global ble_status
+    global ble_status, last_rx
     while True:
         try:
             dev = await BleakScanner.find_device_by_name("SWAN")
             if dev:
                 async with BleakClient(dev) as c:
                     await c.start_notify(NOTIFY_UUID, on_notify)
+                    last_rx = time.time()
+                    # Staleness watchdog: some scales stop notifying when idle / power-saving, and the
+                    # link can silently go quiet (is_connected stays True). If no packet arrives for
+                    # STALE_SEC, break out to disconnect and rescan, which re-subscribes and makes the
+                    # reading resume the moment a load is placed again. Without this, a removed-then-
+                    # replaced object would never update.
                     while c.is_connected:
-                        await asyncio.sleep(1)
+                        await asyncio.sleep(0.4)
+                        if time.time() - last_rx > STALE_SEC:
+                            ble_status = "reconnecting"
+                            raw_buffer.clear()
+                            break
             else:
                 ble_status = "searching"
                 await asyncio.sleep(2)
@@ -411,6 +480,68 @@ def start_ble():
 # ==========================================================================================
 # 6 · GUI
 # ==========================================================================================
+class AutocompleteEntry(tk.Entry):
+    """Entry that suggests matching class names in a dropdown as you type (substring match)."""
+
+    def __init__(self, parent, textvar, options, **kw):
+        super().__init__(parent, textvariable=textvar, **kw)
+        self.var = textvar
+        self.options = options
+        self.pop = None
+        self.lb = None
+        self.bind("<KeyRelease>", self._on_key)
+        self.bind("<FocusOut>", lambda e: self.after(150, self._close))
+        self.bind("<Escape>", lambda e: self._close())
+        self.bind("<Return>", lambda e: self._close())
+
+    def _norm(self, s):
+        return s.strip().lower().replace(" ", "_")
+
+    def _on_key(self, e):
+        if e.keysym in ("Return", "Escape", "Up", "Down"):
+            return
+        txt = self._norm(self.var.get())
+        if not txt:
+            self._close()
+            return
+        starts = [o for o in self.options if o.startswith(txt)]
+        contains = [o for o in self.options if txt in o and not o.startswith(txt)]
+        matches = (starts + contains)[:8]
+        if not matches or (len(matches) == 1 and matches[0] == txt):
+            self._close()
+            return
+        self._show(matches)
+
+    def _show(self, matches):
+        if self.pop is None:
+            self.pop = tk.Toplevel(self)
+            self.pop.wm_overrideredirect(True)
+            self.lb = tk.Listbox(self.pop, bg=CARD, fg=INK, selectbackground=PURPLE,
+                                 font=("Segoe UI", 10), bd=0, highlightthickness=1,
+                                 highlightbackground="#30363d", activestyle="none")
+            self.lb.pack(fill="both", expand=True)
+            self.lb.bind("<ButtonRelease-1>", self._pick)
+        self.lb.delete(0, tk.END)
+        for m in matches:
+            self.lb.insert(tk.END, m)
+        x = self.winfo_rootx()
+        y = self.winfo_rooty() + self.winfo_height()
+        self.pop.wm_geometry(f"{max(self.winfo_width(), 160)}x{20 * len(matches)}+{x}+{y}")
+
+    def _pick(self, e):
+        sel = self.lb.curselection()
+        if sel:
+            self.var.set(self.lb.get(sel[0]))
+        self._close()
+        self.icursor(tk.END)
+
+    def _close(self):
+        if self.pop is not None:
+            self.pop.destroy()
+            self.pop = None
+            self.lb = None
+
+
 class CalEyeZDemo:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -462,7 +593,11 @@ class CalEyeZDemo:
         self.bar_israeli = self._expert_row(dec, "Israeli (13)", TEAL)
         self.route_lbl = tk.Label(dec, text="P(israeli) = -", bg=PANEL, fg=INK,
                                   font=("Segoe UI", 10, "bold"))
-        self.route_lbl.pack(anchor="w", padx=12, pady=(2, 10))
+        self.route_lbl.pack(anchor="w", padx=12, pady=(2, 2))
+        tk.Label(dec, text="WHY  (push toward  ◀ Global   |   Israeli ▶)", bg=PANEL, fg=MUT,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=12)
+        self.reasons_canvas = tk.Canvas(dec, height=104, bg=PANEL, highlightthickness=0)
+        self.reasons_canvas.pack(fill="x", padx=12, pady=(2, 10))
 
     def _expert_row(self, parent, name, color):
         row = tk.Frame(parent, bg=PANEL)
@@ -482,6 +617,35 @@ class CalEyeZDemo:
         w = max(c.winfo_width(), 1)
         c.create_rectangle(0, 0, int(w * conf), 16, fill=bar["color"], width=0)
         bar["lbl"].config(text=f"{label.replace('_', ' ')}  {conf*100:.0f}%")
+
+    def _draw_reasons(self, reasons, feats):
+        """SHAP-style force chart: each feature is a bar from the centre, left = pushed toward Global,
+        right = pushed toward Israeli, length proportional to its contribution."""
+        c = self.reasons_canvas
+        c.delete("all")
+        if not reasons:
+            return
+        w = max(c.winfo_width(), 700)
+        name_w = 150                         # left column for "feature (value)"
+        cx = name_w + (w - name_w - 90) / 2  # centre of the force area
+        half = (w - name_w - 90) / 2 - 6
+        mx = max(abs(r[1]) for r in reasons) or 1.0
+        rows = reasons[:4]
+        rh = 24
+        c.create_line(cx, 6, cx, 6 + rh * len(rows), fill=MUT, dash=(2, 2))
+        for i, (f, contrib, direction) in enumerate(rows):
+            y = 14 + i * rh
+            c.create_text(6, y, anchor="w", text=f"{f} ({feats.get(f, 0):.2f})",
+                          fill=INK, font=("Consolas", 10))
+            length = abs(contrib) / mx * half
+            if contrib > 0:                  # toward Israeli (right, teal)
+                c.create_rectangle(cx, y - 7, cx + length, y + 7, fill=TEAL, width=0)
+                c.create_text(cx + length + 5, y, anchor="w", text=f"+{contrib:.2f}",
+                              fill=TEAL, font=("Consolas", 9))
+            else:                            # toward Global (left, blue)
+                c.create_rectangle(cx - length, y - 7, cx, y + 7, fill=ACCENT, width=0)
+                c.create_text(cx - length - 5, y, anchor="e", text=f"{contrib:.2f}",
+                              fill=ACCENT, font=("Consolas", 9))
 
     # ---------- right: weight + controls + interactive log ----------
     def _build_right(self, root):
@@ -525,7 +689,21 @@ class CalEyeZDemo:
 
         self.btn_save = tk.Button(right, text="SAVE TO LOG", bg=CARD, fg=GREEN,
                                   font=("Segoe UI", 10, "bold"), bd=0, state="disabled", command=self.save)
-        self.btn_save.pack(fill="x", padx=24, pady=10)
+        self.btn_save.pack(fill="x", padx=24, pady=(10, 4))
+
+        # ---- DATA TAGGING: type what it really is, then capture image + predictions + 512-D DNA ----
+        tk.Label(right, text="DATA TAGGING (ground truth)", bg=PANEL, fg=PURPLE,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=24, pady=(6, 0))
+        tagrow = tk.Frame(right, bg=PANEL)
+        tagrow.pack(fill="x", padx=24)
+        self.gt_var = tk.StringVar()
+        AutocompleteEntry(tagrow, self.gt_var, ALL_CLASSES, bg=CARD, fg=INK, insertbackground=INK,
+                          relief="flat", font=("Segoe UI", 11)).pack(side="left", fill="x", expand=True, ipady=3)
+        self.btn_tag = tk.Button(tagrow, text="TAG", bg=PURPLE, fg="#0d1117", font=("Segoe UI", 10, "bold"),
+                                 bd=0, command=self.tag_sample, width=6)
+        self.btn_tag.pack(side="left", padx=(6, 0))
+        self.tag_status = tk.Label(right, text="tagged: 0", bg=PANEL, fg=MUT, font=("Consolas", 9))
+        self.tag_status.pack(anchor="w", padx=24, pady=(2, 6))
 
         # interactive log embedded in the main window (no popups)
         tk.Label(right, text="TODAY'S LOG", bg=PANEL, fg=MUT,
@@ -561,18 +739,11 @@ class CalEyeZDemo:
             cv2.rectangle(frame, (x0, y0), (x0 + s, y0 + s), (204, 255, 0), 2)
             cv2.putText(frame, "PLACE FOOD HERE", (x0, y0 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (204, 255, 0), 2)
-            # live "detected food" box: shows exactly what will be classified (throttled; GrabCut is heavy)
-            self._fc = getattr(self, "_fc", 0) + 1
-            if self._fc % 12 == 0:
-                self._food_box = food_bbox(self.frame_bgr[y0:y0 + s, x0:x0 + s])
-            bb = getattr(self, "_food_box", None)
-            if bb is not None:
-                fx0, fy0, fx1, fy1 = bb
-                cv2.rectangle(frame, (x0 + fx0, y0 + fy0), (x0 + fx1, y0 + fy1), (255, 200, 0), 2)
-                cv2.putText(frame, "food", (x0 + fx0, y0 + fy0 - 6),
-                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 0), 1)
+            # NOTE: food isolation (GrabCut) runs only inside predict() on ANALYZE, never in this live
+            # loop. GrabCut is an iterative GMM and is CPU-heavy; running it per frame here would stutter
+            # the webcam feed while two YOLO models are resident. The live feed shows only the guide box.
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            img = Image.fromarray(rgb).resize((680, 510), Image.Resampling.LANCZOS)
+            img = Image.fromarray(rgb).resize((620, 465), Image.Resampling.LANCZOS)
             tkimg = ImageTk.PhotoImage(img)
             self.video.imgtk = tkimg
             self.video.configure(image=tkimg)
@@ -633,6 +804,7 @@ class CalEyeZDemo:
         route_txt = f"P(israeli) = {d['p_israeli']*100:.0f}%  ->  route to "
         route_txt += "ISRAELI" if d["route_israeli"] else "GLOBAL"
         self.route_lbl.config(text=route_txt, fg=TEAL if d["route_israeli"] else ACCENT)
+        self._draw_reasons(d.get("reasons", []), d.get("features", {}))
 
         self.btn.config(state="normal", text="ANALYZE", bg=ACCENT)
         self.last = info
@@ -666,6 +838,83 @@ class CalEyeZDemo:
         if not os.path.exists(LOG_FILE):
             with open(LOG_FILE, "w", newline="") as f:
                 csv.writer(f).writerow(["Date", "Time", "Food", "Weight(g)", "Calories", "Protein", "Carbs", "Fat", "Route"])
+        os.makedirs(TAG_IMG_DIR, exist_ok=True)
+        os.makedirs(TAG_EMB_DIR, exist_ok=True)
+        if not os.path.exists(TAG_CSV):
+            with open(TAG_CSV, "w", newline="", encoding="utf-8") as f:
+                csv.writer(f).writerow([
+                    "id", "datetime", "ground_truth", "weight_g",
+                    "global_pred", "global_conf", "israeli_pred", "israeli_conf",
+                    "p_israeli", "route", "final_pred",
+                    "global_correct", "israeli_correct", "system_correct",
+                    "global_top5", "israeli_top5", "image_path", "embed_path"])
+        # restore the running tagged/correct count from any existing log
+        self.tag_n = self.tag_ok = 0
+        if os.path.exists(TAG_CSV):
+            with open(TAG_CSV, encoding="utf-8") as f:
+                for r in csv.DictReader(f):
+                    self.tag_n += 1
+                    self.tag_ok += (r.get("system_correct") == "True")
+
+    def tag_sample(self):
+        gt = self.gt_var.get().strip().lower().replace(" ", "_")
+        if not gt:
+            messagebox.showwarning("Ground truth", "Type what the food actually is, then press TAG.")
+            return
+        if self.frame_bgr is None or model_g is None:
+            return
+        self.btn_tag.config(state="disabled")
+        self.tag_status.config(text="tagging...", fg=AMBER)
+        threading.Thread(target=self._tag_worker,
+                         args=(self.frame_bgr.copy(), get_weight(), gt), daemon=True).start()
+
+    def _tag_worker(self, bgr, grams, gt):
+        try:
+            import json
+            d = predict(bgr)
+            roi = center_roi(bgr)
+            g_emb, i_emb = embed_vectors(roi)
+            sid = datetime.now().strftime("%Y%m%d_%H%M%S_%f")[:-3]
+            # 1) labelled image, saved as the centre ROI = exactly what the models saw and embedded,
+            #    in ImageFolder layout so it is directly usable for fine-tuning.
+            cls_dir = os.path.join(TAG_IMG_DIR, gt)
+            os.makedirs(cls_dir, exist_ok=True)
+            img_path = os.path.join(cls_dir, sid + ".jpg")
+            cv2.imwrite(img_path, roi)
+            # 2) the 512-D DNA of both experts
+            emb_path = os.path.join(TAG_EMB_DIR, sid + ".npz")
+            np.savez_compressed(emb_path, g=g_emb, i=i_emb,
+                                ground_truth=gt, route=("israeli" if d["route_israeli"] else "global"))
+            # 3) verification row
+            g_pred, i_pred = d["global"]["label"], d["israeli"]["label"]
+            final = d["label"]
+            g_ok, i_ok = (g_pred == gt), (i_pred == gt)
+            sys_ok = (final == gt)
+            row = [sid, datetime.now().strftime("%Y-%m-%d %H:%M:%S"), gt, grams,
+                   g_pred, f"{d['global']['conf'][0]:.4f}", i_pred, f"{d['israeli']['conf'][0]:.4f}",
+                   f"{d['p_israeli']:.4f}", "israeli" if d["route_israeli"] else "global", final,
+                   g_ok, i_ok, sys_ok,
+                   json.dumps(d["global"]["top5"]), json.dumps(d["israeli"]["top5"]),
+                   os.path.relpath(img_path, ROOT), os.path.relpath(emb_path, ROOT)]
+            with open(TAG_CSV, "a", newline="", encoding="utf-8") as f:
+                csv.writer(f).writerow(row)
+            self.tag_n += 1
+            self.tag_ok += int(sys_ok)
+            self.root.after(0, lambda: self._tag_done(gt, final, sys_ok))
+        except Exception as e:
+            msg = str(e)
+            self.root.after(0, lambda: (self.tag_status.config(text=f"tag failed: {msg}", fg=RED),
+                                        self.btn_tag.config(state="normal")))
+
+    def _tag_done(self, gt, final, ok):
+        acc = 100.0 * self.tag_ok / max(self.tag_n, 1)
+        mark = "OK" if ok else f"MISS (got {final})"
+        self.tag_status.config(
+            text=f"tagged: {self.tag_n}  ·  sys acc: {acc:.0f}%  ·  last: {gt} {mark}",
+            fg=GREEN if ok else AMBER)
+        # keep the label so you can take multiple shots of the same dish quickly; clear it yourself
+        # (or autocomplete a new one) when you switch dishes.
+        self.btn_tag.config(state="normal")
 
     def save(self):
         if not self.last:

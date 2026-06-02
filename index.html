@@ -532,21 +532,47 @@ model.<span class="fn">val</span>(data=<span class="st">"datasets/general_model_
     <span class="box">pick the expert</span>
   </div>
 
-  <h3 id="a-feat">Features and their formulas</h3>
-  <p>For each expert we summarise its softmax output with four interpretable numbers, then add the
-    differences between the two experts. The differences are the strongest signal.</p>
+  <h3 id="a-feat">The 19 features and their math</h3>
+  <p>The arbiter input is a 19-number vector: 7 numbers summarising the Global model's output, the same
+    7 for the Israeli model, and 5 interaction terms that compare the two. Below, <code>p_k</code> is the
+    k-th highest softmax probability and <code>K</code> the number of classes. The "g_" prefix is the
+    Global model, "i_" the Israeli model.</p>
   <table>
-    <thead><tr><th>Feature</th><th>Meaning</th><th>Formula</th></tr></thead>
+    <thead><tr><th>#</th><th>Feature</th><th>Meaning</th><th>Formula</th></tr></thead>
     <tbody>
-      <tr><td>p1, p2</td><td>Highest and second-highest class probabilities</td><td>top-2 of softmax</td></tr>
-      <tr><td>Margin</td><td>How decisive the top guess is</td><td><code>p1 − p2</code></td></tr>
-      <tr><td>Normalised confidence</td><td>Confidence relative to class count (60% across 13 classes is stronger than across 132)</td><td><code>(p1 − 1/K) / (1 − 1/K)</code></td></tr>
-      <tr><td>Entropy</td><td>Spread of the whole distribution; low means decisive</td><td><code>−Σ p_i · log(p_i)</code></td></tr>
-      <tr><td>Deltas</td><td>Difference of each feature between the two experts (the key signal)</td><td><code>feature_israeli − feature_global</code></td></tr>
+      <tr><td>1-5</td><td><code>g_conf1 … g_conf5</code></td><td>Global model's top-5 class probabilities</td><td>top-5 of softmax(global)</td></tr>
+      <tr><td>6</td><td><code>g_entropy</code></td><td>How spread out the Global guess is (low = decisive)</td><td><code>−Σ p_i · ln(p_i)</code></td></tr>
+      <tr><td>7</td><td><code>g_margin</code></td><td>How decisive the Global top guess is</td><td><code>g_conf1 − g_conf2</code></td></tr>
+      <tr><td>8-12</td><td><code>i_conf1 … i_conf5</code></td><td>Israeli model's top-5 class probabilities</td><td>top-5 of softmax(israeli)</td></tr>
+      <tr><td>13</td><td><code>i_entropy</code></td><td>Spread of the Israeli guess</td><td><code>−Σ p_i · ln(p_i)</code></td></tr>
+      <tr><td>14</td><td><code>i_margin</code></td><td>Decisiveness of the Israeli top guess</td><td><code>i_conf1 − i_conf2</code></td></tr>
+      <tr><td>15</td><td><code>conf_gap</code></td><td>Which expert is more confident at the top</td><td><code>g_conf1 − i_conf1</code></td></tr>
+      <tr><td>16</td><td><code>conf_ratio</code></td><td>Relative top-1 confidence (scale-free)</td><td><code>g_conf1 / (i_conf1 + 1e-6)</code></td></tr>
+      <tr><td>17</td><td><code>entropy_gap</code></td><td>Who is more uncertain (&gt;0 = Israeli more uncertain)</td><td><code>i_entropy − g_entropy</code></td></tr>
+      <tr><td>18</td><td><code>margin_gap</code></td><td>Whose decision is sharper</td><td><code>g_margin − i_margin</code></td></tr>
+      <tr><td>19</td><td><code>both_unsure</code></td><td>Flag: neither expert is confident</td><td><code>1 if (g_conf1&lt;0.5 and i_conf1&lt;0.5) else 0</code></td></tr>
     </tbody>
   </table>
-  <p>Top features by importance are <code>entropy_gap</code>, <code>conf_gap</code> and
-    <code>conf_ratio</code>. The arbiter decides on <i>relative</i> confidence between the experts,
+  <div class="callout"><b>The decisive five are the interaction terms (15-19).</b> They encode
+    <i>relative</i> behaviour, which is what actually separates the domains. <code>conf_gap</code>,
+    <code>conf_ratio</code> and <code>entropy_gap</code> rank highest by importance: the arbiter trusts
+    the Israeli model when it is confident <i>and</i> the Global model is comparatively uncertain, not
+    whenever the Israeli model alone fires high. That is why it survives the Israeli model's
+    out-of-domain overconfidence.</div>
+
+  <h4>Seeing the math live (per image)</h4>
+  <p>The demo does not just print a probability. For each capture it computes the exact
+    <b>TreeSHAP contribution</b> of every feature, that is, how many log-odds each one added toward
+    "route to Israeli", and shows the top contributors under the decision panel. A typical readout for a
+    global food:</p>
+  <pre>WHY (top feature contributions):
+conf_gap     =  0.640  +1.31 -> Global    <span class="cm"># global far more confident than israeli</span>
+entropy_gap  = -0.220  +0.74 -> Global    <span class="cm"># israeli more uncertain than global</span>
+i_conf1      =  0.180  +0.42 -> Global    <span class="cm"># israeli top-1 is weak</span></pre>
+  <p>This is the faithful per-prediction explanation (not a global average), so during the demo you can
+    point at the exact numbers that produced the routing decision.</p>
+
+  <p>The arbiter decides on <i>relative</i> confidence between the experts,
     not on the Israeli model's raw confidence, which is exactly why it survives that model's
     out-of-domain overconfidence.</p>
 
@@ -965,16 +991,16 @@ raw = deque(maxlen=<span class="st">5</span>)
     often as the score promises. Source: <code>scripts/demo/caleyez_demo.py</code>.</p>
 
   <div class="sub-nav">
-    <a href="#d-pipe">Pipeline</a><a href="#d-robust">Robustness</a><a href="#d-roi">ROI choice</a>
-    <a href="#d-arb">Arbiter wiring</a><a href="#d-fall">Gemini fallback</a><a href="#d-ui">UI / UX</a>
+    <a href="#d-pipe">Pipeline</a><a href="#d-prep">Preprocessing</a><a href="#d-robust">What we avoid</a>
+    <a href="#d-roi">ROI choice</a><a href="#d-arb">Arbiter wiring</a><a href="#d-fall">Gemini fallback</a><a href="#d-ui">UI / UX</a>
   </div>
 
   <h3 id="d-pipe">The pipeline per capture</h3>
   <div class="flow">
     <span class="box">📷 frame (any res)</span><span class="arr">→</span>
-    <span class="box">center ROI box</span><span class="arr">→</span>
-    <span class="box hl">tighten to food</span><span class="arr">→</span>
-    <span class="box amber">CLAHE + averaging</span><span class="arr">→</span>
+    <span class="box hl">center ROI crop</span><span class="arr">→</span>
+    <span class="box">letterbox to imgsz</span><span class="arr">→</span>
+    <span class="box">normalise 0..1</span><span class="arr">→</span>
     <span class="box hl">Global 132</span><span class="arr">+</span>
     <span class="box teal">Israeli 13</span><span class="arr">→</span>
     <span class="box">19 features</span><span class="arr">→</span>
@@ -984,60 +1010,52 @@ raw = deque(maxlen=<span class="st">5</span>)
     <span class="box">USDA / local DB × grams</span>
   </div>
 
-  <h3 id="d-robust">Why it survives any camera and any light</h3>
-  <p>A score measured on a clean test set only transfers to the room if the live input is brought into
-    the same distribution the models expect. Two steps do that.</p>
+  <h3 id="d-prep">Preprocessing, step by step (animated)</h3>
+  <p>This is exactly what happens to the pixels between the webcam and the network. Press play to watch
+    one frame travel through the four preprocessing stages and into both experts.</p>
+  <div class="cnn-stage">
+    <div class="ctrl">
+      <button onclick="playPrep()">▶ Play preprocessing</button>
+      <span class="legend" id="prepLabel" style="margin-left:10px">ready</span>
+    </div>
+    <canvas id="prepCanvas" width="920" height="250" style="width:100%;background:#0b0f15;border-radius:8px"></canvas>
+  </div>
   <table>
-    <thead><tr><th>Problem in the room</th><th>What we do</th><th>Why it works</th></tr></thead>
+    <thead><tr><th>Stage</th><th>What happens</th><th>Why</th></tr></thead>
     <tbody>
-      <tr><td>Every webcam has a different resolution and aspect ratio</td><td>Run inference through Ultralytics <code>predict()</code>, which letterboxes internally to the model's <code>imgsz</code> (320 global, 224 Israeli)</td><td>The model always sees the exact geometry it trained on, so a 720p and a 4K camera produce the same tensor. We never hand-resize and distort the aspect ratio.</td></tr>
-      <tr><td>Dim, harsh or warm light flattens contrast</td><td><b>CLAHE</b> on the luminance (L) channel, plus <b>test-time averaging</b> of the raw and CLAHE views</td><td>CLAHE equalises local contrast while leaving the colour channels untouched, so the dish looks consistent under different light without any hue shift. Averaging two hue-preserving views means no single transform can dominate the decision.</td></tr>
+      <tr><td>1 · Center ROI crop</td><td>Crop the central square of the frame (the green "place food here" box, about 60% of the short side).</td><td>Deterministic and scale-consistent: the food fills a known fraction on every camera, with no silent failures. Replaces the old idea of auto-detecting a plate.</td></tr>
+      <tr><td>2 · Letterbox to imgsz</td><td>Resize the square to the model input size (320 for Global, 224 for Israeli) inside Ultralytics <code>predict()</code>.</td><td>The model always receives the exact geometry it trained on, so a 720p and a 4K camera produce the same tensor. No aspect-ratio distortion.</td></tr>
+      <tr><td>3 · Normalise</td><td>Pixel values are scaled from 0..255 to 0..1 (the network's expected range).</td><td>Matches training preprocessing exactly.</td></tr>
+      <tr><td>4 · Into both experts</td><td>The same tensor is classified by the Global and Israeli models in a single forward pass each.</td><td>One <code>predict()</code> per model, identical to how the arbiter's training features were generated, so routing behaves exactly as evaluated.</td></tr>
     </tbody>
   </table>
-  <div class="callout amber"><b>Lesson from a live mistake.</b> An earlier version also ran gray-world white
-    balance, which assumes the scene averages to neutral gray. When one coloured object fills the ROI
-    (a red pepper, a tomato) gray-world desaturates it and shifts its hue, which made the model read a
-    red bell pepper as a beige pastry. We removed gray-world and kept only the hue-preserving CLAHE step.
-    This is a concrete example of a lesson derived from testing and folded back into the system.</div>
-  <pre><span class="cm"># inference robustness (scripts/demo/caleyez_demo.py)</span>
-l = CLAHE(clip=2.0, tiles=8x8).apply(l)    <span class="cm"># contrast only, hue preserved (no white balance)</span>
-probs = mean(predict(raw_roi), predict(clahe_roi))   <span class="cm"># test-time averaging</span></pre>
 
-  <h3 id="d-roi">Why a fixed center ROI, not automatic plate detection</h3>
-  <p>The earlier demo tried to find the plate with <code>HoughCircles</code> and contour detection. For a
-    live demo that is the wrong trade.</p>
+  <h3 id="d-robust">What we deliberately do NOT do (lessons from testing)</h3>
+  <p>The preprocessing is intentionally minimal. Several "smart" steps were tried and then removed because
+    measurement showed they <b>hurt</b>. Keeping the record is the honest engineering story.</p>
+  <table>
+    <thead><tr><th>Tried</th><th>Measured effect</th><th>Decision</th></tr></thead>
+    <tbody>
+      <tr><td>Gray-world white balance</td><td>Desaturated dominant-colour foods (a red pepper read as a beige pastry), because gray-world assumes the scene averages to neutral gray.</td><td><b>Removed</b></td></tr>
+      <tr><td>GrabCut food segmentation</td><td>On a clean hummus image the prediction dropped from 96% to 92% wrong (malawach). The models are already background-robust (a pepper scores 99.97% on a dark or wood background), so segmenting was pure harm.</td><td><b>Removed</b></td></tr>
+      <tr><td>CLAHE + test-time averaging</td><td>Averaging raw and CLAHE softmaxes shifted the confidence values away from the distribution the arbiter was trained on, which broke routing (confident Israeli dishes were sent to the Global model).</td><td><b>Removed</b></td></tr>
+    </tbody>
+  </table>
+  <div class="callout green"><b>The principle.</b> The models were trained with heavy augmentation and are
+    robust to background, resolution and lighting on their own. The only safe preprocessing is the part
+    that matches training exactly: a consistent crop, a letterbox resize, and a single forward pass. Every
+    extra transform we added moved the live input <i>away</i> from the training distribution and cost
+    accuracy. Restraint, verified by measurement, was the right answer.</div>
+
+  <h3 id="d-roi">Why a fixed center ROI</h3>
+  <p>The crop is a fixed central square (the on-screen guide box), not an automatically detected plate.</p>
   <table>
     <thead><tr><th>Approach</th><th>Behaviour</th><th>Verdict</th></tr></thead>
     <tbody>
-      <tr><td>Automatic (HoughCircles / contours)</td><td>Depends on a clean round plate, even light and a plain background; fails silently on clutter and returns a wrong crop</td><td>Unpredictable on stage</td></tr>
-      <tr><td><b>Fixed center ROI (chosen)</b></td><td>A drawn "place food here" box; we always crop that square</td><td><b>Deterministic, scale-consistent, no silent failures</b></td></tr>
+      <tr><td>Automatic (HoughCircles / GrabCut / contours)</td><td>Depends on a clean plate, even light and a plain background; fails silently on clutter and returns a wrong crop (measured: it broke clean predictions).</td><td>Unpredictable on stage</td></tr>
+      <tr><td><b>Fixed center ROI (chosen)</b></td><td>A drawn "place food here" box; we always crop that square.</td><td><b>Deterministic, scale-consistent, no silent failures</b></td></tr>
     </tbody>
   </table>
-  <div class="callout"><b>The reasoning.</b> The fixed ROI also fixes the object scale: the food fills a
-    known fraction of the frame on every camera, which removes a second source of variance. We trade a
-    little framing freedom for a result that behaves identically every single time, which is exactly what
-    a demo needs.</div>
-
-  <h4>Second stage: tighten to the food (a lesson from live testing)</h4>
-  <p>The fixed box alone was not enough. In testing, a red bell pepper on the scale was repeatedly
-    misread (jachnun, donut, macaroni) even though the model scores 94% on clean pepper images. The
-    cause: the box still contained the dark scale, wood grain and a hand, and that clutter, not the
-    pepper, drove the prediction. The models were trained on tight food crops, so the live input was out
-    of distribution.</p>
-  <p>A first attempt subtracted a single background colour estimated from the ROI border. That failed on
-    a real table, because the scene has <b>two</b> backgrounds (the brown wood and the dark scale glass),
-    so the scale leaked into the crop and the food was still read as macarons or hummus. The working fix
-    is <b>GrabCut</b> foreground extraction: it models foreground and background as colour mixtures and,
-    seeded with a centre rectangle (the food sits in the guide box), pulls the food out from both the
-    scale and the table. It runs on a downscaled copy for speed; the live preview draws the resulting
-    "food" box. If the detection is implausible (too small or nearly the whole frame) we keep the full
-    ROI instead of guessing.</p>
-  <pre><span class="cm"># food isolation (scripts/demo/caleyez_demo.py)</span>
-cv2.<span class="fn">grabCut</span>(roi, mask, centre_rect, ..., GC_INIT_WITH_RECT)  <span class="cm"># 2-background safe</span>
-crop = bounding box of the largest foreground blob       <span class="cm"># fall back to full ROI if implausible</span></pre>
-  <div class="callout green"><b>Why this helps.</b> It removes hands, keyboard and table clutter from the
-    crop, which is what confuses a whole-image classifier. GrabCut needs no training and makes no plate or
-    shape assumption.</div>
 
   <h4>The deeper finding: camera angle, not background</h4>
   <p>Testing exposed something more fundamental than clutter. The Global model classifies a bell pepper at
@@ -1091,6 +1109,8 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
     <tbody>
       <tr><td>Tkinter desktop app</td><td>The system is an edge device: models, camera and BLE all run locally with no server. Tkinter ships with Python, starts instantly, and binds cleanly to the OpenCV camera loop and the BLE thread, which a browser UI cannot do without extra bridges.</td></tr>
       <tr><td>Live decision panel</td><td>Two confidence bars (Global, Israeli) plus the live P(israeli) make the routing visible while you demo. The reviewer point that the router was unclear is answered on screen: you watch it decide.</td></tr>
+      <tr><td>"Why" force chart (TreeSHAP)</td><td>For each capture the panel draws the exact per-feature contributions to the routing decision (bars pushing toward Global or Israeli), computed with TreeSHAP from the XGBoost arbiter. The decision is not just shown, it is explained on the spot.</td></tr>
+      <tr><td>Data-tagging flywheel</td><td>Type the true dish (autocompleted from all 145 class names) and every capture is logged: the cropped image (training-ready), both 512-D embeddings, and a verification row with each model's prediction and correctness. Demo failures become labelled fine-tuning data.</td></tr>
       <tr><td>Embedded interactive log, not popups</td><td>The day's meals live in a table inside the main window with running calorie and macro totals, colour-coded by which expert produced each row (blue global, teal Israeli). Add and delete update in place, so logging is part of the flow rather than a separate dialog.</td></tr>
       <tr><td>Threaded inference</td><td>Inference runs on a worker thread so the camera preview and weight readout never freeze while the models think.</td></tr>
       <tr><td>Weight colour state</td><td>The big weight readout turns teal only when the BLE stream is stable (last ten samples within 2 g), so you capture on a settled reading, not a bouncing one.</td></tr>
@@ -1439,6 +1459,106 @@ function buildClsBars(){
     : 'score(sushi) = Σ(latent × W_sushi) = high · softmax → 0.93';
   setTimeout(()=>{const bars=wrap.querySelectorAll('.bar-in');data.forEach((d,i)=>bars[i].style.width=(d[1]*100)+'%');},60);
 }
+
+/* ---------- Live Demo: preprocessing animation ---------- */
+let prepRAF=null, prepP=0.6;
+const PREP_W=920, PREP_H=250;  // fixed logical design space; drawn crisp at any size
+function sizePrep(){
+  const c=document.getElementById('prepCanvas');if(!c)return;
+  const dpr=window.devicePixelRatio||1;
+  const cssW=c.clientWidth||PREP_W, cssH=cssW*PREP_H/PREP_W;
+  c.style.height=cssH+'px';
+  const bw=Math.round(cssW*dpr), bh=Math.round(cssH*dpr);
+  if(c.width!==bw||c.height!==bh){c.width=bw;c.height=bh;}
+}
+const PREP_STAGES=[
+  {t:'1 · webcam frame (any resolution)'},
+  {t:'2 · center ROI crop (the guide box)'},
+  {t:'3 · letterbox resize to 320×320 / 224×224'},
+  {t:'4 · normalise pixels 0..255 → 0..1'},
+  {t:'5 · into Global + Israeli experts'}
+];
+function drawFoodScene(ctx,x,y,w,h,zoom){
+  // wood-ish table + round red food + green ROI box
+  ctx.save();ctx.beginPath();ctx.rect(x,y,w,h);ctx.clip();
+  ctx.fillStyle='#6b4a2f';ctx.fillRect(x,y,w,h);
+  for(let i=0;i<6;i++){ctx.strokeStyle='rgba(0,0,0,.12)';ctx.beginPath();ctx.moveTo(x,y+h*i/6);ctx.lineTo(x+w,y+h*i/6);ctx.stroke();}
+  const cx=x+w/2,cy=y+h/2,r=Math.min(w,h)*0.20*zoom;
+  ctx.fillStyle='#d23b2b';ctx.beginPath();ctx.arc(cx,cy,r,0,7);ctx.fill();
+  ctx.fillStyle='#3fae54';ctx.beginPath();ctx.arc(cx,cy-r*0.7,r*0.18,0,7);ctx.fill(); // stem
+  ctx.restore();
+}
+function drawPrep(p){ // p in [0,5]
+  const c=document.getElementById('prepCanvas');if(!c)return;const ctx=c.getContext('2d');
+  prepP=p; sizePrep();
+  const W=PREP_W,H=PREP_H;
+  ctx.setTransform(c.width/W,0,0,c.height/H,0,0);  // map logical space onto DPR backing store
+  ctx.clearRect(0,0,W,H);
+  const n=5,pw=150,ph=150,gap=(W-n*pw)/(n+1),top=40;
+  const stage=Math.min(n-1,Math.floor(p));
+  for(let i=0;i<n;i++){
+    const x=gap+i*(pw+gap),active=p>=i+0.5;
+    ctx.globalAlpha=active?1:0.32;
+    // panel
+    ctx.strokeStyle=active?'#58a6ff':'#30363d';ctx.lineWidth=active?2:1;
+    ctx.strokeRect(x,top,pw,ph);
+    if(i===0){ drawFoodScene(ctx,x,top,pw,ph,1);
+      ctx.strokeStyle='#39d0c4';ctx.lineWidth=2;ctx.strokeRect(x+pw*0.2,top+ph*0.2,pw*0.6,ph*0.6);
+      ctx.fillStyle='#39d0c4';ctx.font='9px monospace';ctx.fillText('ROI',x+pw*0.2+3,top+ph*0.2+11);
+    } else if(i===1){ // cropped ROI
+      drawFoodScene(ctx,x-pw*0.2*1.66,top-ph*0.2*1.66,pw*1.66,ph*1.66,1.66);
+      ctx.strokeStyle='#39d0c4';ctx.strokeRect(x,top,pw,ph);
+    } else if(i===2){ drawFoodScene(ctx,x,top,pw,ph,1.66*0.6+0.34);
+      ctx.strokeStyle='rgba(88,166,255,.5)';ctx.lineWidth=1;
+      for(let g=1;g<8;g++){ctx.beginPath();ctx.moveTo(x+pw*g/8,top);ctx.lineTo(x+pw*g/8,top+ph);ctx.moveTo(x,top+ph*g/8);ctx.lineTo(x+pw,top+ph*g/8);ctx.stroke();}
+      ctx.fillStyle='#8b949e';ctx.font='10px monospace';ctx.fillText('320×320',x+pw/2-26,top+ph+16);
+    } else if(i===3){ ctx.fillStyle='#0b2030';ctx.fillRect(x,top,pw,ph);
+      ctx.font='11px monospace';
+      const vals=[[ '210','0.82'],[' 64','0.25'],['180','0.71'],[' 40','0.16']];
+      vals.forEach((v,k)=>{ctx.fillStyle='#8b949e';ctx.fillText(v[0]+'/255',x+12,top+28+k*30);
+        ctx.fillStyle='#39d0c4';ctx.fillText('→ '+v[1],x+78,top+28+k*30);});
+    } else { // two experts
+      ctx.fillStyle='#0b0f15';ctx.fillRect(x,top,pw,ph);
+      ['Global 320','Israeli 224'].forEach((lab,k)=>{
+        const yy=top+24+k*64;ctx.fillStyle=k?'#39d0c4':'#58a6ff';ctx.font='11px sans-serif';
+        ctx.fillText(lab,x+10,yy);
+        ctx.fillStyle='#1f2633';ctx.fillRect(x+10,yy+8,pw-20,12);
+        ctx.fillStyle=k?'#39d0c4':'#58a6ff';ctx.fillRect(x+10,yy+8,(pw-20)*(active?(k?0.65:0.9):0),12);
+      });
+    }
+    // arrow to next
+    if(i<n-1){ctx.globalAlpha=p>=i+1?1:0.3;ctx.strokeStyle='#8b949e';ctx.fillStyle='#8b949e';
+      const ax=x+pw+gap*0.2,ay=top+ph/2;ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(ax+gap*0.55,ay);ctx.stroke();
+      ctx.beginPath();ctx.moveTo(ax+gap*0.55,ay);ctx.lineTo(ax+gap*0.4,ay-4);ctx.lineTo(ax+gap*0.4,ay+4);ctx.fill();}
+  }
+  ctx.globalAlpha=1;
+  // travelling data chip
+  const dotX=gap+ (p/n)*(W-gap), dotY=top+ph+30;
+  ctx.fillStyle='#bc8cff';ctx.beginPath();ctx.arc(Math.min(dotX,W-20),dotY,5,0,7);ctx.fill();
+  const lbl=document.getElementById('prepLabel');if(lbl)lbl.textContent=PREP_STAGES[stage].t;
+}
+function playPrep(){
+  if(prepRAF)cancelAnimationFrame(prepRAF);
+  const dur=5200,start=performance.now();
+  function step(now){
+    const k=Math.min(1,(now-start)/dur), p=k*5;
+    drawPrep(p);
+    if(k<1)prepRAF=requestAnimationFrame(step);
+  }
+  prepRAF=requestAnimationFrame(step);
+}
+/* draw a static first frame when the demo tab opens */
+const _origShowTab=showTab;
+showTab=function(name){_origShowTab(name);if(name==='demo')setTimeout(()=>drawPrep(prepP),60);};
+/* redraw crisply on viewport/zoom changes (throttled) so it stays responsive */
+let _prepResizeT=null;
+window.addEventListener('resize',function(){
+  if(_prepResizeT)clearTimeout(_prepResizeT);
+  _prepResizeT=setTimeout(function(){
+    const c=document.getElementById('prepCanvas');
+    if(c&&c.clientWidth&&!prepRAF)drawPrep(prepP);
+  },120);
+});
 </script>
 </body>
 </html>

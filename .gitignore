@@ -133,3 +133,5 @@ SCRIPTS (UNCLEANED)/
 # demo runtime artifacts
 nutrition_log.csv
 temp.jpg
+
+tagging_data/
