@@ -126,6 +126,7 @@
     <button data-tab="cnn">CNN Visualizer</button>
     <button data-tab="analysis">System Analysis</button>
     <button data-tab="validation">Validation &amp; Risks</button>
+    <button data-tab="ble">BLE Scale</button>
     <button data-tab="feedback">Reviewer Response</button>
     <button data-tab="future">Limitations &amp; V2</button>
   </div>
@@ -852,7 +853,100 @@ Oracle ceiling         : 9,988 / 11,265 = 88.7%   (= 8,784 global + 1,204 Israel
     </tbody>
   </table>
   <p class="legend">BLE packet format: <code>weight = low_byte + high_byte × 256</code>, verified by a
-    checksum over bytes 2 to 6. Example: <code>AC 05 00 02 14 00 CE E4</code> decodes to 532 g.</p>
+    checksum over bytes 2 to 6. Example: <code>AC 05 00 02 14 00 CE E4</code> decodes to 532 g.
+    The full reverse-engineering story is in the <a href="#" class="goto" data-tab="ble">BLE Scale</a> tab.</p>
+</section>
+
+<!-- ============ BLE SCALE ============ -->
+<section class="tab" id="tab-ble">
+  <h2>Reverse-Engineering the BLE Scale</h2>
+  <p class="lead">The weight is read straight off the scale's Bluetooth Low Energy broadcast, so there is
+    no camera, no OCR, and no vision error in the measurement path. The scale is a generic commercial
+    unit with no public protocol, so we recovered the packet format ourselves. This tab documents how.</p>
+
+  <h3>Step 1 · Find the device</h3>
+  <p>Using the <b>nRF Connect</b> app on a phone, we scanned for nearby BLE advertisers. The scale shows
+    up only under a generic name, so we identified it by <b>signal strength (RSSI)</b>: with the phone
+    held against the scale, the correct device is the one whose RSSI jumps toward 0 dBm while every other
+    advertiser stays weak. Stepping away and watching that one value drop confirmed the match.</p>
+  <div class="flow">
+    <span class="box">📱 nRF Connect scan</span><span class="arr">→</span>
+    <span class="box hl">strongest RSSI = our scale</span><span class="arr">→</span>
+    <span class="box">connect, list GATT services</span><span class="arr">→</span>
+    <span class="box teal">subscribe to notify characteristic</span>
+  </div>
+  <p>The device advertises as <code>SWAN</code> and streams weight on the notify characteristic
+    <code>0000ffb2-0000-1000-8000-00805f9b34fb</code>. Subscribing to it delivers a fresh 8-byte packet
+    every time the reading changes.</p>
+
+  <h3>Step 2 · Make it talk by changing the input</h3>
+  <p>With the notifications logging, we treated the scale as a black box and changed one variable at a
+    time: place a known mass, record the packet; change the mass, record again. The bytes that moved with
+    weight, and the way they moved, revealed the encoding.</p>
+  <table>
+    <thead><tr><th>Mass on scale</th><th>Notify packet (hex)</th><th>Byte that changed</th><th>Decoded</th></tr></thead>
+    <tbody>
+      <tr><td>0 g</td><td>AC 05 00 00 00 00 ..</td><td>baseline</td><td class="r">0</td></tr>
+      <tr><td>100 g</td><td>AC 05 00 00 <b>64</b> 00 ..</td><td>byte 4 = 0x64</td><td class="r">100</td></tr>
+      <tr><td>200 g</td><td>AC 05 00 00 <b>C8</b> 00 ..</td><td>byte 4 = 0xC8</td><td class="r">200</td></tr>
+      <tr><td>255 g</td><td>AC 05 00 00 <b>FF</b> 00 ..</td><td>byte 4 maxed (0xFF)</td><td class="r">255</td></tr>
+      <tr><td>532 g</td><td>AC 05 00 <b>02</b> <b>14</b> 00 ..</td><td>byte 4 rolled over, byte carries the 256s</td><td class="r">532</td></tr>
+    </tbody>
+  </table>
+  <div class="callout green"><b>The "aha".</b> Byte 4 counts grams 0 to 255, then rolls over. Each full
+    rollover is one unit of 256 g, stored separately. So the weight is a two-byte little-endian number:
+    a low byte (0 to 255) plus a high byte multiplied by 256. Documenting 100 g, 200 g, then crossing
+    255 g is exactly what exposed the high byte.</div>
+
+  <h3>Step 3 · The packet layout we recovered</h3>
+  <table>
+    <thead><tr><th>Byte</th><th>0</th><th>1</th><th>2</th><th>3</th><th>4</th><th>5</th><th>6</th><th>7</th></tr></thead>
+    <tbody>
+      <tr><td>Role</td><td>header</td><td>len</td><td>unit</td><td>status + high bits</td><td><b>low byte</b></td><td><b>high byte</b></td><td>magic</td><td>checksum</td></tr>
+      <tr><td>Example</td><td>AC</td><td>05</td><td>00</td><td>02</td><td>14</td><td>00</td><td>CE</td><td>E4</td></tr>
+    </tbody>
+  </table>
+  <pre>low  = packet[4]                          <span class="cm"># grams 0..255</span>
+high = packet[5] | (packet[3] &amp; 0xFE)     <span class="cm"># 256s; some units pack the carry into the status byte</span>
+weight = low + high * 256                  <span class="cm"># little-endian, grams</span></pre>
+  <p><b>Worked example</b> for <code>AC 05 00 02 14 00 CE E4</code>: low = 0x14 = 20, high =
+    0x00 | (0x02 &amp; 0xFE) = 2, weight = 20 + 2 × 256 = <b>532 g</b>. The byte-3 mask is the subtle part:
+    on this unit a high-order carry can appear in the status byte rather than byte 5, so we OR them
+    together (masking off the low status bit) to get the true high byte.</p>
+
+  <h3>Step 4 · Robust decode in software</h3>
+  <p>A live scale flickers as it settles, and the high byte can momentarily read 0 during a refresh,
+    which would make a 532 g reading drop to 20 g for one frame. We added a <b>sticky high byte</b> (hold
+    the last non-zero carry, reset it only when the load genuinely returns to near zero) plus a software
+    stability gate (a reading is "stable" once the last ten samples vary by no more than 2 g). This is
+    the actual handler from <code>gui_scale.py</code>:</p>
+  <pre><span class="kw">from</span> bleak <span class="kw">import</span> BleakScanner, BleakClient
+NOTIFY_UUID = <span class="st">"0000ffb2-0000-1000-8000-00805f9b34fb"</span>
+sticky_high = <span class="st">0</span>
+
+<span class="kw">def</span> <span class="fn">on_notify</span>(sender, data):
+    <span class="kw">global</span> sticky_high
+    b = <span class="fn">list</span>(data)
+    <span class="kw">if</span> <span class="fn">len</span>(b) &lt; <span class="st">8</span>: <span class="kw">return</span>
+    low  = b[<span class="st">4</span>]
+    high = b[<span class="st">5</span>] | (b[<span class="st">3</span>] &amp; <span class="st">0xFE</span>)
+    <span class="kw">if</span> high &gt; <span class="st">0</span>: sticky_high = high          <span class="cm"># remember the carry</span>
+    <span class="kw">if</span> low &lt; <span class="st">5</span> <span class="kw">and</span> high == <span class="st">0</span>: sticky_high = <span class="st">0</span>  <span class="cm"># real return to zero</span>
+    weight = low + <span class="fn">max</span>(high, sticky_high) * <span class="st">256</span>
+    <span class="cm"># ... push to UI, mark STABLE when last 10 samples vary &le; 2 g</span>
+
+<span class="kw">async def</span> <span class="fn">run</span>():
+    dev = <span class="kw">await</span> BleakScanner.<span class="fn">find_device_by_name</span>(<span class="st">"SWAN"</span>)
+    <span class="kw">async with</span> BleakClient(dev) <span class="kw">as</span> c:
+        <span class="kw">await</span> c.<span class="fn">start_notify</span>(NOTIFY_UUID, on_notify)</pre>
+
+  <div class="callout"><b>Why this beats the camera-based alternatives.</b> Reading the broadcast is
+    deterministic and lighting-independent. We did implement the OCR fallback (Tesseract on the
+    7-segment display, in <code>food_app.py</code>), but it was fragile to glare and viewing angle, and
+    every vision volume method failed on the volume-to-mass density problem (see the
+    <a href="#" class="goto" data-tab="validation">Validation &amp; Risks</a> tab). BLE removes the
+    measurement from the vision path entirely. Source: <code>gui_scale.py</code>, used live in
+    <code>DEMO.py</code>.</div>
 </section>
 
 <!-- ============ FEEDBACK ============ -->
