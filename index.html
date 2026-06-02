@@ -1538,14 +1538,15 @@ function drawPrep(p){ // p in [0,5]
   const lbl=document.getElementById('prepLabel');if(lbl)lbl.textContent=PREP_STAGES[stage].t;
 }
 function playPrep(){
-  if(prepRAF)cancelAnimationFrame(prepRAF);
+  // time-based setInterval loop (fires reliably even when requestAnimationFrame is throttled)
+  if(prepRAF){clearInterval(prepRAF);prepRAF=null;}
   const dur=5200,start=performance.now();
-  function step(now){
-    const k=Math.min(1,(now-start)/dur), p=k*5;
-    drawPrep(p);
-    if(k<1)prepRAF=requestAnimationFrame(step);
-  }
-  prepRAF=requestAnimationFrame(step);
+  drawPrep(0);  // draw the first frame immediately so Play always shows something
+  prepRAF=setInterval(function(){
+    const k=Math.min(1,(performance.now()-start)/dur);
+    drawPrep(k*5);
+    if(k>=1){clearInterval(prepRAF);prepRAF=null;}
+  },33);
 }
 /* draw a static first frame when the demo tab opens */
 const _origShowTab=showTab;
