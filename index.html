@@ -1035,10 +1035,23 @@ probs = mean(predict(raw_roi), predict(clahe_roi))   <span class="cm"># test-tim
   <pre><span class="cm"># food isolation (scripts/demo/caleyez_demo.py)</span>
 cv2.<span class="fn">grabCut</span>(roi, mask, centre_rect, ..., GC_INIT_WITH_RECT)  <span class="cm"># 2-background safe</span>
 crop = bounding box of the largest foreground blob       <span class="cm"># fall back to full ROI if implausible</span></pre>
-  <div class="callout green"><b>Why this is the real fix.</b> It brings the live crop back into the
-    tight-food distribution the models were trained on, which is what the clean-image score assumes.
-    GrabCut needs no training and makes no plate or shape assumption, so it survives the two-background
-    table and changing light. This is a direct example of a test result feeding back into the design.</div>
+  <div class="callout green"><b>Why this helps.</b> It removes hands, keyboard and table clutter from the
+    crop, which is what confuses a whole-image classifier. GrabCut needs no training and makes no plate or
+    shape assumption.</div>
+
+  <h4>The deeper finding: camera angle, not background</h4>
+  <p>Testing exposed something more fundamental than clutter. The Global model classifies a bell pepper at
+    <b>99.97%</b> even when it fills only a quarter of a dark-scale or wood background, so background and
+    crop size are not what break it. What breaks it is the <b>viewing angle</b>: the training images are
+    almost all side or eye-level views, while a top-down demo camera sees a red disc with a central stem,
+    which is genuinely out of distribution and can read as chocolate cake.</p>
+  <div class="callout amber"><b>How the system handles it honestly.</b> This is exactly the case the
+    confidence gate is for. On the top-down pepper the Global model scored only 39%, below its 0.45 gate,
+    so the app flagged <b>low confidence</b> rather than asserting a wrong answer, and routes the image to
+    the Gemini fallback (when a key is configured) which is not tied to the local training distribution.
+    The practical mitigations are to angle the camera nearer eye level and to enable the cloud fallback
+    for unusual views. Recognising that the limit is the training-data viewpoint, not the pipeline, is
+    itself a lesson from testing.</div>
 
   <h3 id="d-arb">Wiring the real arbiter (not a re-implementation)</h3>
   <p>The demo computes the <b>same 19 features</b> the arbiter was trained on, in the same order, and

@@ -84,6 +84,21 @@ The demo never blocks on this: when the scale is not connected it automatically 
 field next to the weight readout, so you can type the grams and continue. The chip always states which
 source is live (BLE or manual).
 
+## Camera angle matters (important for the demo)
+
+The models were trained almost entirely on **side / eye-level** photos of food. A steep **top-down**
+view is out of distribution: a round red bell pepper seen from directly above (a red disc with a green
+stem) does not look like the side-view peppers in the training set, so it can be misread. This is not a
+crop bug; the model scores about 99.97% on the same pepper from the side, on any background.
+
+For the demo:
+
+- Angle the camera closer to **45 degrees or eye level**, not straight down, so the food matches the
+  training distribution.
+- Set `GEMINI_API_KEY`. When the local experts are not confident (the app shows a yellow
+  "LOW CONFIDENCE" chip), the ROI is sent to Gemini, which handles the unusual views the local models
+  were never trained on. This is the intended path for out-of-distribution inputs.
+
 ## Notes
 
 - Inference runs on a worker thread, so the preview and weight never freeze.

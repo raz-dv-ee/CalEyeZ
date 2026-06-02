@@ -647,9 +647,12 @@ class CalEyeZDemo:
             f"CARBS  : {info['carb']} g\n"
             f"FAT    : {info['fat']} g"))
         if info["used_gemini"]:
-            self.src_chip.config(text="source: Gemini fallback (experts unsure)", fg=PURPLE)
-        elif d["both_unsure"]:
-            self.src_chip.config(text="experts unsure", fg=AMBER)
+            self.src_chip.config(text="source: Gemini fallback (local experts unsure)", fg=PURPLE)
+        elif not d["confident"]:
+            # low confidence: the experts flagged this input as uncertain (often an out-of-distribution
+            # view, e.g. a top-down object). Gemini would resolve it if a key is configured.
+            hint = "set GEMINI_API_KEY for cloud fallback" if gemini is None else "Gemini fallback failed"
+            self.src_chip.config(text=f"LOW CONFIDENCE {d['conf']*100:.0f}% - uncertain ({hint})", fg=AMBER)
         else:
             self.src_chip.config(text=f"source: {'Israeli' if d['route_israeli'] else 'Global'} expert  ·  {info['src']}",
                                  fg=GREEN)
