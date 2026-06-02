@@ -159,6 +159,48 @@ def center_roi(bgr: np.ndarray) -> np.ndarray:
     return bgr[y0:y0 + s, x0:x0 + s].copy()
 
 
+def food_bbox(roi: np.ndarray):
+    """Bounding box of the food object inside the ROI, in ROI coordinates, or None.
+
+    Why this is the key fix: the models were trained on images where the food fills most of the
+    frame. A fixed ROI on a real table still contains a lot of non-food context (the dark scale
+    glass, wood grain, a hand), and that clutter dominates the prediction, producing confident
+    nonsense. We isolate the food as the region whose colour differs from the ROI border (which is
+    almost always background), take the largest such blob, and crop to it. If the mask looks
+    implausible (too small or nearly the whole frame), we return None and keep the full ROI rather
+    than guess. No training and no plate assumption, so it is robust to lighting and background.
+    """
+    h, w = roi.shape[:2]
+    lab = cv2.cvtColor(roi, cv2.COLOR_BGR2LAB).astype(np.float32)
+    bw = max(4, int(min(h, w) * 0.08))
+    border = np.concatenate([lab[:bw].reshape(-1, 3), lab[-bw:].reshape(-1, 3),
+                             lab[:, :bw].reshape(-1, 3), lab[:, -bw:].reshape(-1, 3)])
+    bg = np.median(border, axis=0)
+    dist = np.linalg.norm(lab - bg, axis=2)
+    mask = (dist > 22).astype(np.uint8) * 255
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, np.ones((5, 5), np.uint8))
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, np.ones((15, 15), np.uint8))
+    cnts, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    if not cnts:
+        return None
+    c = max(cnts, key=cv2.contourArea)
+    area = cv2.contourArea(c)
+    if area < 0.05 * h * w or area > 0.95 * h * w:   # implausible mask -> keep full ROI
+        return None
+    x, y, bw2, bh2 = cv2.boundingRect(c)
+    pad = int(0.10 * max(bw2, bh2))
+    return (max(0, x - pad), max(0, y - pad), min(w, x + bw2 + pad), min(h, y + bh2 + pad))
+
+
+def tighten_to_food(roi: np.ndarray) -> np.ndarray:
+    bb = food_bbox(roi)
+    if bb is None:
+        return roi
+    x0, y0, x1, y1 = bb
+    crop = roi[y0:y1, x0:x1]
+    return crop if crop.size else roi
+
+
 def clahe_luma(bgr: np.ndarray) -> np.ndarray:
     """Equalise local contrast on the luminance (L) channel only.
 
@@ -225,8 +267,9 @@ def build_feature_row(g: dict, i: dict) -> pd.DataFrame:
 def predict(bgr: np.ndarray) -> dict:
     """Full edge decision. Returns everything the UI needs to explain itself."""
     roi = center_roi(bgr)
-    g = expert_features(model_g, roi, GLOBAL_IMGSZ)
-    i = expert_features(model_i, roi, ISRAELI_IMGSZ)
+    food = tighten_to_food(roi)          # crop to the food object, drop scale/table/hand clutter
+    g = expert_features(model_g, food, GLOBAL_IMGSZ)
+    i = expert_features(model_i, food, ISRAELI_IMGSZ)
 
     X = build_feature_row(g, i)
     p_israeli = float(arbiter.predict_proba(X)[0, 1])
@@ -239,7 +282,7 @@ def predict(bgr: np.ndarray) -> dict:
 
     return {"global": g, "israeli": i, "p_israeli": p_israeli, "route_israeli": route_israeli,
             "chosen": chosen, "label": chosen["label"], "conf": chosen["conf"][0],
-            "confident": confident, "both_unsure": both_unsure, "roi": roi}
+            "confident": confident, "both_unsure": both_unsure, "roi": roi, "food": food}
 
 
 def gemini_identify(bgr: np.ndarray) -> str | None:
@@ -503,6 +546,16 @@ class CalEyeZDemo:
             cv2.rectangle(frame, (x0, y0), (x0 + s, y0 + s), (204, 255, 0), 2)
             cv2.putText(frame, "PLACE FOOD HERE", (x0, y0 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (204, 255, 0), 2)
+            # live "detected food" box: shows exactly what will be classified (throttled)
+            self._fc = getattr(self, "_fc", 0) + 1
+            if self._fc % 3 == 0:
+                self._food_box = food_bbox(self.frame_bgr[y0:y0 + s, x0:x0 + s])
+            bb = getattr(self, "_food_box", None)
+            if bb is not None:
+                fx0, fy0, fx1, fy1 = bb
+                cv2.rectangle(frame, (x0 + fx0, y0 + fy0), (x0 + fx1, y0 + fy1), (255, 200, 0), 2)
+                cv2.putText(frame, "food", (x0 + fx0, y0 + fy0 - 6),
+                            cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 200, 0), 1)
             rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             img = Image.fromarray(rgb).resize((680, 510), Image.Resampling.LANCZOS)
             tkimg = ImageTk.PhotoImage(img)
@@ -548,7 +601,7 @@ class CalEyeZDemo:
             used_gemini = False
             label = d["label"]
             if not d["confident"]:
-                g = gemini_identify(d["roi"])
+                g = gemini_identify(d["food"])
                 if g:
                     label, used_gemini = g, True
             info = nutrition(label, grams)

@@ -967,8 +967,9 @@ sticky_high = <span class="st">0</span>
   <h3 id="d-pipe">The pipeline per capture</h3>
   <div class="flow">
     <span class="box">📷 frame (any res)</span><span class="arr">→</span>
-    <span class="box">center ROI crop</span><span class="arr">→</span>
-    <span class="box amber">lighting normalise</span><span class="arr">→</span>
+    <span class="box">center ROI box</span><span class="arr">→</span>
+    <span class="box hl">tighten to food</span><span class="arr">→</span>
+    <span class="box amber">CLAHE + averaging</span><span class="arr">→</span>
     <span class="box hl">Global 132</span><span class="arr">+</span>
     <span class="box teal">Israeli 13</span><span class="arr">→</span>
     <span class="box">19 features</span><span class="arr">→</span>
@@ -1011,6 +1012,26 @@ probs = mean(predict(raw_roi), predict(clahe_roi))   <span class="cm"># test-tim
     known fraction of the frame on every camera, which removes a second source of variance. We trade a
     little framing freedom for a result that behaves identically every single time, which is exactly what
     a demo needs.</div>
+
+  <h4>Second stage: tighten to the food (a lesson from live testing)</h4>
+  <p>The fixed box alone was not enough. In testing, a red bell pepper on the scale was repeatedly
+    misread (jachnun, donut, macaroni) even though the model scores 94% on clean pepper images. The
+    cause: the box still contained the dark scale, wood grain and a hand, and that clutter, not the
+    pepper, drove the prediction. The models were trained on tight food crops, so the live input was out
+    of distribution.</p>
+  <p>The fix is a training-free segmentation step. We estimate the background colour from the ROI
+    border (almost always table or scale), keep the largest region that differs from it, and crop to that
+    blob. The live preview draws this "food" box so the user sees exactly what will be classified. If the
+    detected region is implausible (too small or nearly the whole frame) we keep the full ROI instead of
+    guessing.</p>
+  <pre><span class="cm"># food isolation (scripts/demo/caleyez_demo.py)</span>
+bg   = median(border pixels of the ROI)          <span class="cm"># the table / scale colour</span>
+mask = distance(pixel, bg) &gt; threshold            <span class="cm"># food = what differs from background</span>
+crop = bounding box of the largest mask blob     <span class="cm"># fall back to full ROI if implausible</span></pre>
+  <div class="callout green"><b>Why this is the real fix.</b> It brings the live crop back into the
+    tight-food distribution the models were trained on, which is what the clean-image score assumes. It
+    needs no training and makes no plate or shape assumption, so it survives arbitrary backgrounds and
+    light. This is a direct example of a test result feeding back into the design.</div>
 
   <h3 id="d-arb">Wiring the real arbiter (not a re-implementation)</h3>
   <p>The demo computes the <b>same 19 features</b> the arbiter was trained on, in the same order, and
