@@ -1324,7 +1324,41 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
   </ul>
   <p>We will report per-class accuracy, the routing recall/precision, and the threshold trade-off curve so
     the gain is shown to be a measured operating point, not an arbitrary default.</p>
-  <div class="foot">CalEyeZ · Israeli Model V2 · status: dataset prepared and hashed (14 classes, 6,001 train / 1,032 val / 1,467 test, 0 leakage); arbiter wired for background (skip-row + i_p_background feature); model training in progress.</div>
+  <h3>Measured results (V2, on the held-out test set)</h3>
+  <p>The retrain completed (best epoch 112). Per-class test accuracy on the classes we targeted improved
+    sharply, and crucially the new <code>background</code> signal cleanly separates the domains.</p>
+  <table>
+    <thead><tr><th>Class</th><th class="r">before</th><th class="r">V2</th></tr></thead>
+    <tbody>
+      <tr><td>sabich</td><td class="r">57%</td><td class="r"><b class="g">93.3%</b></td></tr>
+      <tr><td>malawach</td><td class="r">75%</td><td class="r"><b class="g">86.7%</b></td></tr>
+      <tr><td>bourekas_cheese</td><td class="r">84%</td><td class="r"><b class="g">90.0%</b></td></tr>
+      <tr><td>meorav_yerushalmi</td><td class="r">83%</td><td class="r"><b class="g">86.7%</b></td></tr>
+      <tr><td>falafel</td><td class="r">88%</td><td class="r">92.8%</td></tr>
+      <tr><td>background (new, OSR)</td><td class="r">n/a</td><td class="r">61.3% recall</td></tr>
+    </tbody>
+  </table>
+  <p>The decisive signal: the Israeli model's mean <code>i_p_background</code> is <b>0.497 on global food</b>
+    vs <b>0.029 on real Israeli food</b>, a near-clean "not-mine" separator. Feeding it to the arbiter
+    lifted the whole ROC and recovered routing-lost images.</p>
+  <table>
+    <thead><tr><th>System metric</th><th class="r">V1 baseline</th><th class="r">V2</th><th>change</th></tr></thead>
+    <tbody>
+      <tr><td>Routing ROC-AUC</td><td class="r">0.933</td><td class="r"><b class="g">0.973</b></td><td>the ROC lifted (real gain, not redistribution)</td></tr>
+      <tr><td>Israeli recall (routing)</td><td class="r">60.8%</td><td class="r"><b class="g">79.2%</b></td><td>+18.4 pts</td></tr>
+      <tr><td>Global recall (routing)</td><td class="r">97.6%</td><td class="r">98.4%</td><td>held</td></tr>
+      <tr><td>Israeli-domain realized acc</td><td class="r">60.8%</td><td class="r"><b class="g">78.0%</b></td><td>+17 pts (routing gap ~halved)</td></tr>
+      <tr><td>Global-domain realized acc</td><td class="r">86.8%</td><td class="r">87.3%</td><td>+0.5 pt</td></tr>
+      <tr><td><b>System top-1</b></td><td class="r">83.8%</td><td class="r"><b class="g">86.2%</b></td><td>+2.4 pts (now 77% of the way to oracle)</td></tr>
+    </tbody>
+  </table>
+  <div class="callout green"><b>Why this is the principled win.</b> Threshold tuning alone was near zero-sum
+    (it only redistributes between domains). Raising the routing ROC-AUC from 0.933 to 0.973 is what actually
+    adds net accuracy, and it came exactly as predicted: from <i>information</i> (a trustworthy Israeli
+    confidence via the open-set background class), not from moving the decision threshold. The arbiter's top
+    feature by gain is now <code>i_p_background</code> (0.289), well ahead of every logit summary.</div>
+
+  <div class="foot">CalEyeZ · Israeli Model V2 · status: COMPLETE. Model retrained (best ep112), arbiter regenerated + retrained with i_p_background, full system eval done. System 83.8% to 86.2%, Israeli domain 60.8% to 78.0%.</div>
 </section>
 
 <section class="tab" id="tab-future">
