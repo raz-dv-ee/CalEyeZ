@@ -152,6 +152,12 @@
     <div class="stat"><div class="n">132 + 14</div><div class="l">global + Israeli classes (incl. background)</div></div>
   </div>
 
+  <div class="callout green"><b>Latest improvement (V2 open-set retrain).</b> Adding a "background" class to
+    the Israeli model made its confidence trustworthy, which let the arbiter route correctly:
+    <b>system top-1 83.8% &rarr; 86.2%</b>, Israeli-domain accuracy <b>60.8% &rarr; 78.0%</b>, routing
+    ROC-AUC <b>0.933 &rarr; 0.973</b>. Full before/after in the
+    <a href="#" class="goto" data-tab="israeliv2">Israeli Model V2</a> tab.</div>
+
   <h3>The two questions</h3>
   <table>
     <thead><tr><th>Question</th><th>Engineering problem</th><th>Solution (proven)</th></tr></thead>
