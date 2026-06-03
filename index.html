@@ -146,9 +146,9 @@
 
   <div class="grid">
     <div class="stat good"><div class="n">88.18%</div><div class="l">Global model top-1 (clean test)</div></div>
-    <div class="stat good"><div class="n">83.75%</div><div class="l">full routed system top-1</div></div>
-    <div class="stat"><div class="n">93.4%</div><div class="l">arbiter accuracy (ROC-AUC 0.93)</div></div>
-    <div class="stat"><div class="n">132 + 13</div><div class="l">global + Israeli classes</div></div>
+    <div class="stat good"><div class="n">86.2%</div><div class="l">full routed system top-1 (V2)</div></div>
+    <div class="stat"><div class="n">96.1%</div><div class="l">arbiter accuracy (ROC-AUC 0.97, V2)</div></div>
+    <div class="stat"><div class="n">132 + 14</div><div class="l">global + Israeli classes (incl. background)</div></div>
   </div>
 
   <h3>The two questions</h3>
@@ -174,7 +174,7 @@
     <li><b>Target audience:</b> people managing intake for health reasons (diabetes, fitness, clinical
       diet) who abandon manual calorie apps because logging is tedious and portion estimates are wrong.</li>
     <li><b>Primary goal:</b> end-to-end food recognition above the 80% FRS requirement, on a
-      strictly held-out, leakage-free test set. Met at 83.75% (system) and 88.18% (Global model alone).</li>
+      strictly held-out, leakage-free test set. Met at 86.2% (V2 system) and 88.18% (Global model alone).</li>
     <li><b>Secondary goal:</b> accurate weight without asking the user to type anything. Met by BLE.</li>
   </ul>
 
@@ -221,20 +221,20 @@
 
   <div class="callout amber"><b>The headline is not the system percentage, it is trust.</b>
     The old 80.30% sat on a dataset with cross-split leakage and a router that almost never used the
-    second expert. The new 83.75% sits on a de-duplicated, leakage-free split, with a true arbiter that
+    second expert. The new 86.2% (V2) sits on a de-duplicated, leakage-free split, with a true arbiter that
     genuinely recovers Israeli dishes. The new number is both higher and honest.</div>
 
   <h3>Headline comparison</h3>
   <table>
     <thead><tr><th>Metric</th><th class="r">Then (class)</th><th class="r">Now</th><th class="r">Change</th><th>Note</th></tr></thead>
     <tbody>
-      <tr><td>Full system top-1</td><td class="r">80.30%</td><td class="r">83.75%</td><td class="r"><span class="delta-up">+3.45</span></td><td>and now on clean data</td></tr>
+      <tr><td>Full system top-1</td><td class="r">80.30%</td><td class="r">86.2% (V2)</td><td class="r"><span class="delta-up">+5.9</span></td><td>clean data + V2 open-set arbiter</td></tr>
       <tr><td>Global model top-1 (own domain)</td><td class="r">84.6%</td><td class="r">88.18%</td><td class="r"><span class="delta-up">+3.58</span></td><td>apples to apples: each model on its own classes (158 then, 132 now). 84.6% is the as-presented figure; recomputed on this CSV it is 82.2%</td></tr>
       <tr><td>Always-global baseline (full mix)</td><td class="r">76.43%</td><td class="r">77.98%</td><td class="r"><span class="delta-up">+1.55</span></td><td>using only the global model on every image, including Israeli food it scores 0% on</td></tr>
       <tr><td>Oracle ceiling (best possible arbiter)</td><td class="r">82.97%</td><td class="r">88.40%</td><td class="r"><span class="delta-up">+5.43</span></td><td>headroom the models allow</td></tr>
       <tr><td>Classes (global)</td><td class="r">158 to 161</td><td class="r">132</td><td class="r"><span class="delta-dn">cleaned</span></td><td>merged, renamed, de-duplicated</td></tr>
-      <tr><td>Israeli expert classes</td><td class="r">8</td><td class="r">13</td><td class="r"><span class="delta-up">+5</span></td><td>broader local coverage</td></tr>
-      <tr><td>Router accuracy / ROC-AUC</td><td class="r">78.7%</td><td class="r">93.4% / 0.93</td><td class="r"><span class="delta-up">better</span></td><td>this is the router (XGBoost), not the food model; now reported as ROC-AUC, not raw accuracy</td></tr>
+      <tr><td>Israeli expert classes</td><td class="r">8</td><td class="r">13 (+background)</td><td class="r"><span class="delta-up">+5</span></td><td>broader local coverage; V2 adds an open-set background class</td></tr>
+      <tr><td>Arbiter accuracy / ROC-AUC</td><td class="r">78.7%</td><td class="r">96.1% / 0.973</td><td class="r"><span class="delta-up">better</span></td><td>the arbiter (XGBoost); V2 added i_p_background and lifted AUC 0.933 to 0.973</td></tr>
       <tr><td>Val vs test gap (leakage signal)</td><td class="r">about 4 pts</td><td class="r">0.02 pt</td><td class="r"><span class="delta-up">closed</span></td><td>88.16 val vs 88.18 test</td></tr>
     </tbody>
   </table>
@@ -258,8 +258,8 @@
     </tbody>
   </table>
   <p>The current arbiter is trained as an explicit <b>domain detector</b>
-    (<code>route_to_israeli = (domain == israeli)</code>), reaches Israeli recall of 61% with global
-    recall 97.6%, and the
+    (<code>route_to_israeli = (domain == israeli)</code>), reaches Israeli recall of 79% with global
+    recall 98% in V2 (up from 61% / 98% after the open-set background retrain), and the
     <a href="#" class="goto" data-tab="arbiter">Arbiter tab</a> explains exactly which features drive
     each decision. It is also why the current component is correctly called an <b>arbiter</b>, not a
     router: it adjudicates between two experts that have already run, rather than forwarding by a rule.</p>
@@ -501,7 +501,7 @@ model.<span class="fn">val</span>(data=<span class="st">"datasets/general_model_
 
 <!-- ============ ARBITER ============ -->
 <section class="tab" id="tab-arbiter">
-  <h2>Arbiter <span class="tag t-now">acc 93.4%, ROC-AUC 0.93</span></h2>
+  <h2>Arbiter <span class="tag t-now">acc 96.1%, ROC-AUC 0.97 (V2)</span></h2>
   <div class="sub-nav">
     <a href="#a-name">Arbiter, not router</a><a href="#a-what">What it actually is</a><a href="#a-feat">Features</a>
     <a href="#a-why">Why XGBoost</a><a href="#a-code">Code</a><a href="#a-res">Results</a>
@@ -591,8 +591,8 @@ i_conf1      =  0.180  +0.42 -> Global    <span class="cm"># israeli top-1 is we
       <tr><td>Overfit gap</td><td class="r"><span class="delta-dn">19.5%</span></td><td class="r"><span class="delta-up">2.5%</span></td></tr>
     </tbody>
   </table>
-  <p class="legend">Those figures are from the earlier router study; the current arbiter keeps XGBoost
-    and reaches routing accuracy 93.4% and ROC-AUC 0.93 on the rebuilt dataset.</p>
+  <p class="legend">Those figures are from the earlier router study; the current V2 arbiter keeps XGBoost
+    and reaches routing accuracy 96.07% and ROC-AUC 0.973 on the rebuilt dataset (with the i_p_background feature).</p>
 
   <h3 id="a-code">Training code</h3>
   <pre><span class="cm"># scripts/arbiter/train_arbiter_xgb.py  (essentials)</span>
@@ -617,46 +617,54 @@ clf = xgb.<span class="fn">XGBClassifier</span>(
 clf.<span class="fn">fit</span>(X[train], y[train], eval_set=[(X[test], y[test])])
 clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter_xgb.json"</span>)</pre>
 
-  <h3 id="a-res">Results</h3>
+  <h3 id="a-res">Results (V2 arbiter)</h3>
   <p class="legend"><b>ROC-AUC in one line:</b> the probability that the arbiter gives a randomly chosen
     Israeli image a higher P(israeli) than a randomly chosen global image. 1.0 is perfect separation,
-    0.5 is a coin flip. 0.93 means it ranks the two domains correctly 93% of the time. Recall = the
+    0.5 is a coin flip. 0.973 means it ranks the two domains correctly 97% of the time. Recall = the
     share of each domain it actually catches.</p>
   <div class="two">
     <table>
-      <thead><tr><th>Routing metric (test)</th><th class="r">Value</th></tr></thead>
+      <thead><tr><th>Routing metric (test)</th><th class="r">V1</th><th class="r">V2</th></tr></thead>
       <tbody>
-        <tr><td>Routing accuracy</td><td class="r">93.40%</td></tr>
-        <tr><td>ROC-AUC</td><td class="r">0.933</td></tr>
-        <tr><td>Israeli recall</td><td class="r">61.3%</td></tr>
-        <tr><td>Global recall</td><td class="r">97.6%</td></tr>
+        <tr><td>Routing accuracy</td><td class="r">93.40%</td><td class="r"><b>96.07%</b></td></tr>
+        <tr><td>ROC-AUC</td><td class="r">0.933</td><td class="r"><b>0.973</b></td></tr>
+        <tr><td>Israeli recall</td><td class="r">61.3%</td><td class="r"><b class="g" style="color:var(--green)">79.2%</b></td></tr>
+        <tr><td>Global recall</td><td class="r">97.6%</td><td class="r">98.4%</td></tr>
       </tbody>
     </table>
     <table>
-      <thead><tr><th>System top-1 (combined test)</th><th class="r">Value</th></tr></thead>
+      <thead><tr><th>System top-1 (test)</th><th class="r">V1</th><th class="r">V2</th></tr></thead>
       <tbody>
-        <tr><td>Always-global baseline</td><td class="r">77.98%</td></tr>
-        <tr><td>Arbiter (routed)</td><td class="r">83.75%</td></tr>
-        <tr><td>Oracle ceiling</td><td class="r">88.66%</td></tr>
-        <tr><td>Arbiter gain</td><td class="r"><span class="delta-up">+5.78 pts</span></td></tr>
+        <tr><td>Always-global baseline</td><td class="r">78.0%</td><td class="r">77.4%</td></tr>
+        <tr><td>Arbiter (routed)</td><td class="r">83.8%</td><td class="r"><b>86.2%</b></td></tr>
+        <tr><td>Oracle ceiling</td><td class="r">88.7%</td><td class="r">88.8%</td></tr>
+        <tr><td>Arbiter gain</td><td class="r">+5.8</td><td class="r"><span class="delta-up">+8.8 pts</span></td></tr>
       </tbody>
     </table>
   </div>
-  <div class="callout green"><b>What these numbers mean.</b>
+
+  <div class="callout green"><b>What changed between the two trainings, and why the arbiter got much better.</b>
+    The arbiter algorithm did <b>not</b> change (same XGBoost, same training recipe). What changed is the
+    <b>information it receives</b>, and that is the whole point:
     <ul style="margin:8px 0 0">
-      <li><b>Why the gain is real:</b> the global model was never trained on Israeli food, so it gets
-        those images wrong every time (0%). The only way to get them right is for the arbiter to send
-        them to the Israeli expert. That is exactly what produces the jump from the always-global
-        baseline (77.98%) to the routed system (83.75%), a gain of <b>+5.78 points</b>.</li>
-      <li><b>How close that is to perfect:</b> a perfect arbiter (oracle) would score 88.40%. The full
-        gap from baseline to perfect is 88.40 − 77.98 = 10.42 points; the arbiter already captured
-        5.78 of them, so 5.78 ÷ 10.42 = <b>54%</b> of the available gap is closed.</li>
-      <li><b>Why Israeli recall is only 61%:</b> of all truly-Israeli images, the arbiter sends 61% to
-        the right expert and misses 39%. The miss is caused by the Israeli model firing high confidence
-        even on food it never saw, which makes its confidence a noisy signal. Better model calibration
-        would raise this; more arbiter tuning would not.</li>
+      <li><b>The problem in V1:</b> the Israeli model was overconfident on non-Israeli food (it would call a
+        bowl of risotto "hummus" at 80%+). So its confidence was a <i>noisy, untrustworthy</i> signal, the
+        arbiter learned to discount it and default to the global prior, and Israeli recall stalled at 61%.</li>
+      <li><b>The fix (open-set retrain):</b> we retrained the Israeli model with a 14th <code>background</code>
+        class of non-Israeli food, so it now answers "this is not one of my dishes" instead of forcing a
+        guess. Measured: its mean <code>P(background)</code> is <b>0.50 on global food vs 0.03 on real Israeli
+        food</b>, a near-clean separator.</li>
+      <li><b>Exposed to the arbiter as one feature:</b> <code>i_p_background</code>. It instantly became the
+        arbiter's <b>#1 feature by gain (0.289)</b>, ahead of every confidence/entropy term.</li>
+      <li><b>Why this is a real win, not a knob turn:</b> earlier analysis showed that simply moving the
+        decision threshold is near zero-sum (every Israeli image won costs a global image). The only way to
+        gain net accuracy is to <b>raise the ROC-AUC</b>, which needs new information. The background signal
+        did exactly that: <b>AUC 0.933 to 0.973</b>, Israeli recall <b>61% to 79%</b>, system <b>83.8% to
+        86.2%</b>, with global recall holding. The earlier note that "better model calibration would raise
+        Israeli recall, more arbiter tuning would not" is precisely what V2 confirmed.</li>
     </ul>
-    Model file: <code>scripts/arbiter/arbiter_xgb.json</code>.</div>
+    Model file: <code>scripts/arbiter/arbiter_xgb.json</code> (V2, 20 features). See the Israeli Model V2 tab
+    for the full retrain and the per-class numbers.</div>
 </section>
 
 <!-- ============ CNN VISUALIZER ============ -->
@@ -823,10 +831,12 @@ Oracle ceiling         : 10,081 / 11,352 = 88.8%  (= 8,784 global + 1,297 Israel
     P) and purple to the right (high P). The dashed line at 0.5 is the decision threshold: anything to
     its right is sent to the Israeli model. The clean separation (blue piled near 0, purple piled near 1)
     is what a 0.93 ROC-AUC looks like; the small amount of blue and purple that overlap in the middle is
-    exactly the 7% of routing the arbiter cannot get perfectly right.</p>
+    exactly the routing the arbiter cannot get perfectly right. (This histogram illustrates the V1 arbiter;
+    V2's <code>i_p_background</code> feature sharpened the separation further, lifting AUC to 0.973 and
+    shrinking that middle overlap.)</p>
   <div class="two">
     <div><img class="fig" src="assets/sys_4_israeli.png" alt="Israeli recovery"><figcaption>Each bar is 100% of a dish's test images: green recovered (sent to the right expert), red missed.</figcaption></div>
-    <div><img class="fig" src="assets/sys_5_separability.png" alt="Routing separability"><figcaption>Histogram of the arbiter's P(israeli) for true-global (blue) vs true-israeli (purple). Overlap near 0.5 is the source of the 0.93 ROC-AUC ceiling.</figcaption></div>
+    <div><img class="fig" src="assets/sys_5_separability.png" alt="Routing separability"><figcaption>Histogram of the arbiter's P(israeli) for true-global (blue) vs true-israeli (purple). Overlap near 0.5 is the routing it cannot perfect; V2 (i_p_background) reduced it, AUC 0.933 to 0.973.</figcaption></div>
   </div>
   <img class="fig" src="assets/sys_6_worstclasses.png" alt="Worst major classes">
   <figcaption>System accuracy for classes with at least 100 test images (excludes small-sample noise).</figcaption>
@@ -1144,7 +1154,7 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
       <tr><td>API keys from the environment</td><td>USDA and Gemini keys are read from environment variables, never hard-coded, so the public repo carries no secrets.</td></tr>
     </tbody>
   </table>
-  <div class="callout"><b>Result.</b> The same pipeline that scores 83.75% on the held-out test now runs
+  <div class="callout"><b>Result.</b> The same pipeline that scores 86.2% on the held-out test now runs
     live, with the routing on display, robustness baked into the input path, and a cloud fallback for the
     inputs the local models genuinely cannot win. Source: <code>scripts/demo/caleyez_demo.py</code>.</div>
 
