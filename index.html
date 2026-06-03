@@ -127,6 +127,7 @@
     <button data-tab="arbiter">Arbiter</button>
     <button data-tab="cnn">CNN Visualizer</button>
     <button data-tab="analysis">System Analysis</button>
+    <button data-tab="analysisv2">System Analysis V2</button>
     <button data-tab="validation">Validation &amp; Risks</button>
     <button data-tab="ble">BLE Scale</button>
     <button data-tab="demo">Live Demo</button>
@@ -1604,6 +1605,90 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
 </section>
 
 <!-- ============ TRIED & REJECTED ============ -->
+<section class="tab" id="tab-analysisv2">
+  <h2>System Analysis V2 (after the open-set retrain)</h2>
+  <p>This is the full system evaluation <b>after</b> the Israeli Model V2 retrain (the open-set
+    <code>background</code> class plus the <code>i_p_background</code> arbiter feature). The original
+    System Analysis tab is kept unchanged as the V1 baseline; this tab is the current production system,
+    measured on the held-out test set of <b>11,352 images</b> (regenerated
+    <code>datasets/system_evaluation.csv</code>).</p>
+
+  <div class="callout green"><b>Headline:</b> system top-1 <b>83.8% &rarr; 86.2%</b>, Israeli-domain
+    <b>60.8% &rarr; 77.9%</b>, routing ROC-AUC <b>0.933 &rarr; 0.973</b>, all with the global domain holding
+    and the oracle ceiling essentially unchanged. The gain is a genuine routing improvement, not a threshold
+    trade.</div>
+
+  <h3>Error decomposition (V2)</h3>
+  <p>Every outcome on the test set, split into the three mutually exclusive buckets that tell you where the
+    remaining errors live.</p>
+  <div class="chartwrap" style="height:auto;padding:18px">
+    <div style="display:flex;width:100%;height:42px;border-radius:6px;overflow:hidden;font:bold 12px Segoe UI,sans-serif;color:#06240f">
+      <div style="width:86.16%;background:#3fb950;display:flex;align-items:center;justify-content:center">86.2%</div>
+      <div style="width:2.65%;background:#d29922" title="Routing error 2.7%"></div>
+      <div style="width:11.19%;background:#f85149;display:flex;align-items:center;justify-content:center;color:#3a0a08">11.2%</div>
+    </div>
+    <div style="display:flex;gap:18px;margin-top:12px;flex-wrap:wrap;font-size:13px;color:#e6edf3">
+      <span><span style="color:#3fb950">&#9608;</span> System correct: 9,781 (86.2%)</span>
+      <span><span style="color:#d29922">&#9608;</span> Routing error: 301 (2.7%)</span>
+      <span><span style="color:#f85149">&#9608;</span> Both models wrong: 1,270 (11.2%)</span>
+    </div>
+  </div>
+  <div class="callout"><b>What each bucket means, and what fixes it.</b>
+    <ul style="margin:8px 0 0">
+      <li><b>Routing error 2.7% (301 images):</b> a correct expert existed but the arbiter sent the image to
+        the other one. This is the only bucket a better arbiter can recover, and V2 already cut it from the
+        V1 <b>4.9%</b> down to 2.7% (the open-set signal). It is now a small pool.</li>
+      <li><b>Both models wrong 11.2% (1,270 images):</b> neither expert was right, so no router could have
+        helped. This is the real ceiling, and it only moves with <b>better models or more data</b> (a stronger
+        backbone), not with routing. It defines the 88.8% oracle.</li>
+      <li><b>The takeaway:</b> the arbiter side is nearly solved (2.7% recoverable left); the remaining
+        headroom is in the experts, exactly as the Limitations and V2 tab argues.</li>
+    </ul></div>
+
+  <h3>Accuracy by domain (V2)</h3>
+  <div class="chartwrap"><canvas id="v2Domain"></canvas></div>
+  <table>
+    <thead><tr><th>Slice</th><th class="r">Images</th><th class="r">System</th><th class="r">Always-global</th><th class="r">Oracle</th></tr></thead>
+    <tbody>
+      <tr><td>Global domain</td><td class="r">9,960</td><td class="r">87.3%</td><td class="r">88.2%</td><td class="r">88.2%</td></tr>
+      <tr><td>Israeli domain</td><td class="r">1,392</td><td class="r"><b class="g" style="color:var(--green)">77.9%</b></td><td class="r">0.0%</td><td class="r">93.2%</td></tr>
+      <tr><td>Overall system</td><td class="r">11,352</td><td class="r"><b>86.2%</b></td><td class="r">77.4%</td><td class="r">88.8%</td></tr>
+    </tbody>
+  </table>
+
+  <h3>V1 vs V2, side by side</h3>
+  <table>
+    <thead><tr><th>Metric (held-out test)</th><th class="r">V1</th><th class="r">V2</th><th class="r">Change</th></tr></thead>
+    <tbody>
+      <tr><td>System top-1</td><td class="r">83.8%</td><td class="r"><b>86.2%</b></td><td class="r"><span class="delta-up">+2.4</span></td></tr>
+      <tr><td>Israeli-domain accuracy</td><td class="r">60.8%</td><td class="r"><b>77.9%</b></td><td class="r"><span class="delta-up">+17.1</span></td></tr>
+      <tr><td>Routing ROC-AUC</td><td class="r">0.933</td><td class="r"><b>0.973</b></td><td class="r"><span class="delta-up">+0.040</span></td></tr>
+      <tr><td>Routing error pool</td><td class="r">4.9%</td><td class="r"><b>2.7%</b></td><td class="r"><span class="delta-up">-2.2</span></td></tr>
+      <tr><td>Both-wrong pool</td><td class="r">11.3%</td><td class="r">11.2%</td><td class="r">~same (model-bound)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Top remaining system confusions (V2)</h3>
+  <p>The misses left after V2, true class to predicted class on the test set. They are dominated by genuine
+    visual look-alikes, which is the both-models-wrong pool, not routing.</p>
+  <table>
+    <thead><tr><th>True</th><th>Predicted</th><th class="r">Count</th><th>Note</th></tr></thead>
+    <tbody>
+      <tr><td>falafel</td><td>crab_cakes</td><td class="r">35</td><td>brown fried balls, the classic confuser</td></tr>
+      <tr><td>chocolate_mousse</td><td>chocolate_cake</td><td class="r">12</td><td>same ingredient family</td></tr>
+      <tr><td>apple_pie</td><td>bread_pudding</td><td class="r">10</td><td>baked, similar texture</td></tr>
+      <tr><td>falafel</td><td>tacos</td><td class="r">10</td><td>both global; model error, not routing</td></tr>
+      <tr><td>hummus</td><td>omelette</td><td class="r">10</td><td>pale, creamy, similar plating</td></tr>
+      <tr><td>samosa</td><td>spring_rolls</td><td class="r">9</td><td>fried dough pockets</td></tr>
+    </tbody>
+  </table>
+  <div class="callout green"><b>Reading these confusions.</b> Almost all are dishes that genuinely look alike
+    to a human too (fried balls, chocolate desserts, fried dough). They are both-models-wrong cases, so they
+    sit in the 11.2% pool that a better backbone would address, not a better arbiter. The routing side is
+    already near its ceiling.</div>
+  <div class="foot">CalEyeZ · System Analysis V2 · regenerated on the V2 system_evaluation.csv (11,352 test images).</div>
+</section>
+
 <section class="tab" id="tab-rejected">
   <h2>Approaches We Tried and Rejected</h2>
   <p>Before settling on a BLE gravimetric scale for weight, we built and measured two other ways to get the
@@ -1771,6 +1856,20 @@ new Chart(document.getElementById('sysDomain'),{type:'bar',
       {label:'Oracle ceiling',         data:[88.2,93.2,88.8],backgroundColor:'#d29922'}]},
   options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:18}},
     plugins:{title:{display:true,text:'System accuracy by domain (%)',color:'#e6edf3',font:{size:15}},
+      legend:{labels:{color:'#e6edf3'}},
+      tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toFixed(1)+'%'}}},
+    scales:{y:{min:0,max:100,grid:GRID,ticks:{color:'#e6edf3',callback:v=>v+'%'},title:{display:true,text:'Top-1 accuracy',color:'#8b949e'}},
+            x:{grid:GRID,ticks:{color:'#e6edf3'}}}},
+  plugins:[barValueLabels]});
+/* System Analysis V2 tab: same grouped bar, V2 numbers */
+new Chart(document.getElementById('v2Domain'),{type:'bar',
+  data:{labels:['Global domain','Israeli domain','Overall system'],
+    datasets:[
+      {label:'Always-global baseline',data:[88.2,0.0,77.4],backgroundColor:'#8b949e'},
+      {label:'Realized system (V2)',   data:[87.3,77.9,86.2],backgroundColor:'#3fb950'},
+      {label:'Oracle ceiling',         data:[88.2,93.2,88.8],backgroundColor:'#d29922'}]},
+  options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:18}},
+    plugins:{title:{display:true,text:'System accuracy by domain, V2 (%)',color:'#e6edf3',font:{size:15}},
       legend:{labels:{color:'#e6edf3'}},
       tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toFixed(1)+'%'}}},
     scales:{y:{min:0,max:100,grid:GRID,ticks:{color:'#e6edf3',callback:v=>v+'%'},title:{display:true,text:'Top-1 accuracy',color:'#8b949e'}},
