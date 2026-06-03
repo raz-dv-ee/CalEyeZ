@@ -881,7 +881,7 @@ Oracle ceiling         : 10,081 / 11,352 = 88.8%  (= 8,784 global + 1,297 Israel
     <tbody>
       <tr><td>Test accuracy is inflated by data leakage</td><td>Recompute val and test top-1 after SHA-1 + perceptual de-dup; compare the two</td><td>val 88.16 vs test 88.18 (gap 0.02). Leakage removed</td></tr>
       <tr><td>Adding local food breaks the global model (catastrophic forgetting)</td><td>Compare combined-model accuracy against the two-expert split</td><td>Two-expert split keeps global at 88.18% with no degradation</td></tr>
-      <tr><td>The arbiter defaults to one model instead of truly deciding</td><td>Count arbiter decisions and measure per-domain recall and ROC-AUC</td><td>Israeli recall 61%, global recall 97.6%, ROC-AUC 0.93; +5.78 pts over always-global</td></tr>
+      <tr><td>The arbiter defaults to one model instead of truly deciding</td><td>Count arbiter decisions and measure per-domain recall and ROC-AUC</td><td>V2: Israeli recall 79%, global recall 98%, ROC-AUC 0.973; +8.8 pts over always-global (was 61% / 0.93 in V1)</td></tr>
       <tr><td>A wrong food identification goes unnoticed</td><td>Per-image error decomposition into routing error vs both-wrong; per-class recall</td><td>4.91% routing / 11.34% both-wrong, every class measured (System Analysis tab)</td></tr>
       <tr><td>Class imbalance silently hurts rare classes</td><td>Per-class recall reported, smallest classes flagged</td><td>Effect confined to ingredient classes with n≈8; reported, not hidden</td></tr>
       <tr><td>Weight from vision volume is unreliable</td><td>Volume estimates validated against Archimedes water displacement</td><td>Volume to mass fails on density even when volume is right; pivot to BLE</td></tr>
@@ -1230,6 +1230,22 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
   <div class="callout"><b>Governing principle.</b> Every training hyperparameter is held <b>identical</b>
     to V1. Only the data and the run name change. That makes any metric difference attributable to the
     data and the open-set class, not to hyperparameter tuning, a clean and defensible A/B.</div>
+
+  <h3>System results: before vs after V2 (the bottom line)</h3>
+  <table>
+    <thead><tr><th>Overall system metric (held-out test)</th><th class="r">Before (V1)</th><th class="r">After (V2)</th><th class="r">Change</th></tr></thead>
+    <tbody>
+      <tr><td><b>System top-1 accuracy</b></td><td class="r">83.8%</td><td class="r"><b class="g" style="color:var(--green)">86.2%</b></td><td class="r"><span class="delta-up">+2.4</span></td></tr>
+      <tr><td>Israeli-domain realized accuracy</td><td class="r">60.8%</td><td class="r"><b class="g" style="color:var(--green)">78.0%</b></td><td class="r"><span class="delta-up">+17.2</span></td></tr>
+      <tr><td>Global-domain realized accuracy</td><td class="r">86.8%</td><td class="r">87.3%</td><td class="r"><span class="delta-up">+0.5</span></td></tr>
+      <tr><td>Routing ROC-AUC</td><td class="r">0.933</td><td class="r"><b>0.973</b></td><td class="r"><span class="delta-up">+0.040</span></td></tr>
+      <tr><td>Israeli routing recall</td><td class="r">60.8%</td><td class="r"><b>79.2%</b></td><td class="r"><span class="delta-up">+18.4</span></td></tr>
+      <tr><td>Gain over always-global baseline</td><td class="r">+5.8</td><td class="r"><b>+8.8 pts</b></td><td class="r">77% of the way to oracle</td></tr>
+    </tbody>
+  </table>
+  <p class="cap">Same two models' label spaces, same test protocol, same oracle ceiling (~88.8%). The entire
+    gain comes from the open-set retrain making the Israeli model's confidence trustworthy, recovering
+    images the arbiter used to misroute. Full method below; the same numbers also appear in the Arbiter tab.</p>
 
   <h3>Change 1 · More data for the data-starved weak classes</h3>
   <p>We targeted classes by <i>accuracy</i>, not image count (jachnun had the fewest images yet scored
