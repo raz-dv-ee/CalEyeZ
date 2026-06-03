@@ -70,6 +70,7 @@
   @media(max-width:820px){.two{grid-template-columns:1fr}.grid,.grid.g3,.grid.g2{grid-template-columns:repeat(2,1fr)}}
   img.fig{width:100%;border:1px solid var(--line);border-radius:10px;margin:12px 0 4px;background:#0d1117}
   figcaption{color:var(--mut);font-size:12px;margin:0 0 16px}
+  p.cap{color:var(--mut);font-size:13px;margin:6px 0 14px;line-height:1.55}
   .tag{font-size:10px;padding:1px 7px;border-radius:99px;font-weight:700;margin-left:6px;vertical-align:middle}
   .t-then{background:rgba(248,81,73,.15);color:var(--red)}
   .t-now{background:rgba(63,185,80,.15);color:var(--green)}
@@ -122,6 +123,7 @@
     <button data-tab="dataset">Dataset</button>
     <button data-tab="global">Global Model</button>
     <button data-tab="israeli">Israeli Model</button>
+    <button data-tab="israeliv2">Israeli Model V2</button>
     <button data-tab="arbiter">Arbiter</button>
     <button data-tab="cnn">CNN Visualizer</button>
     <button data-tab="analysis">System Analysis</button>
@@ -790,9 +792,20 @@ Oracle ceiling         : 9,988 / 11,265 = 88.7%   (= 8,784 global + 1,204 Israel
     always-global baseline is exactly the global model used alone: it gets 8,784 of the 9,960 global
     images but 0 of the 1,305 Israeli images, which is why adding the Israeli expert plus the arbiter
     lifts the system by 5.78 points (78.0% to 83.8%). Source: <code>datasets/system_evaluation.csv</code>.</div>
+  <div class="chartwrap"><canvas id="sysDomain"></canvas></div>
+  <p class="cap">For each domain, three bars: the <b>always-global baseline</b> (the old global model used
+    alone), the <b>realized system</b> (global + Israeli experts + arbiter), and the <b>oracle ceiling</b>
+    (the best either expert could do). The story is visible at a glance: on the Israeli slice the baseline
+    is 0% (the global model knows no Israeli dishes), so the Israeli expert plus the arbiter is what creates
+    the 60.8%; on the global slice the system pays a tiny 1.4-point cost (86.8% vs 88.2%) for occasionally
+    misrouting; overall the system beats the baseline by 5.8 points and sits 4.9 points below the oracle.</p>
   <div class="two">
-    <div><img class="fig" src="assets/sys_2_domain.png" alt="Accuracy by domain"><figcaption>Global 86.8%, Israeli 60.8%, overall 83.8%, vs always-global 78.0% and oracle 88.7%.</figcaption></div>
     <div><img class="fig" src="assets/sys_3_confusions.png" alt="Top confusions"><figcaption>Most common system confusions, true → predicted.</figcaption></div>
+    <div class="callout"><b>What still limits the overall number.</b> The gap from the green system bars up
+      to the gold oracle line is the <b>routing error</b> (a correct expert existed but was not chosen),
+      worth about 4.9 points; the gap from the oracle up to 100% is the <b>both-experts-wrong</b> pool, which
+      no router can fix. The Israeli domain has the largest oracle gap (60.8% to 92.3%), so it is where a
+      better arbiter would help most.</div>
   </div>
 
   <h3>How decisively the arbiter separates the two domains</h3>
@@ -1183,6 +1196,137 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
 </section>
 
 <!-- ============ SYSTEM LIMITATIONS & FUTURE WORK ============ -->
+<section class="tab" id="tab-israeliv2">
+  <h2>Israeli Model V2 (data + open-set retrain)</h2>
+  <p>V2 attacks the system's biggest weakness: on the Israeli domain the model can reach <b>92.3%</b>
+    (its test-set ceiling), but the system only realizes <b>60.8%</b>. The ~31-point gap is almost all
+    <b>routing error</b>, because the original Israeli model is overconfident on non-Israeli food, so the
+    arbiter cannot trust its confidence. V2 fixes the <i>data</i>, not the hyperparameters.</p>
+
+  <div class="callout"><b>Governing principle.</b> Every training hyperparameter is held <b>identical</b>
+    to V1. Only the data and the run name change. That makes any metric difference attributable to the
+    data and the open-set class, not to hyperparameter tuning, a clean and defensible A/B.</div>
+
+  <h3>Change 1 · More data for the data-starved weak classes</h3>
+  <p>We targeted classes by <i>accuracy</i>, not image count (jachnun had the fewest images yet scored
+    100%, so it was not the problem). Real images were collected, then de-duplicated byte-for-byte.</p>
+  <table>
+    <thead><tr><th>Class</th><th class="r">train before</th><th class="r">train after</th><th>reason</th></tr></thead>
+    <tbody>
+      <tr><td>sabich</td><td class="r">92</td><td class="r">435</td><td>weakest (57%), data-starved</td></tr>
+      <tr><td>malawach</td><td class="r">166</td><td class="r">386</td><td>75%, data-starved</td></tr>
+      <tr><td>meorav_yerushalmi</td><td class="r">134</td><td class="r">369</td><td>83%, data-starved</td></tr>
+      <tr><td>bourekas_cheese</td><td class="r">117</td><td class="r">540</td><td>84%, data-starved</td></tr>
+      <tr><td>jachnun</td><td class="r">89</td><td class="r">392</td><td>added (already 100%, low yield)</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Change 2 · A new "background" class (open-set recognition)</h3>
+  <p>The decisive change. We added a 14th class, <code>background</code>, built from the non-Israeli foods
+    the model used to mistake for Israeli dishes. It lets the model answer <i>"this is not one of my
+    dishes"</i> instead of confidently forcing one of the 13. Crucially it is sourced <b>split-aligned</b>:
+    background train from the global <i>train</i> split, background val from global <i>val</i>, background
+    test from global <i>test</i>. So a background test image is held out from <i>both</i> models (the
+    global model never trained on it either), keeping every evaluation honest.</p>
+  <div class="flow">
+    <span class="box">non-Israeli food</span><span class="arr">→</span>
+    <span class="box teal">background</span><span class="arr">→</span>
+    <span class="box hl">Israeli confidence becomes trustworthy</span><span class="arr">→</span>
+    <span class="box">arbiter can rely on it</span><span class="arr">→</span>
+    <span class="box">fewer misroutes</span>
+  </div>
+  <p>The look-alikes were chosen from the data: across the test set, <b>132</b> of the global images the
+    arbiter misrouted to the Israeli expert were called <code>hummus</code> (creamy/beige foods like
+    risotto, chicken_curry, macaroni_and_cheese), with smaller "sinks" at samosa (fried/dough),
+    falafel (fried clusters), sufganiyah (donuts) and baklava (pastry). The <code>background</code> class
+    is weighted toward those confusers (25 global classes). It is kept modest (400 train / 75 val / 75
+    test) so it cannot swallow real dishes.</p>
+
+  <h3>Change 3 · Byte-for-byte dataset hygiene</h3>
+  <p>The whole 14-class set was hashed (SHA-256) before training. This surfaced and removed a real,
+    pre-existing problem.</p>
+  <table>
+    <thead><tr><th>Check</th><th>Result</th></tr></thead>
+    <tbody>
+      <tr><td>New images duplicating the existing set</td><td>0 (no contamination)</td></tr>
+      <tr><td>Cross-split leakage (same image in train and val/test)</td><td><b>27 groups found and removed</b> (mostly schnitzel, bourekas), 63 redundant copies quarantined</td></tr>
+      <tr><td>Cross-class duplicates (same image under two labels)</td><td>0</td></tr>
+      <tr><td>Final set</td><td>train 6,001 · val 1,032 · test 1,467 · 14 classes · 0 leakage</td></tr>
+    </tbody>
+  </table>
+  <div class="callout green"><b>Why this matters.</b> Leftover train/test leakage inflates the reported
+    accuracy. Removing it means the V2 numbers are honest, exactly the kind of rigor the reviewers asked
+    for. Removed copies are quarantined (reversible), not deleted.</div>
+
+  <h3>Training configuration and the reason for every parameter</h3>
+  <p>Full retrain from the ImageNet-pretrained <code>yolo11l-cls.pt</code> (a fresh head over a pretrained
+    backbone), <b>not</b> a fine-tune. Source: <code>scripts/training/train_israeli_food_v2.py</code>,
+    run <code>israeli_food_yolo11l_v2</code> (a new directory, so the V1 production weights are never
+    overwritten).</p>
+  <table>
+    <thead><tr><th>Parameter</th><th>Value</th><th>Why this value</th></tr></thead>
+    <tbody>
+      <tr><td>imgsz</td><td>224</td><td>Matches V1, the arbiter feature generator, and the live demo, so the Israeli model's confidences stay on the exact scale the arbiter was trained on. Also the backbone's native pretrain size.</td></tr>
+      <tr><td>batch</td><td>32</td><td>Largest power-of-2 that fits an 8 GB RTX 3060 Ti at 224 with AdamW + AMP, while keeping BatchNorm statistics stable (&ge;16).</td></tr>
+      <tr><td>epochs / patience</td><td>120 / 25</td><td>120 is only a budget; early stopping on val top-1 (patience 25) decides the end, and best.pt keeps the best epoch.</td></tr>
+      <tr><td>optimizer</td><td>AdamW</td><td>Robust default for fine-grained transfer; decoupled weight decay generalizes better than plain Adam.</td></tr>
+      <tr><td>lr0 / lrf</td><td>0.001 / 0.01</td><td>Standard AdamW transfer LR: high enough to adapt the new head, low enough to preserve pretrained features; cosine-decayed to lr0&times;0.01.</td></tr>
+      <tr><td>warmup_epochs</td><td>5</td><td>Ramps the LR so the fresh classifier head does not destabilize the backbone in the first epochs.</td></tr>
+      <tr><td>dropout</td><td>0.2</td><td>The Israeli set is small and imbalanced; dropout in the head fights overfitting.</td></tr>
+      <tr><td>label_smoothing</td><td>0.1</td><td><b>Key for this project.</b> Prevents 100% one-class outputs, giving better-calibrated confidences, which is exactly what the arbiter consumes and what the new background class needs to express honest uncertainty.</td></tr>
+      <tr><td>blur aug (custom)</td><td>p=0.35</td><td>Motion/defocus/Gaussian blur on 35% of batches, so the model is robust to a live webcam; 65% stay sharp.</td></tr>
+      <tr><td>hsv / degrees / scale / shear / perspective</td><td>see script</td><td>Lighting and pose invariance: food has no canonical orientation and the demo camera is angled.</td></tr>
+      <tr><td>flipud / fliplr</td><td>0.15 / 0.50</td><td>Food is largely orientation-agnostic, so vertical and horizontal flips are safe augmentations.</td></tr>
+      <tr><td>erasing / mixup / mosaic</td><td>0.40 / 0.10 / 0.0</td><td>Erasing and mixup regularize; mosaic is OFF because it is a detection trick that harms whole-image classification.</td></tr>
+      <tr><td>amp / cache</td><td>on / off</td><td>AMP ~2&times; speed at no accuracy cost at 224; cache off so the loaders rebuild from the changed data (no stale .cache).</td></tr>
+    </tbody>
+  </table>
+
+  <h3>How the background class feeds the arbiter (and why it is NOT a routing row)</h3>
+  <p>The background class is an <b>open-set / calibration device for the Israeli model</b>, not a routing
+    target. Two design rules keep it correct and leakage-free in the arbiter:</p>
+  <table>
+    <thead><tr><th>Decision</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td><b>Skip background as arbiter rows</b> (<code>generate_arbiter_dataset.py</code> excludes the
+        class)</td><td>The arbiter labels each row by domain (<code>y = domain=="israeli"</code>). Background
+        images are non-Israeli food, so adding them as Israeli rows would literally train the arbiter to send
+        global food to the Israeli expert. They are also copies of global images, which would otherwise
+        appear twice with contradictory targets. Excluding them removes both problems.</td></tr>
+      <tr><td><b>Add <code>i_p_background</code> as a feature</b> on every real held-out image</td>
+        <td>This is the signal in clean form: the Israeli model's probability that the image is "not one of
+        my dishes." A high value on a global image is a direct "route to global" cue. By the
+        data-processing inequality it adds information the old logit summaries did not carry.</td></tr>
+      <tr><td><b>Background prediction = "Israeli declines" -&gt; route global</b></td>
+        <td>This is exactly the intended behaviour: when the Israeli model shouts background, the arbiter
+        picks the global expert. It falls out of the feature automatically (high <code>i_p_background</code>
+        + low Israeli dish-confidence -&gt; global), with no contradictory labels.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout green"><b>Leakage-safe by construction.</b> Because background val/test are sourced
+    from the global model's own val/test, running the global model on them in the arbiter generator yields
+    honest (not memorised) confidences, and no image used to train either model is used to evaluate it.</div>
+
+  <h3>The mandatory pipeline after retraining</h3>
+  <div class="callout amber"><b>The arbiter must be regenerated.</b> Its features come from the Israeli
+    model's outputs, so a new model makes the old arbiter stale. The chain is non-negotiable:</div>
+  <pre>python scripts/training/train_israeli_food_v2.py        <span class="cm"># -> runs/israeli_food_yolo11l_v2</span>
+python scripts/arbiter/generate_arbiter_dataset.py     <span class="cm"># rebuild features with the new model</span>
+python scripts/arbiter/train_arbiter_xgb.py            <span class="cm"># retrain the arbiter (now includes the i_p_background feature)</span>
+python scripts/arbiter/evaluate_system.py              <span class="cm"># honest end-to-end re-evaluation</span></pre>
+
+  <h3>Honest expectation</h3>
+  <p>Two separate effects, neither of which raises the global model or the 88.4% oracle:</p>
+  <ul>
+    <li><b>More weak-class data</b> raises the Israeli model's own <i>ceiling</i> (the 92.3%).</li>
+    <li><b>The background class</b> lets the arbiter <i>realize</i> that ceiling by trusting Israeli
+      confidence, recovering routing-lost images (the ~410-image gap).</li>
+  </ul>
+  <p>We will report per-class accuracy, the routing recall/precision, and the threshold trade-off curve so
+    the gain is shown to be a measured operating point, not an arbitrary default.</p>
+  <div class="foot">CalEyeZ · Israeli Model V2 · status: dataset prepared and hashed (14 classes, 6,001 train / 1,032 val / 1,467 test, 0 leakage); arbiter wired for background (skip-row + i_p_background feature); model training in progress.</div>
+</section>
+
 <section class="tab" id="tab-future">
   <h2>System Limitations and Future Work (V2 Architecture)</h2>
 
@@ -1391,6 +1535,27 @@ new Chart(document.getElementById('tnSystem'),{type:'bar',data:{labels:['System 
 new Chart(document.getElementById('tnRouter'),{type:'doughnut',data:{labels:['Chose OLD (95%)','Chose NEW (5%)'],
   datasets:[{data:[15877,843],backgroundColor:['#f85149','#58a6ff'],borderColor:'#0d1117',borderWidth:2}]},
   options:{responsive:true,maintainAspectRatio:false,plugins:{title:{display:true,text:'Old router decisions: it defaulted',color:'#e6edf3'}}}});
+
+/* system accuracy by domain: grouped bars (baseline / system / oracle) with on-bar value labels */
+const barValueLabels={id:'barValueLabels',afterDatasetsDraw(chart){
+  const ctx=chart.ctx;ctx.save();ctx.font='bold 11px Segoe UI, sans-serif';ctx.textAlign='center';ctx.textBaseline='bottom';
+  chart.data.datasets.forEach((ds,di)=>{const meta=chart.getDatasetMeta(di);if(meta.hidden)return;
+    meta.data.forEach((bar,i)=>{const v=ds.data[i];if(v==null)return;
+      ctx.fillStyle=ds.backgroundColor;ctx.fillText(v.toFixed(1)+'%',bar.x,bar.y-3);});});
+  ctx.restore();}};
+new Chart(document.getElementById('sysDomain'),{type:'bar',
+  data:{labels:['Global domain','Israeli domain','Overall system'],
+    datasets:[
+      {label:'Always-global baseline',data:[88.2,0.0,78.0],backgroundColor:'#8b949e'},
+      {label:'Realized system',        data:[86.8,60.8,83.8],backgroundColor:'#3fb950'},
+      {label:'Oracle ceiling',         data:[88.2,92.3,88.7],backgroundColor:'#d29922'}]},
+  options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:18}},
+    plugins:{title:{display:true,text:'System accuracy by domain (%)',color:'#e6edf3',font:{size:15}},
+      legend:{labels:{color:'#e6edf3'}},
+      tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y.toFixed(1)+'%'}}},
+    scales:{y:{min:0,max:100,grid:GRID,ticks:{color:'#e6edf3',callback:v=>v+'%'},title:{display:true,text:'Top-1 accuracy',color:'#8b949e'}},
+            x:{grid:GRID,ticks:{color:'#e6edf3'}}}},
+  plugins:[barValueLabels]});
 
 /* ---------- CNN visualizer ---------- */
 let cnnInit=false, INPUT='circle', KERNEL='vert', N=16, scale=10, imgData=[];

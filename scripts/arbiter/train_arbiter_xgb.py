@@ -28,12 +28,18 @@ MODEL_OUT = ROOT / "scripts" / "arbiter" / "arbiter_xgb.json"
 ALPHA = 0.5  # domain-weight dial: scale_pos_weight = (n_neg/n_pos)**ALPHA
 
 BASE_FEATS = ([f"g_conf{k}" for k in range(1, 6)] + ["g_entropy", "g_margin"]
-              + [f"i_conf{k}" for k in range(1, 6)] + ["i_entropy", "i_margin"])
+              + [f"i_conf{k}" for k in range(1, 6)] + ["i_entropy", "i_margin"]
+              # i_p_background: the V2 Israeli model's probability that the image is NOT one of its
+              # dishes. High value = strong "route to global" signal. Backward compatible (0.0 if the
+              # arbiter_dataset was generated with a model lacking a background class).
+              + ["i_p_background"])
 
 
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
     """Interaction features (pure functions of the base signals; no label leakage)."""
     df = df.copy()
+    if "i_p_background" not in df.columns:        # older datasets (model had no background class)
+        df["i_p_background"] = 0.0
     df["conf_gap"]    = df["g_conf1"] - df["i_conf1"]          # global vs israeli top-1 conf
     df["conf_ratio"]  = df["g_conf1"] / (df["i_conf1"] + 1e-6)
     df["entropy_gap"] = df["i_entropy"] - df["g_entropy"]      # >0 => israeli more uncertain

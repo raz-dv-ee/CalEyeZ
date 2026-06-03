@@ -36,7 +36,14 @@ from ultralytics import YOLO
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 GLOBAL_W = ROOT / "runs" / "general_model_flattened" / "weights" / "best.pt"
-ISRAELI_W = ROOT / "runs" / "israeli_food_yolo11l" / "weights" / "best.pt"
+ISRAELI_W = ROOT / "runs" / "israeli_food_yolo11l_v2" / "weights" / "best.pt"  # V2: 13 dishes + 'background'
+
+# 'background' is an Israeli-model OPEN-SET / calibration class, NOT a routing domain. Its images are
+# copies of non-Israeli (global) food, so adding them as 'israeli' routing rows would teach the arbiter
+# to send global food to the Israeli expert (wrong). Instead we SKIP them as rows and expose the signal
+# as the i_p_background FEATURE (the Israeli model's background probability) on every real held-out image:
+# high i_p_background = "Israeli says not-mine" = route to global. That is the clean form of the idea.
+SKIP_CLASSES = {"background"}
 GLOBAL_DS = ROOT / "datasets" / "general_model_flattened"
 ISRAELI_DS = ROOT / "datasets" / "israeli-food-master"
 OUT = ROOT / "datasets" / "arbiter_dataset.csv"
@@ -56,6 +63,8 @@ def collect(ds_root: Path, domain: str) -> list[tuple[str, str, str]]:
         if not sdir.is_dir():
             continue
         for cls_dir in sorted(p for p in sdir.iterdir() if p.is_dir()):
+            if cls_dir.name in SKIP_CLASSES:        # background is a feature signal, not a routing row
+                continue
             for img in cls_dir.iterdir():
                 if img.suffix.lower() in IMG_EXTS:
                     out.append((str(img), domain, cls_dir.name))
@@ -65,6 +74,8 @@ def collect(ds_root: Path, domain: str) -> list[tuple[str, str, str]]:
 def predict_all(model: YOLO, paths: list[str], imgsz: int) -> list[dict]:
     """Run model over all paths; return per-image top-5 names/confs + entropy + margin."""
     names = model.names
+    # index of the 'background' class, if this model has one (the V2 Israeli model does; global does not).
+    bg_idx = next((k for k, v in names.items() if v == "background"), None)
     rows: list[dict] = []
     for i in range(0, len(paths), BATCH):
         chunk = paths[i:i + BATCH]
@@ -77,11 +88,13 @@ def predict_all(model: YOLO, paths: list[str], imgsz: int) -> list[dict]:
             full = np.clip(full, 1e-12, 1.0)
             entropy = float(-(full * np.log(full)).sum())
             margin = float(top5_conf[0] - top5_conf[1]) if len(top5_conf) > 1 else float(top5_conf[0])
+            p_bg = float(full[bg_idx]) if bg_idx is not None else 0.0   # P(background); 0 if no such class
             rows.append({
                 "top": [names[int(j)] for j in top5_idx],
                 "conf": top5_conf,
                 "entropy": entropy,
                 "margin": margin,
+                "p_bg": p_bg,
             })
         print(f"    {min(i + BATCH, len(paths))}/{len(paths)}", end="\r", flush=True)
     print()
@@ -122,7 +135,7 @@ def main() -> None:
               + [f"g_top{k}" for k in range(1, 6)] + [f"g_conf{k}" for k in range(1, 6)]
               + ["g_entropy", "g_margin", "g_correct"]
               + [f"i_top{k}" for k in range(1, 6)] + [f"i_conf{k}" for k in range(1, 6)]
-              + ["i_entropy", "i_margin", "i_correct", "winner"])
+              + ["i_entropy", "i_margin", "i_p_background", "i_correct", "winner"])
 
     n_gcorr = n_icorr = n_none = 0
     args.out.parent.mkdir(parents=True, exist_ok=True)
@@ -138,7 +151,7 @@ def main() -> None:
                    + g["top"] + [f"{c:.6f}" for c in g["conf"]]
                    + [f"{g['entropy']:.6f}", f"{g['margin']:.6f}", g_corr]
                    + ir["top"] + [f"{c:.6f}" for c in ir["conf"]]
-                   + [f"{ir['entropy']:.6f}", f"{ir['margin']:.6f}", i_corr, winner])
+                   + [f"{ir['entropy']:.6f}", f"{ir['margin']:.6f}", f"{ir['p_bg']:.6f}", i_corr, winner])
             w.writerow(row)
 
     print(f"\nWrote {len(items)} rows -> {args.out}")
