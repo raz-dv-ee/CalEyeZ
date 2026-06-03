@@ -534,11 +534,11 @@ model.<span class="fn">val</span>(data=<span class="st">"datasets/general_model_
     <span class="box">pick the expert</span>
   </div>
 
-  <h3 id="a-feat">The 19 features and their math</h3>
-  <p>The arbiter input is a 19-number vector: 7 numbers summarising the Global model's output, the same
-    7 for the Israeli model, and 5 interaction terms that compare the two. Below, <code>p_k</code> is the
-    k-th highest softmax probability and <code>K</code> the number of classes. The "g_" prefix is the
-    Global model, "i_" the Israeli model.</p>
+  <h3 id="a-feat">The 20 features and their math</h3>
+  <p>The arbiter input is a 20-number vector: 7 numbers summarising the Global model's output, 8 for the
+    Israeli model (V2 adds <code>i_p_background</code>), and 5 interaction terms that compare the two. Below,
+    <code>p_k</code> is the k-th highest softmax probability and <code>K</code> the number of classes. The
+    "g_" prefix is the Global model, "i_" the Israeli model.</p>
   <table>
     <thead><tr><th>#</th><th>Feature</th><th>Meaning</th><th>Formula</th></tr></thead>
     <tbody>
@@ -548,19 +548,21 @@ model.<span class="fn">val</span>(data=<span class="st">"datasets/general_model_
       <tr><td>8-12</td><td><code>i_conf1 … i_conf5</code></td><td>Israeli model's top-5 class probabilities</td><td>top-5 of softmax(israeli)</td></tr>
       <tr><td>13</td><td><code>i_entropy</code></td><td>Spread of the Israeli guess</td><td><code>−Σ p_i · ln(p_i)</code></td></tr>
       <tr><td>14</td><td><code>i_margin</code></td><td>Decisiveness of the Israeli top guess</td><td><code>i_conf1 − i_conf2</code></td></tr>
-      <tr><td>15</td><td><code>conf_gap</code></td><td>Which expert is more confident at the top</td><td><code>g_conf1 − i_conf1</code></td></tr>
-      <tr><td>16</td><td><code>conf_ratio</code></td><td>Relative top-1 confidence (scale-free)</td><td><code>g_conf1 / (i_conf1 + 1e-6)</code></td></tr>
-      <tr><td>17</td><td><code>entropy_gap</code></td><td>Who is more uncertain (&gt;0 = Israeli more uncertain)</td><td><code>i_entropy − g_entropy</code></td></tr>
-      <tr><td>18</td><td><code>margin_gap</code></td><td>Whose decision is sharper</td><td><code>g_margin − i_margin</code></td></tr>
-      <tr><td>19</td><td><code>both_unsure</code></td><td>Flag: neither expert is confident</td><td><code>1 if (g_conf1&lt;0.5 and i_conf1&lt;0.5) else 0</code></td></tr>
+      <tr><td>15</td><td><code>i_p_background</code> <b>(V2)</b></td><td>Israeli model's "not one of my dishes" probability. High = route to global. <b>Now the #1 feature by gain (0.289).</b></td><td><code>softmax(israeli)[background]</code></td></tr>
+      <tr><td>16</td><td><code>conf_gap</code></td><td>Which expert is more confident at the top</td><td><code>g_conf1 − i_conf1</code></td></tr>
+      <tr><td>17</td><td><code>conf_ratio</code></td><td>Relative top-1 confidence (scale-free)</td><td><code>g_conf1 / (i_conf1 + 1e-6)</code></td></tr>
+      <tr><td>18</td><td><code>entropy_gap</code></td><td>Who is more uncertain (&gt;0 = Israeli more uncertain)</td><td><code>i_entropy − g_entropy</code></td></tr>
+      <tr><td>19</td><td><code>margin_gap</code></td><td>Whose decision is sharper</td><td><code>g_margin − i_margin</code></td></tr>
+      <tr><td>20</td><td><code>both_unsure</code></td><td>Flag: neither expert is confident</td><td><code>1 if (g_conf1&lt;0.5 and i_conf1&lt;0.5) else 0</code></td></tr>
     </tbody>
   </table>
-  <div class="callout"><b>The decisive five are the interaction terms (15-19).</b> They encode
-    <i>relative</i> behaviour, which is what actually separates the domains. <code>conf_gap</code>,
-    <code>conf_ratio</code> and <code>entropy_gap</code> rank highest by importance: the arbiter trusts
-    the Israeli model when it is confident <i>and</i> the Global model is comparatively uncertain, not
-    whenever the Israeli model alone fires high. That is why it survives the Israeli model's
-    out-of-domain overconfidence.</div>
+  <div class="callout"><b>In V2 the top feature is <code>i_p_background</code> (gain 0.289), then the interaction
+    terms.</b> They encode <i>relative</i> behaviour, which is what actually separates the domains.
+    <code>i_p_background</code>, <code>entropy_gap</code> and <code>conf_gap</code> rank highest by
+    importance: the arbiter trusts the Israeli model when it is confident, the Global model is comparatively
+    uncertain, <i>and</i> the Israeli model is not signalling "background". That open-set signal is exactly
+    why V2 survives the Israeli model's out-of-domain overconfidence and lifted routing AUC from 0.933 to
+    0.973.</div>
 
   <h4>Seeing the math live (per image)</h4>
   <p>The demo does not just print a probability. For each capture it computes the exact
@@ -1021,7 +1023,7 @@ raw = deque(maxlen=<span class="st">5</span>)
     <span class="box">normalise 0..1</span><span class="arr">→</span>
     <span class="box hl">Global 132</span><span class="arr">+</span>
     <span class="box teal">Israeli 13</span><span class="arr">→</span>
-    <span class="box">19 features</span><span class="arr">→</span>
+    <span class="box">20 features</span><span class="arr">→</span>
     <span class="box amber">arbiter P(israeli)</span><span class="arr">→</span>
     <span class="box">expert pick</span><span class="arr">→</span>
     <span class="box purple">gate? Gemini</span><span class="arr">→</span>
@@ -1090,19 +1092,23 @@ raw = deque(maxlen=<span class="st">5</span>)
     itself a lesson from testing.</div>
 
   <h3 id="d-arb">Wiring the real arbiter (not a re-implementation)</h3>
-  <p>The demo computes the <b>same 19 features</b> the arbiter was trained on, in the same order, and
-    loads the exact saved model. Nothing is approximated.</p>
+  <p>The demo runs the <b>V2 Israeli model</b> (14 classes: the 13 dishes plus <code>background</code>) and
+    computes the <b>same 20 features</b> the arbiter was trained on, in the same order, then loads the exact
+    saved model. The 20th feature is <code>i_p_background</code>, the Israeli model's "this is not one of my
+    dishes" probability, which is now the arbiter's single most important feature.</p>
   <pre>g = expert(global_model, roi, imgsz=<span class="st">320</span>)   <span class="cm"># top-5 conf, entropy, margin</span>
-i = expert(israeli_model, roi, imgsz=<span class="st">224</span>)
+i = expert(israeli_model_v2, roi, imgsz=<span class="st">224</span>) <span class="cm"># also reads P(background)</span>
 X = [g_conf1..5, g_entropy, g_margin,
-     i_conf1..5, i_entropy, i_margin,
+     i_conf1..5, i_entropy, i_margin, <span class="cm">i_p_background,</span>
      conf_gap, conf_ratio, entropy_gap, margin_gap, both_unsure]
-p_israeli = arbiter.<span class="fn">predict_proba</span>(X)[<span class="st">1</span>]     <span class="cm"># scripts/arbiter/arbiter_xgb.json</span>
+p_israeli = arbiter.<span class="fn">predict_proba</span>(X)[<span class="st">1</span>]     <span class="cm"># scripts/arbiter/arbiter_xgb.json (V2, 20 feats)</span>
 route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
   <div class="callout green"><b>Why this matters.</b> Because the features and weights are identical to
-    training, the live router behaves exactly like the 93.4%-accurate arbiter in the evaluation, not a
-    look-alike. The decision panel in the UI shows both experts' top guess and the live P(israeli), so
-    the routing is visible, not hidden.</div>
+    training, the live router behaves exactly like the <b>97.3%-AUC</b> V2 arbiter in the evaluation, not a
+    look-alike. If the Israeli model is routed to but its top guess is <code>background</code>, the demo
+    treats that as an abstain and falls back (never showing "background" as a food). The decision panel
+    shows both experts' top guess, the live P(israeli), and the per-feature contributions, so routing is
+    visible, not hidden.</div>
 
   <h3 id="d-fall">The Gemini fallback: covering the cases no expert can win</h3>
   <p>About 11% of system errors are images where <b>both experts are wrong</b> (the both-wrong pool from
@@ -1112,8 +1118,10 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
   <table>
     <thead><tr><th>Trigger</th><th>Condition</th><th>Meaning</th></tr></thead>
     <tbody>
-      <tr><td>Weak chosen expert</td><td>chosen top-1 below its gate (0.45 global, 0.60 Israeli)</td><td>The selected model is not confident enough to trust</td></tr>
+      <tr><td>Weak chosen expert</td><td>chosen top-1 below its gate (0.55 global, 0.60 Israeli)</td><td>The selected model is not confident enough to trust</td></tr>
       <tr><td>Both experts unsure</td><td>both top-1 below 0.50 (<code>both_unsure</code>)</td><td>The input is likely out of both label spaces</td></tr>
+      <tr><td>Arbiter undecided</td><td>P(israeli) within 0.15 of 0.50 (<code>ARBITER_BAND</code>)</td><td>The router cannot confidently pick an expert</td></tr>
+      <tr><td>Israeli abstains</td><td>routed to Israeli but its top-1 is <code>background</code></td><td>The Israeli model says "not my dish" -> defer instead of forcing a label</td></tr>
     </tbody>
   </table>
   <p>The two gates differ on purpose: the Global model spreads probability over 132 classes, so a modest
@@ -1363,7 +1371,57 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     confidence via the open-set background class), not from moving the decision threshold. The arbiter's top
     feature by gain is now <code>i_p_background</code> (0.289), well ahead of every logit summary.</div>
 
-  <div class="foot">CalEyeZ · Israeli Model V2 · status: COMPLETE. Model retrained (best ep112), arbiter regenerated + retrained with i_p_background, full system eval done. System 83.8% to 86.2%, Israeli domain 60.8% to 78.0%.</div>
+  <h3>V2 training curves and confusion matrix</h3>
+  <div class="two">
+    <div><img class="fig" src="assets/v2_israeli_curves.png" alt="V2 training curves">
+      <figcaption>V2 per-epoch: train loss, val loss, top-1 and top-5 accuracy (120 epochs).</figcaption></div>
+    <div><img class="fig" src="assets/v2_israeli_confusion.png" alt="V2 normalized confusion matrix (val)">
+      <figcaption>V2 normalized confusion matrix on the validation set (14 classes).</figcaption></div>
+  </div>
+
+  <h4 id="v2-loss">Reading the train-loss vs val-loss graph (what it actually means)</h4>
+  <p>These two curves are the single most important diagnostic in training, and they tell a precise story.
+    Both are the <b>cross-entropy loss</b> (with label smoothing): a number that is small when the model puts
+    high probability on the correct class and large when it is wrong or unsure. They are computed on two
+    <i>different</i> sets of images, and the comparison between them is what matters.</p>
+  <ul>
+    <li><b>Train loss</b> (top-left) is measured on the images the model is actively learning from. It falls
+      steadily from about 1.6 toward nearly 0. That only says the model is successfully <i>memorising and
+      fitting</i> its training data, it says nothing on its own about whether it learned anything useful.</li>
+    <li><b>Validation loss</b> (top-right) is measured on held-out images the model never trains on. It is
+      the honest signal of <b>generalisation</b>. Here it drops sharply for the first ~20 epochs, then
+      <b>plateaus around 0.5 and stays flat</b> for the remaining 100 epochs.</li>
+  </ul>
+  <div class="callout"><b>The gap between the two curves is the story.</b> Train loss heads to 0 while val
+    loss settles at ~0.5, so a gap opens up. A <i>gap is normal and expected</i>: any model fits data it has
+    seen better than data it has not. What you watch for is the <b>shape of the val curve</b>:
+    <ul>
+      <li><b>Healthy (what we have):</b> val loss falls, then flattens. The model keeps getting better on
+        train without getting <i>worse</i> on unseen data. The flat val loss plus still-rising val accuracy
+        (bottom-left, to ~0.89) means the extra epochs are harmless.</li>
+      <li><b>Harmful overfitting (what we do NOT have):</b> val loss would bottom out and then <b>turn back
+        upward</b> while train loss keeps falling. That U-shape is the signal to stop earlier. Our val loss
+        never turns up, so the model is not overfitting in the damaging sense.</li>
+    </ul></div>
+  <p>This is exactly why we do not deploy the last epoch: <code>best.pt</code> is saved at the epoch with the
+    highest <b>validation top-1</b> (epoch 112), not the lowest train loss. Selecting on the held-out metric,
+    not the training metric, is what guarantees the shipped model is the best <i>generaliser</i>, and the
+    <code>patience=25</code> early-stopping rule exists to cut the run if val ever did start to degrade. The
+    jagged look of the val curves is ordinary epoch-to-epoch noise on a finite validation set, not instability;
+    the dotted "smooth" line is just a moving average to make the trend readable.</p>
+
+  <h4>What the confusion matrix shows</h4>
+  <p>Each cell is the fraction of images of a true class (column) that the model predicted as a given class
+    (row); a perfect model is a pure diagonal. V2's diagonal is strong across all 13 real dishes (0.85 to
+    1.00: bourekas and jachnun at 1.00, sabich 0.94, malawach 0.93). The one deliberately weaker cell is
+    <b>background at 0.64</b>: it is a broad catch-all of many non-Israeli foods, so it is the hardest class,
+    and about a third of background images are still read as a look-alike dish (creamy foods leak toward
+    hummus, fried toward samosa/falafel). That residual is acceptable because the arbiter does not need
+    background to be the top-1 guess, it uses the <i>probability</i> <code>i_p_background</code>, which is
+    high on those foods even when another class edges it out, and that is enough to route them to the global
+    expert.</p>
+
+  <div class="foot">CalEyeZ · Israeli Model V2 · status: COMPLETE and ADOPTED. Model retrained (best ep112, val top-1 88.9% on 14 classes), arbiter regenerated + retrained with i_p_background (now its #1 feature), full system eval done, demo + System Analysis updated to V2. System 83.8% to 86.2%, Israeli domain 60.8% to 78.0%.</div>
 </section>
 
 <section class="tab" id="tab-future">
