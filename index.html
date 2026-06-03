@@ -1602,7 +1602,7 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
   <div class="two">
     <div><img class="fig" src="assets/fail_apple_raw.jpg" alt="Apple with coin fiducial">
       <figcaption>Input: a single top-down photo of an apple with the 1 shekel coin as the scale reference.</figcaption></div>
-    <div><img class="fig" src="assets/fail_apple_midas.png" alt="MiDaS depth volume pipeline">
+    <div><img class="fig" src="assets/fail_apple_midas.jpg" alt="MiDaS depth volume pipeline">
       <figcaption>MiDaS depth map relative to the table, integrated over the apple mask. Coin gives px to cm
         (pixel size 0.0101 cm). Raw volume 722 cm&sup3; collapses to a <b>final 139.3 cm&sup3;</b> after
         height calibration.</figcaption></div>
@@ -1611,13 +1611,11 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     food's area gives a volume. It got the apple to <b>139.3 cm&sup3;</b>.</p>
 
   <h4>Method 2 · Shadow geometry</h4>
-  <div class="two">
-    <div><img class="fig" src="assets/fail_can_raw.jpg" alt="Can with hard shadow and coin">
-      <figcaption>Input: a hard, single-source shadow plus the coin fiducial. The method needs both.</figcaption></div>
-    <div><img class="fig" src="assets/fail_can_shadow.png" alt="Shadow-geometry volume pipeline">
-      <figcaption>Coin to px/cm (50.34), shadow length 10.88 cm, height = L&middot;tan(45&deg;) = 10.88 cm,
-        perspective-corrected top area 47.75 cm&sup2; gives <b>volume 519.67 cm&sup3;</b>.</figcaption></div>
-  </div>
+  <img class="fig" src="assets/fail_can_shadow.jpg" alt="Shadow-geometry volume pipeline">
+  <figcaption>The panels show the original capture (with the coin fiducial and a hard single-source shadow),
+    the detected shadow and can masks, and the measurements: coin to px/cm (50.34), shadow length 10.88 cm,
+    height = L&middot;tan(45&deg;) = 10.88 cm, perspective-corrected top area 47.75 cm&sup2;, giving
+    <b>volume 519.67 cm&sup3;</b>.</figcaption>
   <p>With a 45&deg; light, an object's height equals the length of its cast shadow. Multiplying the
     perspective-corrected top area by that height gives a volume without any depth network, purely geometry.</p>
 
