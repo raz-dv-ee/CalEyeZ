@@ -132,6 +132,7 @@
     <button data-tab="demo">Live Demo</button>
     <button data-tab="feedback">Reviewer Response</button>
     <button data-tab="future">Limitations &amp; V2</button>
+    <button data-tab="rejected">Tried &amp; Rejected</button>
   </div>
 </header>
 
@@ -1577,6 +1578,98 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     path to <i>raise</i> the oracle beyond 88.4%. V2 commits to both axes so that the two are not
     confused.</div>
 
+  <div class="foot">CalEyeZ · single living project document · Raz Dvora &amp; Roi Tzur · Shenkar.</div>
+</section>
+
+<!-- ============ TRIED & REJECTED ============ -->
+<section class="tab" id="tab-rejected">
+  <h2>Approaches We Tried and Rejected</h2>
+  <p>Before settling on a BLE gravimetric scale for weight, we built and measured two other ways to get the
+    mass of the food. Both worked in the lab and both were rejected for concrete, measured reasons. Keeping
+    this record is the honest engineering story, and it is the direct answer to "why a scale and not just the
+    camera?"</p>
+  <div class="callout"><b>The thread that connects them.</b> A camera is excellent at telling you <i>what</i>
+    a food is. It is a poor instrument for <i>how much</i> it weighs. Every vision route to mass goes through
+    a lossy chain (pixels to volume to density to grams, or a digital readout through OCR), and each link adds
+    error and fragility. The winning move was to stop inferring and <b>measure the mass at the source</b>.</p>
+
+  <h3>Approach A · Estimating weight from a single photo (volume to mass)</h3>
+  <p>The idea: put a coin of known size in frame as a <b>fiducial</b> (an Israeli 1 shekel coin, 18 mm), use
+    it to convert pixels to centimetres, recover the food's <b>volume</b>, then multiply by density to get
+    grams. We implemented two independent volume methods and validated both against a gold standard.</p>
+
+  <h4>Method 1 · Monocular depth (MiDaS)</h4>
+  <div class="two">
+    <div><img class="fig" src="assets/fail_apple_raw.jpg" alt="Apple with coin fiducial">
+      <figcaption>Input: a single top-down photo of an apple with the 1 shekel coin as the scale reference.</figcaption></div>
+    <div><img class="fig" src="assets/fail_apple_midas.png" alt="MiDaS depth volume pipeline">
+      <figcaption>MiDaS depth map relative to the table, integrated over the apple mask. Coin gives px to cm
+        (pixel size 0.0101 cm). Raw volume 722 cm&sup3; collapses to a <b>final 139.3 cm&sup3;</b> after
+        height calibration.</figcaption></div>
+  </div>
+  <p>A neural depth network estimates the height of every pixel above the table; summing height over the
+    food's area gives a volume. It got the apple to <b>139.3 cm&sup3;</b>.</p>
+
+  <h4>Method 2 · Shadow geometry</h4>
+  <div class="two">
+    <div><img class="fig" src="assets/fail_can_raw.jpg" alt="Can with hard shadow and coin">
+      <figcaption>Input: a hard, single-source shadow plus the coin fiducial. The method needs both.</figcaption></div>
+    <div><img class="fig" src="assets/fail_can_shadow.png" alt="Shadow-geometry volume pipeline">
+      <figcaption>Coin to px/cm (50.34), shadow length 10.88 cm, height = L&middot;tan(45&deg;) = 10.88 cm,
+        perspective-corrected top area 47.75 cm&sup2; gives <b>volume 519.67 cm&sup3;</b>.</figcaption></div>
+  </div>
+  <p>With a 45&deg; light, an object's height equals the length of its cast shadow. Multiplying the
+    perspective-corrected top area by that height gives a volume without any depth network, purely geometry.</p>
+
+  <h4>Validation: Archimedes water displacement (the gold standard)</h4>
+  <div class="two">
+    <div><img class="fig" src="assets/fail_archimedes.jpg" alt="Apple submerged in a measuring cup">
+      <figcaption>The same apple fully submerged. The water it displaces is its true volume, here about
+        150 cm&sup3;, so MiDaS (139.3) was within roughly 7 percent.</figcaption></div>
+    <div class="callout green"><b>The methods were actually accurate.</b> Against displacement, MiDaS landed
+      within about 7 percent. So the failure below is <i>not</i> that we could not measure volume, we could.
+      The failure is what comes after volume.</div>
+  </div>
+
+  <div class="callout amber"><b>Why we rejected it anyway.</b>
+    <ul style="margin:8px 0 0">
+      <li><b>Volume is not mass.</b> Converting cm&sup3; to grams needs <b>density</b>, and density varies
+        wildly by food (a cup of salad versus a cup of peanut butter). At inference the density is unknown,
+        so even a perfect volume gives a wrong weight. This is the fatal flaw.</li>
+      <li><b>It only worked in controlled conditions.</b> It required a coin in frame, a single clean object,
+        a plain background, and (for the shadow method) a hard directional light. A real plate of mixed food
+        breaks all of these.</li>
+      <li><b>Errors compound.</b> Fiducial detection, segmentation, depth or shadow estimate, then a density
+        guess, each multiplies the next. The apple floated and had to be forced under for even the validation.</li>
+    </ul></div>
+
+  <h3>Approach B · Reading the kitchen scale's display by OCR</h3>
+  <p>The next idea kept a real scale but avoided pairing it electronically: point the camera at the scale's
+    <b>7-segment LCD</b> and read the number with OCR (<code>pytesseract</code>, in
+    <code>food_app.py</code> / <code>new_gui_with_ocr.py</code>).</p>
+  <div class="callout amber"><b>Why we rejected it.</b> Seven-segment OCR is brittle: general OCR engines are
+    trained on normal fonts, not segmented digits; the LCD glares and washes out under room light; a slight
+    camera angle merges or splits segments; and the value flickers as the reading settles, so a single frame
+    is often wrong. It also still demanded that the display sit cleanly in the camera's view. We were adding a
+    fragile vision problem on top of a device that already knew the answer digitally.</p>
+
+  <h3>The decision: read mass at the source over BLE</h3>
+  <p>Both rejected routes share one mistake: inferring a physical quantity the hardware already measures
+    exactly. The scale computes grams internally, so instead of photographing its screen we
+    <b>reverse-engineered its Bluetooth Low Energy protocol</b> and read the mass directly (see the BLE Scale
+    tab). No density assumption, no fiducial, no lighting or glare dependence, gram-accurate every time.</p>
+  <table>
+    <thead><tr><th>Approach</th><th>Lab result</th><th>Why rejected</th></tr></thead>
+    <tbody>
+      <tr><td>MiDaS depth volume</td><td>apple 139.3 cm&sup3; (~7% vs Archimedes)</td><td>volume needs density to become grams; controlled-conditions only</td></tr>
+      <tr><td>Shadow geometry volume</td><td>can 519.67 cm&sup3;</td><td>same density problem; needs a coin and a hard shadow</td></tr>
+      <tr><td>7-segment OCR of the scale</td><td>worked on clean frames</td><td>glare, angle, flicker, segmented-font OCR is unreliable</td></tr>
+      <tr><td><b>BLE gravimetric (chosen)</b></td><td>exact grams at the source</td><td><b>robust, no inference, no assumptions</b></td></tr>
+    </tbody>
+  </table>
+  <div class="callout green"><b>The principle, in one line.</b> Use the camera for identity, never for mass.
+    When a physical quantity is already measured by the hardware, read it directly rather than inferring it
+    through a lossy proxy. That single decision is what made the weight side of the system reliable.</div>
   <div class="foot">CalEyeZ · single living project document · Raz Dvora &amp; Roi Tzur · Shenkar.</div>
 </section>
 
