@@ -763,49 +763,54 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
   <h3>Accuracy by domain</h3>
   <p><b>How to read this chart.</b> Each bar is the system's top-1 accuracy on a slice of the test set.
     "Global domain" = international foods, "Israeli domain" = the 13 local dishes, "Overall system" =
-    everything combined. The two dashed lines are reference levels: the lower one is the always-global
-    baseline (78.0%, what you get without an arbiter) and the upper one is the oracle ceiling (88.7%, a
-    perfect arbiter). The overall bar sitting at 83.8%, between those lines, is the real arbiter's
-    contribution. Israeli is lower (60.8%) because those dishes are the hardest to route.</p>
+    everything combined. The reference levels are the always-global baseline (77.4%, what you get without
+    an arbiter) and the oracle ceiling (88.8%, a perfect arbiter). The overall system at 86.2%, between
+    those, is the real arbiter's contribution. Israeli is lower (77.9%) because those dishes are the
+    hardest to route, though V2 lifted it sharply from the old 60.8%.</p>
 
-  <h4>The numbers behind the bars (test split, 11,265 images)</h4>
+  <div class="callout green"><b>These are the V2 numbers.</b> After the Israeli Model V2 retrain (open-set
+    background class + the <code>i_p_background</code> arbiter feature), the system rose from 83.8% to
+    <b>86.2%</b> and the Israeli domain from 60.8% to <b>77.9%</b>. See the Israeli Model V2 tab for the
+    full before/after. Source: <code>datasets/system_evaluation.csv</code> (regenerated with V2).</div>
+
+  <h4>The numbers behind the bars (test split, 11,352 images)</h4>
   <table>
     <thead><tr><th>Slice</th><th class="r">Images</th><th class="r">System correct</th><th class="r">System acc</th><th class="r">Always-global</th><th class="r">Oracle</th></tr></thead>
     <tbody>
-      <tr><td>Global domain</td><td class="r">9,960</td><td class="r">8,641</td><td class="r">86.8%</td><td class="r">88.2%</td><td class="r">88.2%</td></tr>
-      <tr><td>Israeli domain</td><td class="r">1,305</td><td class="r">794</td><td class="r">60.8%</td><td class="r">0.0%</td><td class="r">92.3%</td></tr>
-      <tr><td>Overall system</td><td class="r">11,265</td><td class="r">9,435</td><td class="r">83.8%</td><td class="r">78.0%</td><td class="r">88.7%</td></tr>
+      <tr><td>Global domain</td><td class="r">9,960</td><td class="r">8,695</td><td class="r">87.3%</td><td class="r">88.2%</td><td class="r">88.2%</td></tr>
+      <tr><td>Israeli domain</td><td class="r">1,392</td><td class="r">1,084</td><td class="r">77.9%</td><td class="r">0.0%</td><td class="r">93.2%</td></tr>
+      <tr><td>Overall system</td><td class="r">11,352</td><td class="r">9,779</td><td class="r">86.2%</td><td class="r">77.4%</td><td class="r">88.8%</td></tr>
     </tbody>
   </table>
   <p><b>How the math works.</b> Each bar is simply correct images divided by total images for that slice:</p>
-  <pre>Global   : 8,641 / 9,960  = 86.8%
-Israeli  :   794 / 1,305  = 60.8%
-Overall  : 9,435 / 11,265 = 83.8%   (= (8,641 + 794) / (9,960 + 1,305))
+  <pre>Global   : 8,695 / 9,960  = 87.3%
+Israeli  : 1,084 / 1,392  = 77.9%
+Overall  : 9,779 / 11,352 = 86.2%   (= (8,695 + 1,084) / (9,960 + 1,392))
 
-Always-global baseline : 8,784 / 11,265 = 78.0%   (global model alone on every image;
-                                                    it scores 0 of 1,305 Israeli images)
-Oracle ceiling         : 9,988 / 11,265 = 88.7%   (= 8,784 global + 1,204 Israeli that
+Always-global baseline : 8,784 / 11,352 = 77.4%   (global model alone on every image;
+                                                    it scores 0 of 1,392 Israeli images)
+Oracle ceiling         : 10,081 / 11,352 = 88.8%  (= 8,784 global + 1,297 Israeli that
                                                     at least one expert got right)</pre>
   <div class="callout"><b>Why the mix is mostly global.</b> The test split holds <b>9,960</b> global
-    images and <b>1,305</b> Israeli images (about 88% / 12%). Because Israeli is the smaller and harder
-    slice, its 60.8% pulls the overall number down only modestly, from the global 86.8% to 83.8%. The
+    images and <b>1,392</b> Israeli images (about 88% / 12%). Because Israeli is the smaller and harder
+    slice, its 77.9% pulls the overall number down only modestly, from the global 87.3% to 86.2%. The
     always-global baseline is exactly the global model used alone: it gets 8,784 of the 9,960 global
-    images but 0 of the 1,305 Israeli images, which is why adding the Israeli expert plus the arbiter
-    lifts the system by 5.78 points (78.0% to 83.8%). Source: <code>datasets/system_evaluation.csv</code>.</div>
+    images but 0 of the 1,392 Israeli images, which is why adding the Israeli expert plus the arbiter
+    lifts the system by 8.8 points (77.4% to 86.2%). Source: <code>datasets/system_evaluation.csv</code>.</div>
   <div class="chartwrap"><canvas id="sysDomain"></canvas></div>
   <p class="cap">For each domain, three bars: the <b>always-global baseline</b> (the old global model used
     alone), the <b>realized system</b> (global + Israeli experts + arbiter), and the <b>oracle ceiling</b>
     (the best either expert could do). The story is visible at a glance: on the Israeli slice the baseline
     is 0% (the global model knows no Israeli dishes), so the Israeli expert plus the arbiter is what creates
-    the 60.8%; on the global slice the system pays a tiny 1.4-point cost (86.8% vs 88.2%) for occasionally
-    misrouting; overall the system beats the baseline by 5.8 points and sits 4.9 points below the oracle.</p>
+    the 77.9%; on the global slice the system pays a tiny 0.9-point cost (87.3% vs 88.2%) for occasionally
+    misrouting; overall the system beats the baseline by 8.8 points and sits 2.6 points below the oracle.</p>
   <div class="two">
     <div><img class="fig" src="assets/sys_3_confusions.png" alt="Top confusions"><figcaption>Most common system confusions, true → predicted.</figcaption></div>
     <div class="callout"><b>What still limits the overall number.</b> The gap from the green system bars up
       to the gold oracle line is the <b>routing error</b> (a correct expert existed but was not chosen),
-      worth about 4.9 points; the gap from the oracle up to 100% is the <b>both-experts-wrong</b> pool, which
-      no router can fix. The Israeli domain has the largest oracle gap (60.8% to 92.3%), so it is where a
-      better arbiter would help most.</div>
+      worth about 2.6 points; the gap from the oracle up to 100% is the <b>both-experts-wrong</b> pool, which
+      no router can fix. The Israeli domain still has the largest oracle gap (77.9% to 93.2%), so it remains
+      where a better arbiter would help most, but V2 already closed most of the old 60.8% to 92.3% gap.</div>
   </div>
 
   <h3>How decisively the arbiter separates the two domains</h3>
@@ -1580,9 +1585,9 @@ const barValueLabels={id:'barValueLabels',afterDatasetsDraw(chart){
 new Chart(document.getElementById('sysDomain'),{type:'bar',
   data:{labels:['Global domain','Israeli domain','Overall system'],
     datasets:[
-      {label:'Always-global baseline',data:[88.2,0.0,78.0],backgroundColor:'#8b949e'},
-      {label:'Realized system',        data:[86.8,60.8,83.8],backgroundColor:'#3fb950'},
-      {label:'Oracle ceiling',         data:[88.2,92.3,88.7],backgroundColor:'#d29922'}]},
+      {label:'Always-global baseline',data:[88.2,0.0,77.4],backgroundColor:'#8b949e'},
+      {label:'Realized system (V2)',   data:[87.3,77.9,86.2],backgroundColor:'#3fb950'},
+      {label:'Oracle ceiling',         data:[88.2,93.2,88.8],backgroundColor:'#d29922'}]},
   options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:18}},
     plugins:{title:{display:true,text:'System accuracy by domain (%)',color:'#e6edf3',font:{size:15}},
       legend:{labels:{color:'#e6edf3'}},

@@ -71,7 +71,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 
 GLOBAL_W = os.path.join(ROOT, "runs", "general_model_flattened", "weights", "best.pt")
-ISRAELI_W = os.path.join(ROOT, "runs", "israeli_food_yolo11l", "weights", "best.pt")
+ISRAELI_W = os.path.join(ROOT, "runs", "israeli_food_yolo11l_v2", "weights", "best.pt")  # V2: 13 dishes + background
 ARBITER_J = os.path.join(ROOT, "scripts", "arbiter", "arbiter_xgb.json")
 
 GLOBAL_IMGSZ = 320            # matches how the global model was trained / the arbiter dataset
@@ -79,13 +79,16 @@ ISRAELI_IMGSZ = 224          # matches how the Israeli model was trained
 ROI_FRAC = 0.60              # central square fraction used as the food region
 
 # Confidence gate -> Gemini fallback. These target the "both models wrong" pool (~11% of images).
-GATE_GLOBAL = 0.45           # global model is broad (132 cls): a modest top-1 is still trustworthy
+GATE_GLOBAL = 0.55           # global model is broad (132 cls); raised so borderline guesses auto-defer to Gemini
 GATE_ISRAELI = 0.60          # Israeli model is narrow (13 cls): demand a higher top-1
 BOTH_UNSURE = 0.50           # if BOTH experts' top-1 < this, treat as out-of-distribution -> Gemini
+ARBITER_BAND = 0.15          # if |P(israeli) - 0.5| < this, the arbiter cannot decide which expert -> Gemini
 
-# Keys are read from the environment so they are not committed. Fallbacks keep the demo runnable.
-USDA_API_KEY = os.environ.get("USDA_API_KEY", "").strip()
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
+# Keys: read from the environment first; the literal is a fallback so the demo runs out of the box.
+# WARNING: these literals are real secrets. Do NOT commit/push this file with them, and rotate the
+# keys before sharing the repo. Prefer setting USDA_API_KEY / GEMINI_API_KEY in the environment.
+USDA_API_KEY = os.environ.get("USDA_API_KEY", "YOUR_USDA_API_KEY_HERE").strip()
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY_HERE").strip()
 
 LOG_FILE = os.path.join(ROOT, "nutrition_log.csv")
 NOTIFY_UUID = "0000ffb2-0000-1000-8000-00805f9b34fb"   # SWAN scale notify characteristic
@@ -104,8 +107,10 @@ BG, PANEL, CARD, INK, MUT = "#0d1117", "#161b22", "#1c2230", "#e6edf3", "#8b949e
 ACCENT, GREEN, AMBER, RED, TEAL, PURPLE = "#58a6ff", "#3fb950", "#d29922", "#f85149", "#39d0c4", "#bc8cff"
 
 # 19 arbiter features, in the exact training order (scripts/arbiter/train_arbiter_xgb.py)
+# 20 arbiter features, EXACT training order (scripts/arbiter/train_arbiter_xgb.py): note i_p_background
+# sits right after i_margin, before the interaction terms.
 FEATS = ([f"g_conf{k}" for k in range(1, 6)] + ["g_entropy", "g_margin"]
-         + [f"i_conf{k}" for k in range(1, 6)] + ["i_entropy", "i_margin"]
+         + [f"i_conf{k}" for k in range(1, 6)] + ["i_entropy", "i_margin", "i_p_background"]
          + ["conf_gap", "conf_ratio", "entropy_gap", "margin_gap", "both_unsure"])
 
 # Small local nutrition table (per 100 g) for the Israeli dishes the USDA database does not cover well.
@@ -231,7 +236,12 @@ def expert_features(model, bgr: np.ndarray, imgsz: int) -> dict:
     full = np.clip(p.data.detach().cpu().numpy().astype(np.float64), 1e-12, 1.0)
     entropy = float(-(full * np.log(full)).sum())
     margin = float(conf[0] - conf[1])
+    # P(background): the V2 Israeli model's "this is not one of my dishes" probability. 0.0 for the global
+    # model (no such class). High value = strong "route to global" signal (the arbiter's top feature).
+    bg_idx = next((k for k, v in r.names.items() if v == "background"), None)
+    p_background = float(full[bg_idx]) if bg_idx is not None else 0.0
     return {"label": r.names[int(order[0])], "conf": conf, "entropy": entropy, "margin": margin,
+            "p_background": p_background,
             "top5": [(r.names[int(i)], float(c)) for i, c in zip(order, conf)]}
 
 
@@ -242,6 +252,7 @@ def build_feature_row(g: dict, i: dict) -> pd.DataFrame:
         row[f"i_conf{k+1}"] = i["conf"][k]
     row["g_entropy"], row["g_margin"] = g["entropy"], g["margin"]
     row["i_entropy"], row["i_margin"] = i["entropy"], i["margin"]
+    row["i_p_background"] = i.get("p_background", 0.0)   # V2 arbiter feature
     row["conf_gap"] = g["conf"][0] - i["conf"][0]
     row["conf_ratio"] = g["conf"][0] / (i["conf"][0] + 1e-6)
     row["entropy_gap"] = i["entropy"] - g["entropy"]
@@ -281,17 +292,49 @@ def predict(bgr: np.ndarray) -> dict:
     X = build_feature_row(g, i)
     p_israeli = float(arbiter.predict_proba(X)[0, 1])
     route_israeli = p_israeli >= 0.5
+    # The arbiter's raw output is a log-odds (logit); the sigmoid of it is P(israeli). Recover it so the
+    # UI can show the actual math: logit = sum(SHAP contributions) + bias, P = 1 / (1 + e^-logit).
+    pc = min(max(p_israeli, 1e-7), 1 - 1e-7)
+    logit = float(np.log(pc / (1 - pc)))
 
     chosen = i if route_israeli else g
     gate = GATE_ISRAELI if route_israeli else GATE_GLOBAL
     both_unsure = (g["conf"][0] < BOTH_UNSURE) and (i["conf"][0] < BOTH_UNSURE)
-    confident = (chosen["conf"][0] >= gate) and not both_unsure
+    # "arbiter undecided": P(israeli) sits near 0.5, so the router cannot confidently pick an expert.
+    arbiter_unsure = abs(p_israeli - 0.5) < ARBITER_BAND
+    # If the Israeli model was routed to but it says 'background' (= "not one of my dishes"), that is an
+    # abstention, not a real food label -> treat as not confident so it falls back to the global guess/Gemini.
+    israeli_abstain = route_israeli and chosen["label"] == "background"
+    confident = (chosen["conf"][0] >= gate) and not both_unsure and not arbiter_unsure and not israeli_abstain
 
     return {"global": g, "israeli": i, "p_israeli": p_israeli, "route_israeli": route_israeli,
-            "chosen": chosen, "label": chosen["label"], "conf": chosen["conf"][0],
-            "confident": confident, "both_unsure": both_unsure, "roi": roi, "food": food,
+            "logit": logit, "chosen": chosen, "label": chosen["label"], "conf": chosen["conf"][0],
+            "confident": confident, "both_unsure": both_unsure, "arbiter_unsure": arbiter_unsure,
+            "israeli_abstain": israeli_abstain,
+            "roi": roi, "food": food,
             "features": {f: float(X.iloc[0][f]) for f in FEATS},
             "reasons": arbiter_reasons(X)}
+
+
+def predict_best(frames):
+    """Run the full edge decision on several recent frames and keep the strongest one.
+
+    Each frame is a genuine single-frame prediction, so the arbiter features are never averaged and
+    routing is identical to the single-frame path (we do NOT distort the confidence distribution the
+    arbiter was trained on). Taking the best-of-N simply raises the chance that at least one in-focus,
+    well-lit, in-distribution frame is captured, which is the cheapest no-retrain accuracy win. Prefers
+    a confident result; otherwise the highest top-1 confidence."""
+    results = []
+    for f in frames:
+        try:
+            results.append(predict(f))
+        except Exception as e:
+            print(f"[WARN] predict frame failed: {e}")
+    if not results:
+        return None
+    confident = [r for r in results if r["confident"]]
+    pool = confident if confident else results
+    return max(pool, key=lambda r: r["conf"])
 
 
 def arbiter_reasons(X: pd.DataFrame, k: int = 5):
@@ -547,6 +590,8 @@ class CalEyeZDemo:
         self.root = root
         self.running = True
         self.frame_bgr = None
+        self.frames = deque(maxlen=6)   # recent frames for best-of-N analysis
+        self.last = None
         self.last = None
         root.title("CalEyeZ  ·  Live Demo")
         root.geometry("1240x820")
@@ -597,7 +642,14 @@ class CalEyeZDemo:
         tk.Label(dec, text="WHY  (push toward  ◀ Global   |   Israeli ▶)", bg=PANEL, fg=MUT,
                  font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=12)
         self.reasons_canvas = tk.Canvas(dec, height=104, bg=PANEL, highlightthickness=0)
-        self.reasons_canvas.pack(fill="x", padx=12, pady=(2, 10))
+        self.reasons_canvas.pack(fill="x", padx=12, pady=(2, 6))
+
+        # live arbiter math: the actual 19 features and the logit -> sigmoid -> P(israeli) computation
+        tk.Label(dec, text="ARBITER MATH  (live 19-feature vector -> P)", bg=PANEL, fg=MUT,
+                 font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=12)
+        self.math_lbl = tk.Label(dec, text="(press Analyze)", bg=CARD, fg=INK, justify="left",
+                                  anchor="w", font=("Consolas", 9), padx=8, pady=6)
+        self.math_lbl.pack(fill="x", padx=12, pady=(2, 10))
 
     def _expert_row(self, parent, name, color):
         row = tk.Frame(parent, bg=PANEL)
@@ -647,6 +699,35 @@ class CalEyeZDemo:
                 c.create_text(cx - length - 5, y, anchor="e", text=f"{contrib:.2f}",
                               fill=ACCENT, font=("Consolas", 9))
 
+    def _update_math(self, d):
+        """Show the arbiter's live arithmetic: the 19 input features, then the logit -> sigmoid -> P.
+
+        This is the exact computation the XGBoost arbiter runs every capture, made visible so you can
+        read the numbers that produced the routing decision on stage."""
+        f = d.get("features", {})
+        g5 = " ".join(f"{f.get(f'g_conf{k}',0):.2f}" for k in range(1, 6))
+        i5 = " ".join(f"{f.get(f'i_conf{k}',0):.2f}" for k in range(1, 6))
+        p = d.get("p_israeli", 0.0)
+        logit = d.get("logit", 0.0)
+        decision = "ISRAELI" if d.get("route_israeli") else "GLOBAL"
+        flag = ""
+        if d.get("arbiter_unsure"):
+            flag = "   <- UNDECIDED (near 0.5)"
+        txt = (
+            f"GLOBAL : conf1-5 [{g5}]\n"
+            f"         entropy={f.get('g_entropy',0):.2f}  margin={f.get('g_margin',0):.2f}\n"
+            f"ISRAELI: conf1-5 [{i5}]\n"
+            f"         entropy={f.get('i_entropy',0):.2f}  margin={f.get('i_margin',0):.2f}\n"
+            f"INTERACT conf_gap={f.get('conf_gap',0):+.2f}  conf_ratio={f.get('conf_ratio',0):.2f}\n"
+            f"         entropy_gap={f.get('entropy_gap',0):+.2f}  margin_gap={f.get('margin_gap',0):+.2f}"
+            f"  both_unsure={int(f.get('both_unsure',0))}\n"
+            f"--------------------------------------------\n"
+            f"logit(sum SHAP+bias) = {logit:+.3f}\n"
+            f"P(israeli) = sigmoid({logit:+.2f}) = {p:.3f}\n"
+            f"P {'>=' if p>=0.5 else '<'} 0.50  ->  route to {decision}{flag}"
+        )
+        self.math_lbl.config(text=txt)
+
     # ---------- right: weight + controls + interactive log ----------
     def _build_right(self, root):
         right = tk.Frame(root, bg=PANEL, width=460)
@@ -687,9 +768,17 @@ class CalEyeZDemo:
         self.src_chip = self._chip(right, "", MUT)
         self.src_chip.pack(anchor="w", padx=24, pady=(4, 0))
 
+        # Manual cloud override: the confidence gate cannot catch a confident-WRONG local guess (a
+        # top-down object the model reads as the wrong food at high confidence). This button lets you
+        # force the Gemini vision identifier on the current view, so the demo is never stuck on a bad
+        # local prediction. Requires GEMINI_API_KEY.
+        self.btn_gem = tk.Button(right, text="ASK GEMINI (override)", bg=CARD, fg=PURPLE,
+                                 font=("Segoe UI", 10, "bold"), bd=0, command=self.ask_gemini)
+        self.btn_gem.pack(fill="x", padx=24, pady=(10, 0))
+
         self.btn_save = tk.Button(right, text="SAVE TO LOG", bg=CARD, fg=GREEN,
                                   font=("Segoe UI", 10, "bold"), bd=0, state="disabled", command=self.save)
-        self.btn_save.pack(fill="x", padx=24, pady=(10, 4))
+        self.btn_save.pack(fill="x", padx=24, pady=(6, 4))
 
         # ---- DATA TAGGING: type what it really is, then capture image + predictions + 512-D DNA ----
         tk.Label(right, text="DATA TAGGING (ground truth)", bg=PANEL, fg=PURPLE,
@@ -733,12 +822,18 @@ class CalEyeZDemo:
         ok, frame = self.cap.read()
         if ok:
             self.frame_bgr = frame.copy()
+            self.frames.append(frame.copy())
             h, w = frame.shape[:2]
             s = int(min(h, w) * ROI_FRAC)
             y0, x0 = (h - s) // 2, (w - s) // 2
             cv2.rectangle(frame, (x0, y0), (x0 + s, y0 + s), (204, 255, 0), 2)
             cv2.putText(frame, "PLACE FOOD HERE", (x0, y0 - 10),
                         cv2.FONT_HERSHEY_SIMPLEX, 0.6, (204, 255, 0), 2)
+            # The models were trained on side / eye-level food photos. A top-down webcam view is
+            # out-of-distribution; aiming the camera at ~45 deg / eye level matches training and is the
+            # single biggest accuracy win, no retraining needed.
+            cv2.putText(frame, "tip: aim camera at eye level / ~45deg", (x0, y0 + s + 22),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (140, 200, 255), 1)
             # NOTE: food isolation (GrabCut) runs only inside predict() on ANALYZE, never in this live
             # loop. GrabCut is an iterative GMM and is CPU-heavy; running it per frame here would stutter
             # the webcam feed while two YOLO models are resident. The live feed shows only the guide box.
@@ -770,6 +865,41 @@ class CalEyeZDemo:
             self.ble_lbl.config(text=f"BLE: {ble_status} - using manual g", fg=MUT)
         self.root.after(120, self._tick_weight)
 
+    # ---------- manual Gemini override ----------
+    def ask_gemini(self):
+        if gemini is None:
+            messagebox.showinfo("Gemini", "Set GEMINI_API_KEY (and pip install google-generativeai) "
+                                          "to enable the cloud fallback.")
+            return
+        if self.frame_bgr is None or model_g is None:
+            return
+        self.btn_gem.config(state="disabled", text="ASKING GEMINI...", fg=MUT)
+        threading.Thread(target=self._gemini_worker,
+                         args=(self.frame_bgr.copy(), get_weight()), daemon=True).start()
+
+    def _gemini_worker(self, bgr, grams):
+        try:
+            d = self.last["decision"] if self.last else predict(bgr)
+            food = d.get("food") if isinstance(d, dict) else center_roi(bgr)
+            name = gemini_identify(food if food is not None else center_roi(bgr))
+            if not name:
+                self.root.after(0, lambda: self._gemini_done(None, None))
+                return
+            info = nutrition(name, grams)
+            info["used_gemini"] = True
+            info["decision"] = d
+            self.root.after(0, lambda: self._gemini_done(info, None))
+        except Exception as e:
+            self.root.after(0, lambda: self._gemini_done(None, str(e)))
+
+    def _gemini_done(self, info, err):
+        self.btn_gem.config(state="normal", text="ASK GEMINI (override)", fg=PURPLE)
+        if info is None:
+            self.src_chip.config(text=f"Gemini override failed ({err})" if err else
+                                 "Gemini could not identify the food", fg=AMBER)
+            return
+        self._show(info)
+
     # ---------- analyze ----------
     def analyze(self):
         if self.frame_bgr is None or model_g is None:
@@ -777,13 +907,16 @@ class CalEyeZDemo:
             return
         self.btn.config(state="disabled", text="THINKING...", bg=MUT)
         self.result.config(text="Running edge inference...")
+        frames = [f.copy() for f in self.frames] or [self.frame_bgr.copy()]
         threading.Thread(target=self._analyze_worker,
-                         args=(self.frame_bgr.copy(), get_weight(), self.prep.get()),
+                         args=(frames, get_weight(), self.prep.get()),
                          daemon=True).start()
 
-    def _analyze_worker(self, bgr, grams, prep):
+    def _analyze_worker(self, frames, grams, prep):
         try:
-            d = predict(bgr)
+            d = predict_best(frames)
+            if d is None:
+                raise RuntimeError("inference produced no result")
             used_gemini = False
             label = d["label"]
             if not d["confident"]:
@@ -805,6 +938,7 @@ class CalEyeZDemo:
         route_txt += "ISRAELI" if d["route_israeli"] else "GLOBAL"
         self.route_lbl.config(text=route_txt, fg=TEAL if d["route_israeli"] else ACCENT)
         self._draw_reasons(d.get("reasons", []), d.get("features", {}))
+        self._update_math(d)
 
         self.btn.config(state="normal", text="ANALYZE", bg=ACCENT)
         self.last = info
@@ -819,12 +953,19 @@ class CalEyeZDemo:
             f"CARBS  : {info['carb']} g\n"
             f"FAT    : {info['fat']} g"))
         if info["used_gemini"]:
-            self.src_chip.config(text="source: Gemini fallback (local experts unsure)", fg=PURPLE)
+            why = ("arbiter undecided" if d.get("arbiter_unsure") else
+                   "both experts unsure" if d.get("both_unsure") else "low confidence")
+            self.src_chip.config(text=f"source: Gemini fallback ({why})", fg=PURPLE)
         elif not d["confident"]:
-            # low confidence: the experts flagged this input as uncertain (often an out-of-distribution
-            # view, e.g. a top-down object). Gemini would resolve it if a key is configured.
+            # the system flagged this input as uncertain. Three distinct reasons, shown explicitly:
+            if d.get("arbiter_unsure"):
+                reason = f"ARBITER UNDECIDED  P(israeli)={d['p_israeli']*100:.0f}% (near 50/50)"
+            elif d.get("both_unsure"):
+                reason = "BOTH EXPERTS UNSURE (out-of-distribution)"
+            else:
+                reason = f"LOW CONFIDENCE {d['conf']*100:.0f}%"
             hint = "set GEMINI_API_KEY for cloud fallback" if gemini is None else "Gemini fallback failed"
-            self.src_chip.config(text=f"LOW CONFIDENCE {d['conf']*100:.0f}% - uncertain ({hint})", fg=AMBER)
+            self.src_chip.config(text=f"{reason} ({hint})", fg=AMBER)
         else:
             self.src_chip.config(text=f"source: {'Israeli' if d['route_israeli'] else 'Global'} expert  ·  {info['src']}",
                                  fg=GREEN)
