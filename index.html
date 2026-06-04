@@ -126,6 +126,7 @@
     <button data-tab="israeliv2">Israeli Model V2</button>
     <button data-tab="arbiter">Arbiter</button>
     <button data-tab="cnn">CNN Visualizer</button>
+    <button data-tab="trainlab">Training Lab</button>
     <button data-tab="analysis">System Analysis</button>
     <button data-tab="analysisv2">System Analysis V2</button>
     <button data-tab="validation">Validation &amp; Risks</button>
@@ -587,6 +588,31 @@ i_conf1      =  0.180  +0.42 -> Global    <span class="cm"># israeli top-1 is we
   <p>The arbiter decides on <i>relative</i> confidence between the experts,
     not on the Israeli model's raw confidence, which is exactly why it survives that model's
     out-of-domain overconfidence.</p>
+
+  <h4 id="a-softmax">The softmax behind the features (with code proof)</h4>
+  <p>Every confidence the arbiter consumes is a <b>softmax</b> probability. Softmax turns a model's raw
+    logits <code>z</code> into a probability distribution over classes:</p>
+  <pre>softmax(z)_i = e^(z_i) / Σ_j e^(z_j)        <span class="cm"># non-negative, sums to 1</span></pre>
+  <p><b>Where it runs:</b> we do not hand-write softmax. Each YOLO11l-cls expert applies it inside its
+    classification head (Ultralytics / PyTorch), so <code>results.probs</code> is already a softmax
+    distribution. Our pipeline <i>consumes</i> that output and derives the features from it. Proof, straight
+    from <code>scripts/arbiter/generate_arbiter_dataset.py</code> (identical in the live demo's
+    <code>expert_features</code>):</p>
+  <pre>probs     = r.probs                          <span class="cm"># the Classify head's softmax output</span>
+top5_conf = [float(c) for c in probs.top5conf.tolist()]   <span class="cm"># top-5 softmax probabilities</span>
+full      = probs.data.cpu().numpy()         <span class="cm"># the full softmax vector (sums to 1)</span>
+full      = np.clip(full, <span class="st">1e-12</span>, <span class="st">1.0</span>)        <span class="cm"># guard log(0)</span>
+entropy   = float(-(full * np.log(full)).sum())           <span class="cm"># H = -Σ p ln p</span>
+margin    = float(top5_conf[<span class="st">0</span>] - top5_conf[<span class="st">1</span>])        <span class="cm"># p1 - p2</span></pre>
+  <p>So <code>g_conf1..5</code> / <code>i_conf1..5</code> are softmax probabilities, <code>*_entropy</code>
+    is the entropy of the softmax vector, <code>*_margin</code> is the gap between its top two, and
+    <code>i_p_background</code> is the softmax mass on the background class. All 20 features are functions
+    of these two softmax distributions, never the raw logits.</p>
+  <div class="callout"><b>One subtlety: the arbiter's own output is a sigmoid, not softmax.</b> The arbiter
+    is a 2-class decision (global vs Israeli), so its probability is the logistic sigmoid, which is just the
+    two-class special case of softmax: <code>P(israeli) = 1 / (1 + e^(-logit))</code>. The live demo recovers
+    that logit with <code>logit = ln(p / (1 - p))</code> to show the math panel. In short: the <i>experts</i>
+    use softmax (proof above); the <i>arbiter</i> uses its sigmoid sibling.</div>
 
   <h3 id="a-why">Why XGBoost, backed by data</h3>
   <p>A Random Forest looked great on training data but collapsed on held-out data: it memorised.
@@ -1552,7 +1578,7 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     <thead><tr><th>Run</th><th>Setup</th><th>Clean test top-1 (was 92.26%)</th><th>Change</th></tr></thead>
     <tbody>
       <tr><td>1</td><td>15 epochs, AdamW, lr 1e-4, full fine-tune, 21 tagged images ×8 aug</td><td>49.89%</td><td>−42.4 pts</td></tr>
-      <tr><td>2</td><td>25 epochs (longer)</td><td>23.37%</td><td>−68.9 pts (collapsed, never improved)</td></tr>
+      <tr><td>2</td><td>25 epochs, froze the backbone and trained the classifier head only</td><td>23.37%</td><td>−68.9 pts (collapsed: the framework reset the head to random and a frozen backbone could not retrain it)</td></tr>
       <tr><td>3</td><td>20 epochs, lr 1e-4, 72 tagged ×2 aug</td><td>66.21%</td><td>−26.1 pts (least bad)</td></tr>
       <tr><td>4</td><td>15 epochs, lower lr 5e-5, 72 tagged ×1 aug</td><td>52.64%</td><td>−39.6 pts</td></tr>
     </tbody>
@@ -1564,14 +1590,15 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     words: <b>the tagged hummus images were too visually similar to neighbouring classes.</b> Overhead shots of
     a beige dip look like other spreads and pastes in the set, so training pulled those neighbours' decision
     boundaries into "hummus". The model relabelled its neighbours as hummus and their test accuracy cratered.
-    More epochs (run 2) and a lower learning rate (run 4) did not help, because the problem is the data, not
-    the optimiser.</div>
+    A lower learning rate (run 4) did not help, because the core problem is the data, not the optimiser; and
+    head-only training (run 2) failed for a separate reason: the framework reinitialised the classifier head
+    to random weights, and with the backbone frozen that random head had no way to recover, so it collapsed.</div>
   <h4>What would actually fix it</h4>
   <table>
     <thead><tr><th>Fix</th><th>Why it addresses the failure</th></tr></thead>
     <tbody>
       <tr><td>Rehearsal / replay</td><td>Mix the original balanced training data back in (not just the new class) so shared features are not overwritten. Naive fine-tuning on one class guarantees forgetting.</td></tr>
-      <tr><td>Freeze the backbone, train the head only (or LoRA)</td><td>All four runs fine-tuned every layer. Freezing the feature extractor and adapting only the classifier (or low-rank adapters) keeps the learned representation intact and needs far less data.</td></tr>
+      <tr><td>Freeze the backbone, retrain the head WITHOUT resetting it (or LoRA)</td><td>The "head" is the small final classifier layer; the "backbone" is the feature extractor. Runs 1, 3, 4 fine-tuned every layer; run 2 froze the backbone but the framework reset the head to random, so it could not recover. The correct version keeps the existing head weights (or adds low-rank adapters), adapting only the classifier while leaving the learned features intact, with far less data.</td></tr>
       <tr><td>Hard negatives for the look-alike neighbours</td><td>Since the new hummus images resemble their neighbours, add labelled examples of those neighbours (or a contrastive / triplet objective) so the boundary is sharpened instead of swallowed.</td></tr>
       <tr><td>Curate, do not just collect</td><td>Drop ambiguous borderline captures; keep class-balanced sampling so the new images do not dominate. A heavy augmentation multiplier on a tiny, ambiguous set (run 1, ×8) makes the overfitting worse.</td></tr>
       <tr><td>Early-stop on the clean-test metric</td><td>Select the checkpoint by overall held-out accuracy, not by the new class's accuracy, so a gain on one class can never be bought with a loss everywhere else.</td></tr>
@@ -1776,6 +1803,132 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     When a physical quantity is already measured by the hardware, read it directly rather than inferring it
     through a lossy proxy. That single decision is what made the weight side of the system reliable.</div>
   <div class="foot">CalEyeZ · single living project document · Raz Dvora &amp; Roi Tzur · Shenkar.</div>
+</section>
+
+<section class="tab" id="tab-trainlab">
+  <h2>Training Lab: how learning actually happens</h2>
+  <p>Three interactive toys that make the training terms concrete: how a model <b>learns</b> by gradient
+    descent (and why the <b>learning rate</b> matters), why <b>batch size</b> changes the path, and what a
+    <b>backbone</b>, a <b>head</b>, and <b>freezing</b> really mean. These are the exact levers behind the
+    Israeli Model V2 retrain and the fine-tune failures.</p>
+
+  <div class="sub-nav">
+    <a href="#tl-gd">Gradient descent</a><a href="#tl-batch">Batch size</a><a href="#tl-freeze">Backbone / head / freeze</a><a href="#tl-logits">Logits and softmax</a>
+  </div>
+
+  <h3 id="tl-gd">1 · Gradient descent and the learning rate</h3>
+  <p>A model "learns" by minimising a <b>loss</b> (how wrong it is). It repeatedly nudges its weights
+    downhill along the slope (the <b>gradient</b>) of the loss. The step size is the <b>learning rate (LR)</b>.
+    The curve below is a simple loss bowl; the dot is the current weight. Press play and change the LR.</p>
+  <div class="cnn-stage">
+    <div class="ctrl">
+      <button onclick="tlGDStart()">▶ Train</button>
+      <button onclick="tlGDReset()">Reset</button>
+      <span style="margin-left:12px">LR: <input id="gdLR" type="range" min="0.05" max="2.6" step="0.05" value="0.4" oninput="tlGDLabel()" style="vertical-align:middle"></span>
+      <span id="gdLRval" class="legend"></span>
+      <span id="gdStatus" class="legend" style="margin-left:10px"></span>
+    </div>
+    <canvas id="gdCanvas" width="920" height="300" style="width:100%;background:#0b0f15;border-radius:8px"></canvas>
+  </div>
+  <table>
+    <thead><tr><th>LR regime</th><th>What you see</th><th>Why</th></tr></thead>
+    <tbody>
+      <tr><td>Too small (≈0.1)</td><td>The dot crawls, barely moves</td><td>Tiny steps; training would take forever / stall</td></tr>
+      <tr><td>Good (≈1.0)</td><td>Slides smoothly to the bottom</td><td>Steps are proportional to the slope; fast, stable convergence</td></tr>
+      <tr><td>High (≈1.9)</td><td>Overshoots and zig-zags, still settles</td><td>Each step jumps past the minimum but the bowl pulls it back</td></tr>
+      <tr><td>Too high (&gt;2.0)</td><td>Bounces outward and diverges</td><td>Steps overshoot more than the slope corrects; loss explodes (this is what too-high LR does in real training)</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>This is the whole game.</b> Real networks do exactly this in millions of dimensions
+    at once. <code>lr0=0.001</code> in our training is small on purpose: it adapts the model without
+    blowing up the pretrained features. <b>warmup</b> ramps the LR up gently at the start for the same reason.</div>
+
+  <h3 id="tl-batch">2 · Batch size: why it changes the path</h3>
+  <p>The true downhill direction is computed by averaging over data. A <b>batch</b> is how many images you
+    average before each step. A <b>small</b> batch gives a <i>noisy</i> estimate of the slope (the path
+    jitters); a <b>large</b> batch gives a <i>smooth</i> estimate (a cleaner path) but each step costs more
+    memory. Drag the batch size and watch the descent path on a 2-D loss (the rings are contours).</p>
+  <div class="cnn-stage">
+    <div class="ctrl">
+      <button onclick="tlBatchRun()">▶ Run descent</button>
+      <span style="margin-left:12px">Batch size: <input id="bsRange" type="range" min="1" max="256" step="1" value="8" oninput="tlBatchLabel()" style="vertical-align:middle"></span>
+      <span id="bsVal" class="legend"></span>
+    </div>
+    <canvas id="batchCanvas" width="920" height="320" style="width:100%;background:#0b0f15;border-radius:8px"></canvas>
+  </div>
+  <table>
+    <thead><tr><th>Batch</th><th>Gradient</th><th>Trade-off</th></tr></thead>
+    <tbody>
+      <tr><td>Small (1-8)</td><td>Noisy, jittery path</td><td>More updates per epoch, low memory, the noise can even help generalisation, but unstable BatchNorm statistics</td></tr>
+      <tr><td>Large (128+)</td><td>Smooth, direct path</td><td>Stable and fast on a GPU, but uses much more memory and can generalise slightly worse</td></tr>
+    </tbody>
+  </table>
+  <div class="callout green"><b>Why we used batch = 32.</b> It is the largest power of two that fits the
+    8&nbsp;GB GPU at 224&nbsp;px, while still being big enough (&ge;16) to keep BatchNorm statistics stable.
+    That is the real reasoning behind the number in the V2 training config.</div>
+
+  <h3 id="tl-freeze">3 · Backbone, head, and freezing</h3>
+  <p>A classifier has two parts. The <b>backbone</b> is the deep stack that turns an image into a compact
+    feature vector (it holds the general visual knowledge). The <b>head</b> is the small final layer that maps
+    that vector to class scores. Learning flows forward (prediction) then backward (the gradient updates the
+    weights). <b>Freezing</b> the backbone locks it so only the head learns. Toggle freeze and run a step.</p>
+  <div class="cnn-stage">
+    <div class="ctrl">
+      <button onclick="tlFzStep()">▶ Train step (forward + backprop)</button>
+      <label style="margin-left:12px"><input id="fzFreeze" type="checkbox" onchange="tlFzDraw()"> Freeze backbone</label>
+      <label style="margin-left:12px"><input id="fzReset" type="checkbox" onchange="tlFzDraw()"> Reset head to random (Ultralytics default)</label>
+    </div>
+    <canvas id="freezeCanvas" width="920" height="300" style="width:100%;background:#0b0f15;border-radius:8px"></canvas>
+    <span id="fzNote" class="legend"></span>
+  </div>
+  <table>
+    <thead><tr><th>Mode</th><th>What trains</th><th>When to use it</th></tr></thead>
+    <tbody>
+      <tr><td>Full fine-tune (no freeze)</td><td>Backbone + head both update</td><td>Plenty of data; willing to risk catastrophic forgetting. Runs 1, 3, 4 of our fine-tune did this.</td></tr>
+      <tr><td>Freeze backbone, train head</td><td>Only the head updates; features stay intact</td><td>Little data; fast; protects general features. The <i>right</i> way to add a class cheaply.</td></tr>
+      <tr><td><b class="r">Freeze backbone + reset head (the trap)</b></td><td>Head starts random, backbone cannot adapt to it</td><td><b>Never.</b> This is exactly run 2 and the global fine-tune: the framework reset the head to random, the frozen backbone could not retrain it, and accuracy collapsed to near-random.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout amber"><b>This panel explains our fine-tune failures.</b> Toggle both checkboxes on:
+    the backprop pulse stops at the frozen boundary and the random head has no way to recover, which is the
+    23% collapse from the Limitations &amp; V2 tab. The fix is to freeze the backbone but <i>keep</i> the
+    existing head weights (or use LoRA adapters), or to do a full retrain like V2.</div>
+  <h3 id="tl-logits">4 · Logits, softmax, and what the arbiter reads</h3>
+  <p>The final layer of each model outputs one raw score per class, the <b>logits</b>. They are unbounded
+    (any real number) and do not sum to anything. <b>Softmax</b> turns them into <b>probabilities</b> that
+    sum to 1, by exponentiating and normalising: <code>p_i = e^(z_i/T) / Σ e^(z_j/T)</code>. The model's
+    "confidence" is just the largest probability. Drag the logits and watch the probabilities, and the three
+    numbers the arbiter actually consumes: top-1 confidence, margin, and entropy.</p>
+  <div class="cnn-stage">
+    <div class="ctrl" style="flex-wrap:wrap;gap:6px 14px">
+      <span>logit A <input id="lz0" type="range" min="-4" max="10" step="0.1" value="4.0" oninput="tlLogitDraw()"></span>
+      <span>B <input id="lz1" type="range" min="-4" max="10" step="0.1" value="2.0" oninput="tlLogitDraw()"></span>
+      <span>C <input id="lz2" type="range" min="-4" max="10" step="0.1" value="1.0" oninput="tlLogitDraw()"></span>
+      <span>D <input id="lz3" type="range" min="-4" max="10" step="0.1" value="0.3" oninput="tlLogitDraw()"></span>
+      <span>E <input id="lz4" type="range" min="-4" max="10" step="0.1" value="0.0" oninput="tlLogitDraw()"></span>
+      <span style="margin-left:8px">temperature T <input id="lzT" type="range" min="0.3" max="3" step="0.1" value="1.0" oninput="tlLogitDraw()"></span>
+      <button onclick="tlLogitPreset('conf')">confident</button>
+      <button onclick="tlLogitPreset('unsure')">unsure</button>
+    </div>
+    <canvas id="logitCanvas" width="920" height="300" style="width:100%;background:#0b0f15;border-radius:8px"></canvas>
+    <span id="lzMetrics" class="legend"></span>
+  </div>
+  <table>
+    <thead><tr><th>Quantity</th><th>Meaning</th><th>Used by the arbiter as</th></tr></thead>
+    <tbody>
+      <tr><td><b>logits</b> (z)</td><td>raw, unbounded class scores, straight out of the final layer</td><td>not directly; they are turned into probabilities first</td></tr>
+      <tr><td><b>softmax probabilities</b> (p)</td><td>logits squashed to [0,1], summing to 1</td><td><code>g_conf1..5</code>, <code>i_conf1..5</code>, and <code>i_p_background</code></td></tr>
+      <tr><td><b>top-1 confidence</b></td><td>the largest probability (how sure the model is)</td><td><code>g_conf1</code>, <code>i_conf1</code>, the gates</td></tr>
+      <tr><td><b>margin</b></td><td>top-1 minus top-2 (how decisive the choice is)</td><td><code>g_margin</code>, <code>i_margin</code></td></tr>
+      <tr><td><b>entropy</b></td><td>spread of the whole distribution (low = peaked, high = unsure)</td><td><code>g_entropy</code>, <code>i_entropy</code></td></tr>
+      <tr><td><b>temperature</b> (T)</td><td>divides the logits before softmax: high T softens, low T sharpens</td><td>the calibration lever discussed in Limitations &amp; V2</td></tr>
+    </tbody>
+  </table>
+  <div class="callout green"><b>This is the exact bridge to the Arbiter.</b> The arbiter never sees pixels; it
+    sees these softmax-derived numbers from both experts. Raising T flattens every probability (less
+    confident); lowering T spikes the top class. That is why a network can be <i>overconfident</i> (peaky
+    softmax) on food it has never seen, the very problem the open-set <code>background</code> class fixed.</div>
+  <div class="foot">CalEyeZ · Training Lab · interactive explainer of the training terms used across this report.</div>
 </section>
 
 </main>
@@ -2088,6 +2241,137 @@ window.addEventListener('resize',function(){
     if(c&&c.clientWidth&&!prepRAF)drawPrep(prepP);
   },120);
 });
+</script>
+
+<!-- ============ TRAINING LAB (interactive explainers) ============ -->
+<script>
+/* 1 - gradient descent: loss f(x)=0.5 x^2, grad=x, update x -= lr*x */
+let gdX=8, gdTimer=null;
+function gdLoss(x){return 0.5*x*x;}
+function tlGDLabel(){var e=document.getElementById('gdLR');if(e)document.getElementById('gdLRval').textContent='= '+parseFloat(e.value).toFixed(2);}
+function tlGDdraw(){
+  var c=document.getElementById('gdCanvas');if(!c)return;var ctx=c.getContext('2d'),W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H);
+  var minY=46,maxY=H-30,lossMax=50;
+  function x2px(x){return W/2 + x*((W/2-50)/10);}
+  function l2py(l){return maxY-(Math.min(l,lossMax)/lossMax)*(maxY-minY);}
+  ctx.strokeStyle='#30363d';ctx.beginPath();ctx.moveTo(40,maxY);ctx.lineTo(W-20,maxY);ctx.stroke();
+  ctx.strokeStyle='#8b949e';ctx.lineWidth=2;ctx.beginPath();
+  for(var px=40;px<=W-20;px+=2){var x=(px-W/2)/((W/2-50)/10),py=l2py(gdLoss(x));px===40?ctx.moveTo(px,py):ctx.lineTo(px,py);}
+  ctx.stroke();
+  ctx.fillStyle='#3fb950';ctx.beginPath();ctx.arc(x2px(0),l2py(0),4,0,7);ctx.fill();
+  var bx=Math.max(20,Math.min(W-20,x2px(gdX))),by=l2py(gdLoss(gdX));
+  ctx.fillStyle='#58a6ff';ctx.beginPath();ctx.arc(bx,by,8,0,7);ctx.fill();
+  ctx.fillStyle='#e6edf3';ctx.font='12px Consolas';ctx.textAlign='left';
+  ctx.fillText('weight = '+gdX.toFixed(2)+'    loss = '+gdLoss(gdX).toFixed(2),50,30);
+}
+function tlGDReset(){if(gdTimer){clearInterval(gdTimer);gdTimer=null;}gdX=8;tlGDLabel();tlGDdraw();var s=document.getElementById('gdStatus');if(s)s.textContent='';}
+function tlGDStart(){
+  if(gdTimer)clearInterval(gdTimer);var s=document.getElementById('gdStatus');
+  gdTimer=setInterval(function(){
+    var lr=parseFloat(document.getElementById('gdLR').value);
+    gdX=gdX-lr*gdX; tlGDdraw();
+    if(Math.abs(gdX)<0.02){s.textContent='converged';s.style.color='#3fb950';clearInterval(gdTimer);gdTimer=null;}
+    else if(Math.abs(gdX)>1e4){s.textContent='DIVERGED (LR too high)';s.style.color='#f85149';clearInterval(gdTimer);gdTimer=null;}
+    else if(lr>2){s.textContent='oscillating / diverging';s.style.color='#d29922';}
+    else if(lr>1){s.textContent='overshooting but converging';s.style.color='#d29922';}
+    else{s.textContent='converging';s.style.color='#58a6ff';}
+  },220);
+}
+/* 2 - batch size: 2-D descent, jitter ~ 1/sqrt(batch) */
+let bsTimer=null;
+function tlBatchLabel(){var e=document.getElementById('bsRange');if(e)document.getElementById('bsVal').textContent='= '+e.value+'   (jitter proportional to 1/sqrt(batch))';}
+function tlBatchRun(){
+  var c=document.getElementById('batchCanvas');if(!c)return;var ctx=c.getContext('2d'),W=c.width,H=c.height;
+  var batch=parseInt(document.getElementById('bsRange').value),noise=0.9/Math.sqrt(batch),cx=W/2,cy=H/2;
+  function redraw(path){
+    ctx.clearRect(0,0,W,H);
+    for(var r=40;r<=260;r+=40){ctx.strokeStyle='#21262d';ctx.beginPath();ctx.ellipse(cx,cy,r*1.5,r,0,0,7);ctx.stroke();}
+    ctx.fillStyle='#3fb950';ctx.beginPath();ctx.arc(cx,cy,5,0,7);ctx.fill();
+    ctx.strokeStyle='#58a6ff';ctx.lineWidth=2;ctx.beginPath();
+    path.forEach(function(p,i){i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y);});ctx.stroke();
+    if(path.length){var last=path[path.length-1];ctx.fillStyle='#bc8cff';ctx.beginPath();ctx.arc(last.x,last.y,5,0,7);ctx.fill();}
+    ctx.fillStyle='#e6edf3';ctx.font='12px Consolas';ctx.textAlign='left';
+    ctx.fillText('batch = '+batch+'    step jitter = '+noise.toFixed(2),20,24);
+  }
+  var p={x:130,y:70},path=[{x:p.x,y:p.y}],nstep=0;
+  if(bsTimer)clearInterval(bsTimer);
+  bsTimer=setInterval(function(){
+    var dx=cx-p.x,dy=cy-p.y,g=0.16;
+    p={x:p.x+dx*g+(Math.random()*2-1)*noise*95,y:p.y+dy*g+(Math.random()*2-1)*noise*95};
+    path.push({x:p.x,y:p.y});nstep++;redraw(path);
+    if(nstep>70||(Math.abs(dx)<6&&Math.abs(dy)<6&&noise<0.18)){clearInterval(bsTimer);bsTimer=null;}
+  },55);
+  redraw(path);
+}
+/* 3 - backbone / head / freeze */
+let fzTimer=null;
+function tlRR(ctx,x,y,w,h,r){ctx.beginPath();ctx.moveTo(x+r,y);ctx.arcTo(x+w,y,x+w,y+h,r);ctx.arcTo(x+w,y+h,x,y+h,r);ctx.arcTo(x,y+h,x,y,r);ctx.arcTo(x,y,x+w,y,r);ctx.closePath();}
+function tlFzDraw(pulse){
+  var c=document.getElementById('freezeCanvas');if(!c)return;var ctx=c.getContext('2d'),W=c.width,H=c.height;
+  var frozen=document.getElementById('fzFreeze').checked,reset=document.getElementById('fzReset').checked;
+  ctx.clearRect(0,0,W,H);var y=H/2-28;
+  var blocks=[{l:'image',c:'#39d0c4'},{l:'conv1',c:'#58a6ff',bb:1},{l:'conv2',c:'#58a6ff',bb:1},{l:'conv3',c:'#58a6ff',bb:1},{l:'conv4',c:'#58a6ff',bb:1},{l:'features',c:'#8b949e'},{l:'HEAD',c:'#bc8cff'},{l:'classes',c:'#3fb950'}];
+  var n=blocks.length,bw=84,gap=(W-n*bw)/(n+1),cxs=[];
+  for(var i=0;i<n;i++){var b=blocks[i],x=gap+i*(bw+gap);cxs.push(x+bw/2);
+    var col=(b.bb&&frozen)?'#30363d':b.c;
+    ctx.fillStyle='#161b22';ctx.strokeStyle=col;ctx.lineWidth=2;tlRR(ctx,x,y,bw,56,8);ctx.fill();ctx.stroke();
+    ctx.fillStyle=(b.bb&&frozen)?'#8b949e':col;ctx.font='11px Segoe UI';ctx.textAlign='center';
+    ctx.fillText(b.l,x+bw/2,y+(b.bb&&frozen?26:32));
+    if(b.bb&&frozen)ctx.fillText('locked',x+bw/2,y+44);
+    if(i===6&&reset){ctx.fillStyle='#f85149';ctx.fillText('random',x+bw/2,y+46);}
+  }
+  ctx.strokeStyle='#8b949e';ctx.fillStyle='#8b949e';
+  for(var j=0;j<n-1;j++){var x1=cxs[j]+bw/2,x2=cxs[j+1]-bw/2;ctx.beginPath();ctx.moveTo(x1,y+28);ctx.lineTo(x2-6,y+28);ctx.stroke();ctx.beginPath();ctx.moveTo(x2-6,y+24);ctx.lineTo(x2,y+28);ctx.lineTo(x2-6,y+32);ctx.fill();}
+  ctx.textAlign='center';ctx.fillStyle='#8b949e';ctx.font='11px Segoe UI';
+  ctx.fillText('BACKBONE (feature extractor)',(cxs[1]+cxs[4])/2,y-12);
+  ctx.fillText('HEAD',cxs[6],y-12);
+  if(pulse!=null){var stopIdx=frozen?6:1,idx=Math.max(stopIdx,n-1-pulse),px=cxs[idx];
+    ctx.fillStyle='#f85149';ctx.beginPath();ctx.arc(px,y+28,7,0,7);ctx.fill();
+    ctx.fillText('gradient',px,y+80);}
+  ctx.textAlign='left';
+  var note=document.getElementById('fzNote');if(!note)return;
+  if(reset&&frozen){note.textContent='head reset to random AND backbone frozen -> cannot learn, collapses (this is run 2)';note.style.color='#f85149';}
+  else if(frozen){note.textContent='backbone frozen -> only the HEAD updates (fast, data-efficient, safe)';note.style.color='#39d0c4';}
+  else{note.textContent='full fine-tune -> every layer updates (powerful, but risks catastrophic forgetting)';note.style.color='#8b949e';}
+}
+function tlFzStep(){if(fzTimer)clearInterval(fzTimer);var pulse=0,maxp=8;
+  fzTimer=setInterval(function(){tlFzDraw(pulse);pulse++;if(pulse>maxp){clearInterval(fzTimer);fzTimer=null;tlFzDraw(null);}},120);}
+/* 4 - logits -> softmax -> probabilities (what the arbiter reads) */
+function tlLogitVals(){return [0,1,2,3,4].map(function(i){return parseFloat(document.getElementById('lz'+i).value);});}
+function tlLogitPreset(k){
+  var v=(k==='conf')?[8,1,0.5,0,-1]:[1.2,1.0,0.9,0.7,0.5];
+  for(var i=0;i<5;i++)document.getElementById('lz'+i).value=v[i];
+  document.getElementById('lzT').value=1.0;tlLogitDraw();
+}
+function tlLogitDraw(){
+  var c=document.getElementById('logitCanvas');if(!c)return;var ctx=c.getContext('2d'),W=c.width,H=c.height;
+  ctx.clearRect(0,0,W,H);
+  var z=tlLogitVals(),T=parseFloat(document.getElementById('lzT').value);
+  var ez=z.map(function(v){return Math.exp(v/T);}),s=ez.reduce(function(a,b){return a+b;},0),p=ez.map(function(v){return v/s;});
+  var labels=['A','B','C','D','E'],n=5,colW=W/2-80,x0=40,x1=W/2+40,top=52,bh=32,gap=12,zmin=-4,zmax=10;
+  var pmax=Math.max.apply(null,p),topi=p.indexOf(pmax);
+  ctx.fillStyle='#e6edf3';ctx.font='13px Segoe UI';ctx.textAlign='left';
+  ctx.fillText('LOGITS (raw scores, can be negative)',x0,30);
+  ctx.fillText('SOFTMAX PROBABILITIES (sum = 1)',x1,30);
+  for(var i=0;i<n;i++){var y=top+i*(bh+gap);
+    var zw=(z[i]-zmin)/(zmax-zmin)*colW;
+    ctx.fillStyle='#30363d';ctx.fillRect(x0,y,colW,bh);
+    ctx.fillStyle='#58a6ff';ctx.fillRect(x0,y,Math.max(2,zw),bh);
+    ctx.fillStyle='#e6edf3';ctx.font='12px Consolas';ctx.fillText(labels[i]+'  z='+z[i].toFixed(1),x0+8,y+21);
+    ctx.fillStyle='#30363d';ctx.fillRect(x1,y,colW,bh);
+    ctx.fillStyle=(i===topi)?'#3fb950':'#bc8cff';ctx.fillRect(x1,y,Math.max(2,p[i]*colW),bh);
+    ctx.fillStyle='#e6edf3';ctx.fillText((p[i]*100).toFixed(1)+'%',x1+8,y+21);
+  }
+  var sorted=p.slice().sort(function(a,b){return b-a;}),conf=sorted[0],margin=sorted[0]-sorted[1];
+  var ent=-p.reduce(function(a,q){return a+(q>1e-9?q*Math.log(q):0);},0);
+  var m=document.getElementById('lzMetrics');
+  if(m)m.textContent='T='+T.toFixed(1)+'    top-1 conf='+(conf*100).toFixed(1)+'%    margin='+(margin*100).toFixed(1)+' pts    entropy='+ent.toFixed(2);
+}
+/* init when the Training Lab tab opens */
+const _tlPrevShowTab = showTab;
+showTab = function(name){_tlPrevShowTab(name);
+  if(name==='trainlab')setTimeout(function(){tlGDLabel();tlGDdraw();tlBatchLabel();tlFzDraw(null);tlLogitDraw();},60);};
 </script>
 </body>
 </html>
