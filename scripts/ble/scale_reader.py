@@ -9,7 +9,7 @@ reverse engineering (see the BLE Scale tab in index.html):
     notify UUID : 0000ffb2-0000-1000-8000-00805f9b34fb
     packet      : 8 bytes, weight is little-endian grams
         low  = packet[4]                       # 0..255
-        high = packet[5] | (packet[3] & 0xFE)  # 256s (carry may sit in the status byte)
+        high = packet[5] | packet[3]           # number of 256s (carry in packet[3]); do NOT mask bit0
         weight = low + high * 256
 
 A sticky high byte holds the last non-zero carry (the high byte can momentarily
@@ -66,7 +66,9 @@ def notification_handler(sender, data):
 
     # פיענוח משקל (V6 Protocol)
     low_byte = hex_data[4]
-    high_byte = hex_data[5] | (hex_data[3] & 0xFE)
+    # do NOT mask bit0 of the high byte: `& 0xFE` dropped 256 g on every odd multiple of 256
+    # (e.g. 272 g read as 16 g). The high byte (count of 256s) lives in hex_data[3].
+    high_byte = hex_data[5] | hex_data[3]
     raw_buffer.append(low_byte + high_byte * 256)
     srt = sorted(raw_buffer)
     weight = srt[len(srt) // 2]   # median of last few raw decodes

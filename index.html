@@ -1069,12 +1069,15 @@ Oracle ceiling         : 9,988 / 11,265 = 88.7%   (= 8,784 global + 1,204 Israel
     </tbody>
   </table>
   <pre>low  = packet[4]                          <span class="cm"># grams 0..255</span>
-high = packet[5] | (packet[3] &amp; 0xFE)     <span class="cm"># 256s; some units pack the carry into the status byte</span>
+high = packet[5] | packet[3]               <span class="cm"># number of 256s (carry sits in byte 3)</span>
 weight = low + high * 256                  <span class="cm"># little-endian, grams</span></pre>
   <p><b>Worked example</b> for <code>AC 05 00 02 14 00 CE E4</code>: low = 0x14 = 20, high =
-    0x00 | (0x02 &amp; 0xFE) = 2, weight = 20 + 2 × 256 = <b>532 g</b>. The byte-3 mask is the subtle part:
-    on this unit a high-order carry can appear in the status byte rather than byte 5, so we OR them
-    together (masking off the low status bit) to get the true high byte.</p>
+    0x00 | 0x02 = 2, weight = 20 + 2 × 256 = <b>532 g</b>.</p>
+  <div class="callout amber"><b>A real bug we fixed (the odd-256 trap).</b> Our first decode masked the high
+    byte with <code>&amp; 0xFE</code>, on the theory that byte 3's low bit was a status flag. It was not: that
+    bit is the lowest bit of the high byte. Masking it silently dropped <b>256 g</b> from every odd multiple
+    of 256, so <b>272 g read as 16 g</b> while even weights like 532 g looked fine. The fix is to use the full
+    high byte (no mask). Lesson: never assume a bit is a flag without testing the value range that exercises it.</div>
 
   <h3>Step 4 · Robust decode in software (a lesson from a real bug)</h3>
   <p>A live scale flickers as it settles, and the high byte can momentarily read wrong during a refresh,
@@ -1097,7 +1100,7 @@ raw = deque(maxlen=<span class="st">5</span>)
     b = <span class="fn">list</span>(data)
     <span class="kw">if</span> <span class="fn">len</span>(b) &lt; <span class="st">8</span>: <span class="kw">return</span>
     low  = b[<span class="st">4</span>]
-    high = b[<span class="st">5</span>] | (b[<span class="st">3</span>] &amp; <span class="st">0xFE</span>)
+    high = b[<span class="st">5</span>] | b[<span class="st">3</span>]                   <span class="cm"># full high byte, no mask (see odd-256 bug)</span>
     raw.<span class="fn">append</span>(low + high * <span class="st">256</span>)
     weight = <span class="fn">sorted</span>(raw)[<span class="fn">len</span>(raw) // <span class="st">2</span>]   <span class="cm"># median: no latch, returns to 0, rejects spikes</span>
     <span class="cm"># ... push to UI, mark STABLE when last 10 samples vary &le; 2 g</span>
@@ -2331,7 +2334,7 @@ oracle_acc = (g_corr | i_corr).mean()             <span class="cm"># …and the 
       <p class="lab" style="margin-top:14px">The CalEyeZ code</p>
 <pre><span class="cm"># scripts/ble/scale_reader.py - raw transducer bytes → grams, with a stability spec</span>
 low_byte  = hex_data[<span class="nu">4</span>]
-high_byte = hex_data[<span class="nu">5</span>] | (hex_data[<span class="nu">3</span>] &amp; <span class="nu">0xFE</span>)   <span class="cm"># carry may live in the status byte</span>
+high_byte = hex_data[<span class="nu">5</span>] | hex_data[<span class="nu">3</span>]          <span class="cm"># full high byte = number of 256s (no mask)</span>
 weight = sorted(raw_buffer)[len(raw_buffer)//<span class="nu">2</span>]      <span class="cm"># MEDIAN filter = noise vs responsiveness</span>
 delta  = max(stability_buffer) - min(stability_buffer)
 software_stable = delta &lt;= STABILITY_THRESHOLD        <span class="cm"># ≤2 g over 10 samples ⇒ STABLE</span></pre>

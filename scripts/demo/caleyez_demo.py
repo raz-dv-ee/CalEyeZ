@@ -21,6 +21,7 @@ from __future__ import annotations
 import asyncio
 import csv
 import os
+import sys
 import threading
 import time
 from collections import deque
@@ -68,7 +69,14 @@ except Exception as e:
 # 0 · CONFIG
 # ==========================================================================================
 HERE = os.path.dirname(os.path.abspath(__file__))
-ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
+# Path root. When packaged by PyInstaller, model/arbiter data files are unpacked under the bundle dir
+# (sys._MEIPASS for onefile; the _internal dir for onedir). In dev it is the repo root two levels up.
+FROZEN = getattr(sys, "frozen", False)
+EXE_DIR = os.path.dirname(sys.executable) if FROZEN else HERE   # folder the .exe sits in (for config/log files)
+if FROZEN:
+    ROOT = getattr(sys, "_MEIPASS", EXE_DIR)
+else:
+    ROOT = os.path.abspath(os.path.join(HERE, "..", ".."))
 
 GLOBAL_W = os.path.join(ROOT, "runs", "general_model_flattened", "weights", "best.pt")
 ISRAELI_W = os.path.join(ROOT, "runs", "israeli_food_yolo11l_v2", "weights", "best.pt")  # V2: 13 dishes + background
@@ -84,20 +92,45 @@ GATE_ISRAELI = 0.60          # Israeli model is narrow (13 cls): demand a higher
 BOTH_UNSURE = 0.50           # if BOTH experts' top-1 < this, treat as out-of-distribution -> Gemini
 ARBITER_BAND = 0.15          # if |P(israeli) - 0.5| < this, the arbiter cannot decide which expert -> Gemini
 
-# Keys: read from the environment first; the literal is a fallback so the demo runs out of the box.
-# WARNING: these literals are real secrets. Do NOT commit/push this file with them, and rotate the
-# keys before sharing the repo. Prefer setting USDA_API_KEY / GEMINI_API_KEY in the environment.
-USDA_API_KEY = os.environ.get("USDA_API_KEY", "YOUR_USDA_API_KEY_HERE").strip()
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "YOUR_GEMINI_API_KEY_HERE").strip()
+# best-of-N analysis: run more frames on a GPU, fewer on a CPU / packaged edge build so ANALYZE stays
+# responsive (each frame is 2 model forward passes; on CPU 6 frames would mean a ~10 s wait per click).
+try:
+    BEST_OF_N = 2 if (FROZEN or not (_ML_OK and torch.cuda.is_available())) else 6
+except Exception:
+    BEST_OF_N = 2
 
-LOG_FILE = os.path.join(ROOT, "nutrition_log.csv")
+# Keys: env first, then a plain-text `caleyez_keys.txt` next to the program (USDA_API_KEY=... per line),
+# then a dev fallback literal. The packaged .exe is FROZEN, so it NEVER uses the literal: a shipped exe
+# carries no secret, the user sets an env var or drops a caleyez_keys.txt beside the .exe.
+def _read_key(name: str) -> str:
+    v = os.environ.get(name, "").strip()
+    if v:
+        return v
+    cfg = os.path.join(EXE_DIR, "caleyez_keys.txt")
+    if os.path.exists(cfg):
+        try:
+            for line in open(cfg, encoding="utf-8"):
+                if line.strip().startswith(name + "="):
+                    return line.split("=", 1)[1].strip()
+        except Exception:
+            pass
+    return ""
+# dev-only fallback (ignored when frozen so the literal is never shipped in the exe)
+_DEV_USDA = "" if FROZEN else "YOUR_USDA_API_KEY_HERE"
+_DEV_GEM  = "" if FROZEN else "YOUR_GEMINI_API_KEY_HERE"
+USDA_API_KEY = _read_key("USDA_API_KEY") or _DEV_USDA
+GEMINI_API_KEY = _read_key("GEMINI_API_KEY") or _DEV_GEM
+
+# Writable outputs go next to the .exe when frozen (the bundle dir is temporary/read-only).
+WRITE_DIR = EXE_DIR if FROZEN else ROOT
+LOG_FILE = os.path.join(WRITE_DIR, "nutrition_log.csv")
 NOTIFY_UUID = "0000ffb2-0000-1000-8000-00805f9b34fb"   # SWAN scale notify characteristic
 MAX_HISTORY = 100
 
 # Data-tagging tool: every tagged shot becomes (1) a labelled image for fine-tuning, (2) a real-world
 # verification row, and (3) the 512-D penultimate embedding ("DNA") of each model for an
 # embeddings-router / OSR study. Layout is ImageFolder-compatible so the images are training-ready.
-TAG_DIR = os.path.join(ROOT, "tagging_data")
+TAG_DIR = os.path.join(WRITE_DIR, "tagging_data")
 TAG_IMG_DIR = os.path.join(TAG_DIR, "images")
 TAG_EMB_DIR = os.path.join(TAG_DIR, "embeddings")
 TAG_CSV = os.path.join(TAG_DIR, "tagging_log.csv")
@@ -183,6 +216,29 @@ else:
 # ==========================================================================================
 # 2 · IMAGE ROBUSTNESS  (why: a live demo faces any webcam resolution and any room lighting)
 # ==========================================================================================
+def open_camera():
+    """Open the webcam robustly across Windows machines.
+
+    cv2.VideoCapture(0) defaults to the MSMF backend on Windows, which on many laptops fails with
+    'CvCapture_MSMF::grabFrame ... can't grab frame. Error: -1072875772' (it opens but never delivers
+    frames). DirectShow (CAP_DSHOW) is far more reliable for consumer webcams, so we try it first, then
+    MSMF, then the plain default, across the first few device indices. Returns the first capture that
+    actually yields a frame (a handle that merely 'opens' is not enough — MSMF lies about that).
+    """
+    backends = [cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY]
+    for idx in range(3):              # device 0,1,2 (external cams / virtual cams shift the index)
+        for be in backends:
+            cap = cv2.VideoCapture(idx, be)
+            if cap.isOpened():
+                ok, _ = cap.read()    # actually pull one frame to confirm the device delivers
+                if ok:
+                    print(f"[CAMERA] opened index {idx} via backend {be}")
+                    return cap
+            cap.release()
+    print("[CAMERA] WARNING: no working webcam found; preview will be blank.")
+    return cv2.VideoCapture(0)        # last resort, keeps the app alive
+
+
 def center_roi(bgr: np.ndarray) -> np.ndarray:
     """Fixed central square crop.
 
@@ -473,7 +529,10 @@ def on_notify(_sender, data):
     if len(b) < 8:
         return
     low = b[4]
-    high = b[5] | (b[3] & 0xFE)
+    # high byte = number of 256s, carried in b[3]. Do NOT mask bit0: the old `& 0xFE` cleared the
+    # low bit of the high byte, so every ODD multiple of 256 lost 256 g (e.g. 272 g -> 16 g). b[5] is
+    # status/zero in practice and is OR-ed in only defensively.
+    high = b[5] | b[3]
     raw = low + high * 256
     raw_buffer.append(raw)
     s = sorted(raw_buffer)
@@ -590,7 +649,7 @@ class CalEyeZDemo:
         self.root = root
         self.running = True
         self.frame_bgr = None
-        self.frames = deque(maxlen=6)   # recent frames for best-of-N analysis
+        self.frames = deque(maxlen=BEST_OF_N)   # recent frames for best-of-N analysis (2 on CPU/edge, 6 on GPU)
         self.last = None
         self.last = None
         root.title("CalEyeZ  ·  Live Demo")
@@ -603,7 +662,7 @@ class CalEyeZDemo:
         self._build_left(root)
         self._build_right(root)
 
-        self.cap = cv2.VideoCapture(0)
+        self.cap = open_camera()
         self._tick_camera()
         self._tick_weight()
 
