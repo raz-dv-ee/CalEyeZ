@@ -19,6 +19,73 @@
   pre{background:#0b0f15;border:1px solid var(--line);border-radius:8px;padding:14px 16px;
     overflow:auto;font-family:ui-monospace,Consolas,monospace;font-size:12.5px;line-height:1.55}
   pre .cm{color:var(--mut)} pre .kw{color:var(--purple)} pre .st{color:var(--teal)} pre .fn{color:var(--accent)}
+  pre .nu{color:var(--amber)}
+
+  /* ---- Electronic Engineering tab: per-course evidence cards ---- */
+  #tab-ee .course{background:var(--panel);border:1px solid var(--line);border-radius:12px;margin:20px 0;overflow:hidden}
+  #tab-ee .course>.head{padding:16px 20px;border-bottom:1px solid var(--line);display:flex;align-items:flex-start;gap:14px}
+  #tab-ee .course>.head .ix{font-size:24px;font-weight:800;color:var(--panel2);background:var(--ink);border-radius:9px;width:44px;height:44px;flex:none;display:flex;align-items:center;justify-content:center}
+  #tab-ee .course .nm{font-size:18px;font-weight:700;margin:0}
+  #tab-ee .course .nm .he{color:var(--mut);font-weight:500;font-size:13px}
+  #tab-ee .course .meta{color:var(--mut);font-size:12px;margin-top:3px}
+  #tab-ee .course .body{padding:18px 20px}
+  #tab-ee .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
+  @media(max-width:760px){#tab-ee .grid2{grid-template-columns:1fr}}
+  #tab-ee .lab{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--mut);font-weight:700;margin:0 0 6px}
+  #tab-ee ul.tight{margin:6px 0 0;padding-left:18px} #tab-ee ul.tight li{margin:3px 0}
+  #tab-ee .built{border-left:3px solid var(--purple);padding-left:14px;margin:8px 0}
+  #tab-ee .proj{background:rgba(63,185,80,.07);border:1px solid rgba(63,185,80,.32);border-radius:10px;padding:15px 18px;margin-top:18px}
+  #tab-ee .proj .lab{color:var(--green)}
+  #tab-ee .proj .ptitle{font-size:15px;font-weight:700;margin:2px 0 6px}
+  #tab-ee .proj .ptitle .pmeta{display:block;color:var(--mut);font-weight:500;font-size:12px;margin-top:2px}
+  #tab-ee .proj table td.win{color:var(--green);font-weight:700}
+  #tab-ee .chips{display:flex;flex-wrap:wrap;gap:6px;margin:8px 0 2px}
+  #tab-ee .chip{font-size:11px;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:3px 9px;color:var(--mut)}
+  #tab-ee .eebox{background:rgba(57,208,196,.08);border:1px solid rgba(57,208,196,.3);border-radius:9px;padding:13px 16px;margin-top:18px}
+  #tab-ee .eebox .lab{color:var(--teal)}
+  #tab-ee .found{background:rgba(210,153,34,.07);border:1px solid rgba(210,153,34,.32);border-radius:9px;padding:13px 16px;margin-top:18px}
+  #tab-ee .found .lab{color:var(--amber)}
+  #tab-ee .ref{color:var(--mut);font-size:12px;margin-top:6px}
+
+  /* ---- Real Images Validation tab ---- */
+  #tab-riv .clshead{display:flex;align-items:baseline;gap:10px;margin:26px 0 4px}
+  #tab-riv .clshead h3{margin:0;font-size:18px}
+  #tab-riv .clshead .acc{font-size:13px;font-weight:700}
+  #tab-riv .clshead .acc.good{color:var(--green)} #tab-riv .clshead .acc.mid{color:var(--amber)} #tab-riv .clshead .acc.bad{color:var(--red)}
+  #tab-riv .gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px;margin:10px 0 4px}
+  #tab-riv .shot{border:2px solid var(--green);border-radius:9px;overflow:hidden;background:#0b0f15}
+  #tab-riv .shot.bad{border-color:var(--red)}
+  #tab-riv .shot img{width:100%;height:120px;object-fit:cover;display:block}
+  #tab-riv .shot .cap{padding:5px 8px;font-size:11px;line-height:1.35}
+  #tab-riv .shot .cap b{color:var(--ink)} #tab-riv .shot .v{float:right;font-weight:700}
+  #tab-riv .shot.ok .v{color:var(--green)} #tab-riv .shot.bad .v{color:var(--red)}
+  #tab-riv .shot .why{color:var(--amber);display:block;margin-top:3px}
+  #tab-riv .fixrow{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin:10px 0}
+  @media(max-width:760px){#tab-riv .fixrow{grid-template-columns:1fr}}
+  #tab-riv .fixcard{background:var(--panel);border:1px solid var(--line);border-left:3px solid var(--amber);border-radius:9px;padding:13px 15px}
+  #tab-riv .fixcard h4{margin:0 0 6px;font-size:14px;color:var(--amber)}
+  #tab-riv .fixcard .f{color:var(--green);font-weight:600;margin-top:6px;display:block}
+  /* stats + charts */
+  #tab-riv .statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}
+  @media(max-width:760px){#tab-riv .statgrid{grid-template-columns:repeat(2,1fr)}}
+  #tab-riv .stat{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px 14px}
+  #tab-riv .stat .n{font-size:24px;font-weight:800;color:var(--accent)} #tab-riv .stat .l{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+  #tab-riv .charts{display:grid;grid-template-columns:240px 1fr;gap:20px;align-items:center;margin:16px 0;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:18px}
+  @media(max-width:760px){#tab-riv .charts{grid-template-columns:1fr}}
+  #tab-riv .legend{font-size:13px;color:var(--ink)} #tab-riv .legend div{margin:3px 0} #tab-riv .legend i{display:inline-block;width:11px;height:11px;border-radius:3px;margin-right:7px;vertical-align:middle}
+  #tab-riv .accbar{display:flex;align-items:center;gap:10px;margin:5px 0;font-size:12.5px}
+  #tab-riv .accbar .nm{width:130px;color:var(--mut);text-align:right;flex:none}
+  #tab-riv .accbar .track{flex:1;background:#0b0f15;border-radius:5px;height:16px;overflow:hidden;border:1px solid var(--line)}
+  #tab-riv .accbar .fill{height:100%;border-radius:4px 0 0 4px}
+  #tab-riv .accbar .pc{width:78px;flex:none;font-variant-numeric:tabular-nums;color:var(--mut)}
+  #tab-riv .galcards{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin:10px 0 4px}
+  @media(max-width:760px){#tab-riv .galcards{grid-template-columns:1fr}}
+  #tab-riv .cardshot{border:2px solid var(--green);border-radius:9px;overflow:hidden;background:#0b0f15;display:block}
+  #tab-riv .cardshot.bad{border-color:var(--red)}
+  #tab-riv .cardshot img{width:100%;display:block}
+  #tab-riv .cardshot .cap{padding:6px 9px;font-size:11.5px;line-height:1.4;color:var(--ink)}
+  #tab-riv .cardshot .v{float:right;font-weight:700} #tab-riv .cardshot.ok .v{color:var(--green)} #tab-riv .cardshot.bad .v{color:var(--red)}
+  #tab-riv .cardshot .why{color:var(--amber);display:block;margin-top:3px}
 
   /* header + tab bar */
   header.top{padding:26px 40px 0;border-bottom:1px solid var(--line);background:var(--panel)}
@@ -130,11 +197,13 @@
     <button data-tab="analysis">System Analysis</button>
     <button data-tab="analysisv2">System Analysis V2</button>
     <button data-tab="validation">Validation &amp; Risks</button>
+    <button data-tab="riv">Real Images Validation</button>
     <button data-tab="ble">BLE Scale</button>
     <button data-tab="demo">Live Demo</button>
     <button data-tab="feedback">Reviewer Response</button>
     <button data-tab="future">Limitations &amp; V2</button>
     <button data-tab="rejected">Tried &amp; Rejected</button>
+    <button data-tab="ee">Electronic Engineering</button>
   </div>
 </header>
 
@@ -1928,6 +1997,396 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     confident); lowering T spikes the top class. That is why a network can be <i>overconfident</i> (peaky
     softmax) on food it has never seen, the very problem the open-set <code>background</code> class fixed.</div>
   <div class="foot">CalEyeZ · Training Lab · interactive explainer of the training terms used across this report.</div>
+</section>
+
+<section class="tab" id="tab-riv">
+  <h2>Real-World Image Validation</h2>
+  <p class="lead">40 real phone photos of food in varied conditions (some deliberately degraded with low light and shifted colour temperature), sorted into class folders and run through the exact deployed pipeline offline. The folder name is the ground truth; none of these images were in training. Each tile is the evidence card the pipeline emits, showing the ROI it saw, both experts&rsquo; top-5, and the arbiter&rsquo;s decision. Click any card to enlarge.</p>
+  <div class="statgrid">
+    <div class="stat"><div class="n">40</div><div class="l">photos tested</div></div>
+    <div class="stat"><div class="n">75%</div><div class="l">top-1 accuracy</div></div>
+    <div class="stat"><div class="n">30 / 10</div><div class="l">correct / wrong</div></div>
+    <div class="stat"><div class="n">190 ms</div><div class="l">median latency</div></div>
+  </div>
+  <div class="charts">
+    <div style="text-align:center">
+      <svg width="150" height="150" viewBox="0 0 150 150">
+        <circle cx="75" cy="75" r="54" fill="none" stroke="#f85149" stroke-width="20"/>
+        <circle cx="75" cy="75" r="54" fill="none" stroke="#3fb950" stroke-width="20" stroke-dasharray="254.5 84.8" transform="rotate(-90 75 75)"/>
+        <text x="75" y="70" text-anchor="middle" font-size="26" font-weight="800" fill="#e6edf3">75%</text>
+        <text x="75" y="90" text-anchor="middle" font-size="11" fill="#8b949e">correct</text>
+      </svg>
+      <div class="legend" style="margin-top:6px"><div><i style="background:#3fb950"></i>Correct (30)</div><div><i style="background:#f85149"></i>Wrong (10)</div></div>
+    </div>
+    <div>
+      <p style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#8b949e;font-weight:700;margin:0 0 8px">Accuracy by class</p>
+      <div class="accbar"><span class="nm">french fries</span><span class="track"><span class="fill" style="width:100%;background:#3fb950"></span></span><span class="pc">3/3 &middot; 100%</span></div>
+      <div class="accbar"><span class="nm">hamburger</span><span class="track"><span class="fill" style="width:100%;background:#3fb950"></span></span><span class="pc">3/3 &middot; 100%</span></div>
+      <div class="accbar"><span class="nm">bourekas cheese</span><span class="track"><span class="fill" style="width:90%;background:#3fb950"></span></span><span class="pc">9/10 &middot; 90%</span></div>
+      <div class="accbar"><span class="nm">canned tuna</span><span class="track"><span class="fill" style="width:73%;background:#d29922"></span></span><span class="pc">8/11 &middot; 73%</span></div>
+      <div class="accbar"><span class="nm">pizza</span><span class="track"><span class="fill" style="width:71%;background:#d29922"></span></span><span class="pc">5/7 &middot; 71%</span></div>
+      <div class="accbar"><span class="nm">grapes</span><span class="track"><span class="fill" style="width:67%;background:#d29922"></span></span><span class="pc">2/3 &middot; 67%</span></div>
+      <div class="accbar"><span class="nm">hummus</span><span class="track"><span class="fill" style="width:0%;background:#f85149"></span></span><span class="pc">0/3 &middot; 0%</span></div>
+    </div>
+  </div>
+  <p style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#8b949e;font-weight:700;margin:18px 0 6px">The 10 errors, by root cause</p>
+  <div style="background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px">
+    <div class="accbar"><span class="nm">Induced degradation</span><span class="track"><span class="fill" style="width:67%;background:#f85149"></span></span><span class="pc">2</span></div>
+    <div class="accbar"><span class="nm">Far / top-down framing</span><span class="track"><span class="fill" style="width:67%;background:#d29922"></span></span><span class="pc">2</span></div>
+    <div class="accbar"><span class="nm">Under-trained hummus</span><span class="track"><span class="fill" style="width:100%;background:#bc8cff"></span></span><span class="pc">3</span></div>
+    <div class="accbar"><span class="nm">Israeli lookalike</span><span class="track"><span class="fill" style="width:33%;background:#39d0c4"></span></span><span class="pc">1</span></div>
+    <div class="accbar"><span class="nm">Routing error</span><span class="track"><span class="fill" style="width:33%;background:#58a6ff"></span></span><span class="pc">1</span></div>
+    <div class="accbar"><span class="nm">Low-conf (gate catches)</span><span class="track"><span class="fill" style="width:33%;background:#3fb950"></span></span><span class="pc">1</span></div>
+  </div>
+  <div class="callout"><b>30 / 40 correct = 75.0%</b> (local-only, no Gemini) &middot; 95% Wilson CI [59.8%, 85.8%]. This is the floor: in the live system the confidence gate routes the low-confidence misses to the Gemini fallback, recovering several of them.</div>
+  <div class="clshead"><h3>french fries</h3><span class="acc good">3/3 = 100%</span></div>
+  <div class="galcards">
+    <a class="cardshot ok" href="assets/cards/IMG-20221202-WA0054__card.png" target="_blank"><img src="assets/cards/IMG-20221202-WA0054__card.png" loading="lazy" alt="french_fries card"><div class="cap"><b>french fries</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260607_143845122__card.png" target="_blank"><img src="assets/cards/PXL_20260607_143845122__card.png" loading="lazy" alt="french_fries card"><div class="cap"><b>french fries</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260607_143847833__card.png" target="_blank"><img src="assets/cards/PXL_20260607_143847833__card.png" loading="lazy" alt="french_fries card"><div class="cap"><b>french fries</b><span class="v">&#10003;</span></div></a>
+  </div>
+  <div class="clshead"><h3>hamburger</h3><span class="acc good">3/3 = 100%</span></div>
+  <div class="galcards">
+    <a class="cardshot ok" href="assets/cards/20180915_151422__card.png" target="_blank"><img src="assets/cards/20180915_151422__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/20221209_135251__card.png" target="_blank"><img src="assets/cards/20221209_135251__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/20240102_200042__card.png" target="_blank"><img src="assets/cards/20240102_200042__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span></div></a>
+  </div>
+  <div class="clshead"><h3>bourekas cheese</h3><span class="acc good">9/10 = 90%</span></div>
+  <div class="galcards">
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_094742715__card.png" target="_blank"><img src="assets/cards/PXL_20260606_094742715__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_094749329__card.png" target="_blank"><img src="assets/cards/PXL_20260606_094749329__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_095336091__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095336091__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_095338869__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095338869__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_095342662__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095342662__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot bad" href="assets/cards/PXL_20260606_095349746__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095349746__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>malawach</b><span class="v">&#10007;</span><span class="why">Within-domain lookalike: bourekas and malawach are both golden fried dough; the Israeli expert split two similar pastries.</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_095354025__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095354025__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_095356615__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095356615__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_095405062__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095405062__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_095410289__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095410289__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span></div></a>
+  </div>
+  <div class="clshead"><h3>canned tuna</h3><span class="acc mid">8/11 = 73%</span></div>
+  <div class="galcards">
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_093444220__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093444220__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_093448547__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093448547__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_093455311__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093455311__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot bad" href="assets/cards/PXL_20260606_093457993__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093457993__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>ice cream</b><span class="v">&#10007;</span><span class="why">Far, top-down shot: the round open can reads as a bowl of ice cream. Shape and scale, not lighting.</span></div></a>
+    <a class="cardshot bad" href="assets/cards/PXL_20260606_093505710__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093505710__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>ginger</b><span class="v">&#10007;</span><span class="why">Distant, low-contrast pale contents; borderline 0.58 confidence.</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_093508478__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093508478__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_093517965__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093517965__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_093533873__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093533873__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_093538470__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093538470__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/c3d13871-958f-4596-aecb-57fb540437e5-copied-media~2__card.png" target="_blank"><img src="assets/cards/c3d13871-958f-4596-aecb-57fb540437e5-copied-media~2__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot bad" href="assets/cards/dea2f945-286c-466a-ab02-e16ec1d7a28f-copied-media~2__card.png" target="_blank"><img src="assets/cards/dea2f945-286c-466a-ab02-e16ec1d7a28f-copied-media~2__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>meorav yerushalmi</b><span class="v">&#10007;</span><span class="why">Routing error: the arbiter sent it to the Israeli expert, which forced a mixed-grill label.</span></div></a>
+  </div>
+  <div class="clshead"><h3>pizza</h3><span class="acc mid">5/7 = 71%</span></div>
+  <div class="galcards">
+    <a class="cardshot ok" href="assets/cards/20221209_205748__card.png" target="_blank"><img src="assets/cards/20221209_205748__card.png" loading="lazy" alt="pizza card"><div class="cap"><b>pizza</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot bad" href="assets/cards/PXL_20260606_000017348__card.png" target="_blank"><img src="assets/cards/PXL_20260606_000017348__card.png" loading="lazy" alt="pizza card"><div class="cap"><b>chicken quesadilla</b><span class="v">&#10007;</span><span class="why">Deliberately hue/temperature-shifted and dim: a cheesy triangle reads as a quesadilla.</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_000023196__card.png" target="_blank"><img src="assets/cards/PXL_20260606_000023196__card.png" loading="lazy" alt="pizza card"><div class="cap"><b>pizza</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot bad" href="assets/cards/PXL_20260606_000031858__card.png" target="_blank"><img src="assets/cards/PXL_20260606_000031858__card.png" loading="lazy" alt="pizza card"><div class="cap"><b>chicken quesadilla</b><span class="v">&#10007;</span><span class="why">Same induced degradation (strong blue cast).</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_000048777__card.png" target="_blank"><img src="assets/cards/PXL_20260606_000048777__card.png" loading="lazy" alt="pizza card"><div class="cap"><b>pizza</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_000051391__card.png" target="_blank"><img src="assets/cards/PXL_20260606_000051391__card.png" loading="lazy" alt="pizza card"><div class="cap"><b>pizza</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/PXL_20260606_000057160__card.png" target="_blank"><img src="assets/cards/PXL_20260606_000057160__card.png" loading="lazy" alt="pizza card"><div class="cap"><b>pizza</b><span class="v">&#10003;</span></div></a>
+  </div>
+  <div class="clshead"><h3>grapes</h3><span class="acc mid">2/3 = 67%</span></div>
+  <div class="galcards">
+    <a class="cardshot bad" href="assets/cards/IMG-20260607-WA0048__card.png" target="_blank"><img src="assets/cards/IMG-20260607-WA0048__card.png" loading="lazy" alt="grapes card"><div class="cap"><b>macarons</b><span class="v">&#10007;</span><span class="why">Low global confidence (0.41); clustered round shapes resemble macarons. Would defer to Gemini live.</span></div></a>
+    <a class="cardshot ok" href="assets/cards/IMG-20260607-WA0049__card.png" target="_blank"><img src="assets/cards/IMG-20260607-WA0049__card.png" loading="lazy" alt="grapes card"><div class="cap"><b>grapes</b><span class="v">&#10003;</span></div></a>
+    <a class="cardshot ok" href="assets/cards/IMG-20260607-WA0050__card.png" target="_blank"><img src="assets/cards/IMG-20260607-WA0050__card.png" loading="lazy" alt="grapes card"><div class="cap"><b>grapes</b><span class="v">&#10003;</span></div></a>
+  </div>
+  <div class="clshead"><h3>hummus</h3><span class="acc bad">0/3 = 0%</span></div>
+  <div class="galcards">
+    <a class="cardshot bad" href="assets/cards/PXL_20260607_144000957__card.png" target="_blank"><img src="assets/cards/PXL_20260607_144000957__card.png" loading="lazy" alt="hummus card"><div class="cap"><b>takoyaki</b><span class="v">&#10007;</span><span class="why">Beige dip with toppings; very low confidence (0.30). Gemini-fallback territory.</span></div></a>
+    <a class="cardshot bad" href="assets/cards/PXL_20260607_144003201__card.png" target="_blank"><img src="assets/cards/PXL_20260607_144003201__card.png" loading="lazy" alt="hummus card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10007;</span><span class="why">Routed to the Israeli expert (beige food), which returned bourekas confidently.</span></div></a>
+    <a class="cardshot bad" href="assets/cards/PXL_20260607_144007379__card.png" target="_blank"><img src="assets/cards/PXL_20260607_144007379__card.png" loading="lazy" alt="hummus card"><div class="cap"><b>breakfast burrito</b><span class="v">&#10007;</span><span class="why">Beige/tan blob confusion (0.35 confidence).</span></div></a>
+  </div>
+  <h3 style="margin-top:34px">Failure modes and how I would fix them</h3>
+  <div class="fixrow">
+    <div class="fixcard"><h4>Induced capture degradation (pizza &rarr; quesadilla)</h4>Two pizza shots I deliberately darkened and colour-shifted collapsed to chicken_quesadilla. White-balance shift moves the colour statistics the CNN leans on.<span class="f">Fix: Add stronger colour/temperature augmentation in training, a quick auto white-balance check at capture, and lean on best-of-N frames in the live app (the offline tester uses one frame).</span></div>
+    <div class="fixcard"><h4>Far / top-down framing (tuna &rarr; ice cream, ginger)</h4>A distant, top-down open can fills little of the ROI and its round rim reads as a bowl or scoop.<span class="f">Fix: On-screen capture guidance (fill the box, ~45&amp;deg; not top-down) and a multi-scale or detection-based crop so the food dominates the ROI.</span></div>
+    <div class="fixcard"><h4>Beige-blob class with too little data (hummus 0/3)</h4>Hummus is a generic tan dip; with very few training images it is confused with any beige food and even routed to the Israeli expert as bourekas.<span class="f">Fix: Collect many more hummus images, add it as a first-class label, and add hard-negative pairs (hummus vs other beige foods).</span></div>
+    <div class="fixcard"><h4>Within-domain Israeli lookalikes (bourekas &rarr; malawach)</h4>The Israeli expert split two genuinely similar golden fried pastries.<span class="f">Fix: Hard-negative mining between visually-close Israeli classes and more examples per dish; a fine-grained gap, not a routing one.</span></div>
+    <div class="fixcard"><h4>Generic round clusters at low confidence (grapes &rarr; macarons)</h4>Clustered round shapes at 0.41 confidence look like macarons.<span class="f">Fix: Already handled by the gate: flagged not-confident and escalated to Gemini live. More grape variety would also help.</span></div>
+  </div>
+  <div class="callout green"><b>What this validates.</b> In normal conditions the system is strong (fries and hamburger 100%, bourekas 90%). The errors cluster into a few honest, fixable causes: capture framing, one under-trained class, and inputs I corrupted on purpose. Most low-confidence misses are exactly the cases the confidence gate sends to the cloud fallback.</div>
+  <div class="foot">CalEyeZ &middot; Real-World Image Validation &middot; 40 field photos through the deployed pipeline, folder = ground truth.</div>
+</section>
+
+<!-- ===================== ELECTRONIC ENGINEERING ===================== -->
+<section class="tab" id="tab-ee">
+  <h2>Why CalEyeZ Is Electronic Engineering, Not Just Software</h2>
+  <p class="lead">A common first reaction is "this is a software project with a camera." It is not. CalEyeZ is a
+    closed loop from the physical world, through silicon, back to a physical-world decision. Take away any one
+    layer and a real subsystem disappears. Here is that argument laid out.</p>
+
+  <div class="callout"><b>The one-sentence case.</b> Two analog sensors (a camera and a load cell) capture the
+    world; their signals are conditioned with 1-D and 2-D digital filtering; the recognition runs as
+    convolutions and matrix-multiplies on a parallel GPU in FP16; a decision-tree arbiter and a confidence gate
+    turn that into an answer; and the whole thing is held together by code that drives real hardware. That is a
+    sensing-through-silicon-to-decision pipeline, which is electronic engineering.</div>
+
+  <h3>The pipeline, read as electronic-engineering stages</h3>
+  <table>
+    <thead><tr><th>Stage</th><th>What physically happens</th><th>The discipline behind it</th></tr></thead>
+    <tbody>
+      <tr><td><b>Sense</b></td><td>A camera and a strain-gauge load cell turn light and force into electrical signals.</td><td>Sensors &amp; Actuators · Analog Electronics</td></tr>
+      <tr><td><b>Condition</b></td><td>Median filter on the 1-D weight stream; white balance + CLAHE on the 2-D image.</td><td>Signal &amp; Image Processing</td></tr>
+      <tr><td><b>Compute on silicon</b></td><td>Two CNNs run as tiled matrix-multiplies and convolutions, in parallel, in FP16, on a CUDA GPU.</td><td>GPU Accelerator · Computer Architecture</td></tr>
+      <tr><td><b>Decide</b></td><td>An XGBoost arbiter routes between the two experts; a confidence gate escalates when unsure.</td><td>Practical ML · Applications in AI</td></tr>
+      <tr><td><b>Drive it in code</b></td><td>OOP classes, ring buffers and bounds-checks orchestrate the camera loop and the BLE device loop.</td><td>Python for E&amp;E · Software / C</td></tr>
+    </tbody>
+  </table>
+
+  <h3>Each course → its project → the CalEyeZ code it produced</h3>
+  <p>This is the hard proof. For every course: the project I built in it, and the actual code in our final
+    project that the course put there. Not a name and a checkmark, the real lines.</p>
+
+  <!-- COURSE 1 : PYTHON -->
+  <div class="course">
+    <div class="head"><div class="ix">1</div><div>
+      <p class="nm">Python Programming for E&amp;E Engineers <span class="he">· תכנות פיתון למהנדסי חשמל</span></p>
+      <div class="meta">Course 3600102 · Raspberry-Pi-centric, hardware-in-the-loop</div></div></div>
+    <div class="body">
+      <p class="lab">What it put into CalEyeZ</p>
+      <div class="built">The whole codebase is Python driving real hardware (webcam + Bluetooth scale) through the module library, exactly the syllabus model.</div>
+      <p class="lab" style="margin-top:14px">The CalEyeZ code</p>
+<pre><span class="cm"># scripts/demo/caleyez_demo.py - the module library + a hardware device</span>
+<span class="kw">import</span> cv2, numpy <span class="kw">as</span> np, pandas <span class="kw">as</span> pd
+<span class="kw">from</span> PIL <span class="kw">import</span> Image, ImageTk
+<span class="kw">from</span> bleak <span class="kw">import</span> BleakScanner, BleakClient   <span class="cm"># BLE hardware, in pure Python</span>
+...
+self.cap = cv2.VideoCapture(<span class="nu">0</span>)   <span class="cm"># a physical camera</span>
+self._tick_camera()                <span class="cm"># live frame loop</span>
+self._tick_weight()                <span class="cm"># live weight loop from the BLE scale</span></pre>
+      <div class="eebox"><p class="lab">Immediate impact</p>The course's thesis, "intelligent operation of any hardware component", is literally the live demo: a camera loop and a BLE device loop running together in one Python program.</div>
+    </div>
+  </div>
+
+  <!-- COURSE 2 : SOFTWARE / C -->
+  <div class="course">
+    <div class="head"><div class="ix">2</div><div>
+      <p class="nm">Software - Programming in C <span class="he">· מבוא למדעי המחשב (C)</span></p>
+      <div class="meta">Course 3601865 · algorithms, structs, dynamic memory, intro to classes (OOP)</div></div></div>
+    <div class="body">
+      <p class="lab">What it put into CalEyeZ</p>
+      <div class="built">The demo is built as OOP classes (the course's closing topic), with a custom widget that <em>inherits</em> a base class, plus ring buffers and a hand-written median filter.</div>
+      <p class="lab" style="margin-top:14px">The CalEyeZ code</p>
+<pre><span class="cm"># scripts/demo/caleyez_demo.py - a class that inherits and overrides, and the app object</span>
+<span class="kw">class</span> <span class="fn">AutocompleteEntry</span>(tk.Entry):                 <span class="cm"># inherits a base class</span>
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, parent, textvar, options, **kw):
+        <span class="kw">super</span>().__init__(parent, textvariable=textvar, **kw)
+<span class="kw">class</span> <span class="fn">CalEyeZDemo</span>:
+    <span class="kw">def</span> <span class="fn">__init__</span>(self, root):
+        self.frames = deque(maxlen=<span class="nu">6</span>)   <span class="cm"># fixed-size buffer = the array/struct discipline from C</span></pre>
+      <div class="eebox"><p class="lab">Immediate impact</p>Pointers, dynamic memory and bounds-checking from C are the exact mental model for reasoning about GPU memory and array indexing later. This course is the floor the GPU work stands on.</div>
+    </div>
+  </div>
+
+  <!-- COURSE 3 : GPU -->
+  <div class="course">
+    <div class="head"><div class="ix">3</div><div>
+      <p class="nm">GPU Parallel Hardware Accelerator <span class="he">· חומרה מאיצה (GPU / CUDA)</span></p>
+      <div class="meta">Course 3624550 · CUDA, warps, memory hierarchy, tiling, convolution, FP16</div></div></div>
+    <div class="body">
+      <p class="lead" style="color:var(--teal);margin:0 0 12px"><b>★ The beating heart.</b> The two vision models exist only because a GPU runs convolutions and matrix-multiplies in parallel, the precise subject of this course.</p>
+      <p class="lab">What it put into CalEyeZ</p>
+      <div class="built">Both YOLO11 models train and run on a CUDA GPU (RTX 3060 Ti) in <b>FP16/AMP</b>, the floating-point lecture put to work. A YOLO layer <em>is</em> tiled convolutions + matmuls, the primitives this course builds by hand.</div>
+      <p class="lab" style="margin-top:14px">The CalEyeZ code</p>
+<pre><span class="cm"># scripts/training/train_general_model.py - CUDA GPU + FP16</span>
+results = model.train(
+    device = <span class="nu">0</span>,          <span class="cm"># the CUDA GPU</span>
+    amp    = <span class="kw">True</span>,       <span class="cm"># mixed precision = the FP16 path from the floating-point lecture</span>
+)
+<span class="cm"># scripts/demo/caleyez_demo.py - a GPU forward pass (the "Deep Learning on GPU" lecture)</span>
+g = model_g.embed(roi, imgsz=GLOBAL_IMGSZ)[<span class="nu">0</span>]  <span class="cm"># 512-D penultimate features, on the GPU</span></pre>
+
+      <div class="proj">
+        <p class="lab">My course project → why it IS this engine</p>
+        <p class="ptitle">CUDA Attention Mechanism - Transformer attention written from scratch in CUDA
+          <span class="pmeta">attention.cu · Q·Kᵀ·scale → row-softmax → P·V · N=512, d=64 · baseline vs optimized, validated against a CPU reference</span></p>
+        <p style="margin:6px 0">I hand-wrote and optimized the same primitives the YOLO models run millions of times per image:</p>
+        <div class="chips">
+          <span class="chip">Tiled shared-memory matmul</span><span class="chip">32×32 tiles = warp size</span>
+          <span class="chip">Kernel fusion (QKᵀ + scale)</span><span class="chip">Virtual transpose</span>
+          <span class="chip">Zero-pad boundary guard</span><span class="chip">Parallel softmax</span>
+        </div>
+        <table>
+          <tr><th>Implementation</th><th>Time (N=512)</th><th>Speed-up</th></tr>
+          <tr><td>CPU reference</td><td>36.465 ms</td><td>1×</td></tr>
+          <tr><td>Basic GPU (4 kernels)</td><td>0.612 ms</td><td>≈60×</td></tr>
+          <tr><td class="win">Optimized GPU (tiled + fused)</td><td class="win">0.170 ms</td><td class="win">≈214× vs CPU</td></tr>
+        </table>
+<pre><span class="cm">// attention.cu - the optimized fused QKᵀ kernel</span>
+<span class="kw">#define</span> TILE <span class="nu">32</span>                          <span class="cm">// = NVIDIA warp size → coalesced access</span>
+<span class="kw">__global__</span> <span class="kw">void</span> <span class="fn">qkt_fused_opt</span>(<span class="kw">const float</span>* Q, <span class="kw">const float</span>* K, <span class="kw">float</span>* S, <span class="kw">float</span> scale){
+  <span class="kw">__shared__ float</span> Qs[TILE][TILE], Ks[TILE][TILE];
+  Ks[ty][tx] = (col &lt; N &amp;&amp; kK &lt; D) ? K[col * D + kK] : <span class="nu">0.0f</span>;  <span class="cm">// virtual transpose + guard</span>
+  <span class="kw">for</span> (<span class="kw">int</span> k = <span class="nu">0</span>; k &lt; TILE; ++k) acc += Qs[ty][k] * Ks[k][tx];
+  <span class="kw">if</span> (row &lt; N &amp;&amp; col &lt; N) S[row * N + col] = acc * scale;   <span class="cm">// KERNEL FUSION</span>
+}</pre>
+        <p class="ref" style="color:var(--green)">Impact on CalEyeZ: a YOLO layer is this kernel at scale. Having built and profiled the tiled/fused matmul myself, the <code>amp=True</code> training run and GPU forward passes are not a black box, they are the production version of the kernel I wrote.</p>
+      </div>
+
+      <div class="found">
+        <p class="lab">Foundation: Computer Architecture (3602801)</p>
+        The GPU work is legible only because of the Von-Neumann model and the register-vs-memory latency hierarchy (registers ≈ 1 cyc, shared ≈ 5, global ≈ 500) that is the whole reason for tiling into shared memory.
+        <div style="margin-top:10px;border-top:1px solid rgba(210,153,34,.3);padding-top:10px">
+          <b style="color:var(--amber)">My Computer Architecture project: a CPU.</b> A single-cycle MIPS processor in Verilog, 32 registers, an ALU, full Fetch → Decode → Execute, then optimized across four revisions:</div>
+        <table>
+          <tr><th>CPU revision</th><th>Cycles</th><th>Technique</th></tr>
+          <tr><td>Basic single-cycle MIPS</td><td>53</td><td>standard fetch/decode/execute loop</td></tr>
+          <tr><td>Extended ISA</td><td>6</td><td>custom ALU op (func <code>101011</code>) = n(n+1)/2 − m(m−1)/2 in hardware</td></tr>
+          <tr><td>Minimal 2-cycle</td><td>2</td><td>stripped datapath, dedicated accumulator</td></tr>
+          <tr><td style="color:var(--amber);font-weight:700">Pure combinational</td><td style="color:var(--amber);font-weight:700">0</td><td>clockless logic, result instant</td></tr>
+        </table>
+        <p class="ref" style="color:var(--amber)">Impact: designing a datapath and <em>extending an instruction set</em> is the same instinct behind choosing FP16 tensor paths and fused CUDA kernels above. A GPU is this machine, massively parallelised.</p>
+      </div>
+      <div class="ref">Code: <code>scripts/training/train_general_model.py</code>, <code>train_israeli_food_v2.py</code>, <code>scripts/demo/caleyez_demo.py</code>.</div>
+    </div>
+  </div>
+
+  <!-- COURSE 4 : PRACTICAL ML -->
+  <div class="course">
+    <div class="head"><div class="ix">4</div><div>
+      <p class="nm">Practical Machine Learning <span class="he">· למידת מכונה יישומית</span></p>
+      <div class="meta">Course 3644118 · supervised &amp; deep learning, image recognition, evaluation</div></div></div>
+    <div class="body">
+      <p class="lab">What it put into CalEyeZ</p>
+      <div class="built">Two supervised deep-learning classifiers (132-class + 13-class), trained with honest splits, SHA-256 de-duplication (zero leakage), confusion matrices, and calibrated confidence.</div>
+      <p class="lab" style="margin-top:14px">The CalEyeZ code</p>
+<pre><span class="cm"># scripts/training/train_israeli_food_v2.py - supervised deep learning + calibration</span>
+model = YOLO(<span class="st">"yolo11l-cls.pt"</span>)
+results = model.train(
+    data=DATASET_DIR, task=<span class="st">"classify"</span>,
+    epochs=<span class="nu">120</span>, patience=<span class="nu">25</span>,        <span class="cm"># early-stop on val top-1 = no overfitting</span>
+    label_smoothing=<span class="nu">0.1</span>,           <span class="cm"># calibrated, trustworthy probabilities</span>
+)</pre>
+      <div class="proj">
+        <p class="lab">My course project → the methodology it taught</p>
+        <p class="ptitle">Predictive Data-Science Pipeline for USA Housing Prices
+          <span class="pmeta">realtor-dataset-100k.csv · 100k rows · pandas / scikit-learn / XGBoost</span></p>
+        <div class="chips">
+          <span class="chip">Hierarchical median imputation</span><span class="chip">IQR outlier trimming</span>
+          <span class="chip">Feature engineering</span><span class="chip">Linear · Ridge · RF · XGBoost</span>
+        </div>
+        <table>
+          <tr><th>Stage</th><th>Best model</th><th>R²</th></tr>
+          <tr><td>Raw features</td><td>Linear regression</td><td>0.33</td></tr>
+          <tr><td>After feature engineering</td><td>Linear / Ridge</td><td>0.77</td></tr>
+          <tr><td class="win">Non-linear</td><td class="win">Random Forest</td><td class="win">0.98</td></tr>
+        </table>
+        <p class="ref" style="color:var(--green)">Impact on CalEyeZ: identical discipline, leakage-free splits and metric-driven decisions, applied to images instead of tables. It also taught me when feature engineering beats a fancier model, which directly shaped the hand-built 20-feature arbiter vector.</p>
+      </div>
+      <div class="ref">Code: <code>scripts/training/train_israeli_food_v2.py</code>, <code>train_general_model.py</code> · Results: <code>runs/*/confusion_matrix.png</code>.</div>
+    </div>
+  </div>
+
+  <!-- COURSE 5 : AI -->
+  <div class="course">
+    <div class="head"><div class="ix">5</div><div>
+      <p class="nm">Contents &amp; Applications in Artificial Intelligence <span class="he">· יישומים בבינה מלאכותית</span></p>
+      <div class="meta">Course 3604142 · decision trees / random forest / KNN, clustering, cosine similarity</div></div></div>
+    <div class="body">
+      <p class="lab">What it put into CalEyeZ</p>
+      <div class="built">The XGBoost arbiter is a gradient-boosted decision-tree ensemble (the tree/forest family this course teaches), engineered as a model: 20-feature vector, <code>scale_pos_weight</code> for imbalance, ROC-AUC, and a baseline-vs-oracle trade-off study.</div>
+      <p class="lab" style="margin-top:14px">The CalEyeZ code</p>
+<pre><span class="cm"># scripts/arbiter/train_arbiter_xgb.py - a boosted decision-tree ensemble + honest eval</span>
+clf = xgb.XGBClassifier(n_estimators=<span class="nu">400</span>, max_depth=<span class="nu">5</span>, learning_rate=<span class="nu">0.05</span>,
+    scale_pos_weight=spw, eval_metric=<span class="st">"auc"</span>)        <span class="cm"># class imbalance handling</span>
+auc        = roc_auc_score(yte, proba)            <span class="cm"># characterise the model</span>
+routed_acc = routed_correct.mean()                <span class="cm"># vs an always-global baseline…</span>
+oracle_acc = (g_corr | i_corr).mean()             <span class="cm"># …and the perfect-router ceiling</span></pre>
+      <div class="proj">
+        <p class="lab">My course project → the arbiter's algorithm family</p>
+        <p class="ptitle">Decision-tree &amp; ensemble modelling (from the Housing-Price pipeline)
+          <span class="pmeta">inspected the split matrix: root <code>acre_lot ≤ 293.46</code>, children on <code>house_size</code>, <code>bath</code>…</span></p>
+        <p class="ref" style="color:var(--green)">Impact on CalEyeZ: reading decision-tree splits is exactly how the arbiter routes, a learned hierarchy of threshold splits on the 20 features. The XGBoost choice is a deliberate one I understand from the inside, not a black box.</p>
+      </div>
+      <div class="ref">Code: <code>scripts/arbiter/train_arbiter_xgb.py</code>, <code>generate_arbiter_dataset.py</code>.</div>
+    </div>
+  </div>
+
+  <!-- COURSE 6 : SENSORS -->
+  <div class="course">
+    <div class="head"><div class="ix">6</div><div>
+      <p class="nm">Sensors and Actuators <span class="he">· חיישנים ומפעלים</span></p>
+      <div class="meta">Course 3603820 · prereq: Analog Electronics 1&amp;2 · sensitivity vs linearity, accuracy vs sampling rate</div></div></div>
+    <div class="body">
+      <p class="lab">What it put into CalEyeZ</p>
+      <div class="built">The SWAN BLE scale is a load-cell (strain-gauge) sensor. I reverse-engineered its wire protocol (8-byte packet, little-endian grams, carry bit) and implemented the accuracy-vs-sampling-rate trade-off with a median filter + a stability gate.</div>
+      <p class="lab" style="margin-top:14px">The CalEyeZ code</p>
+<pre><span class="cm"># scripts/ble/scale_reader.py - raw transducer bytes → grams, with a stability spec</span>
+low_byte  = hex_data[<span class="nu">4</span>]
+high_byte = hex_data[<span class="nu">5</span>] | (hex_data[<span class="nu">3</span>] &amp; <span class="nu">0xFE</span>)   <span class="cm"># carry may live in the status byte</span>
+weight = sorted(raw_buffer)[len(raw_buffer)//<span class="nu">2</span>]      <span class="cm"># MEDIAN filter = noise vs responsiveness</span>
+delta  = max(stability_buffer) - min(stability_buffer)
+software_stable = delta &lt;= STABILITY_THRESHOLD        <span class="cm"># ≤2 g over 10 samples ⇒ STABLE</span></pre>
+      <div class="proj">
+        <p class="lab">My course project → the same trade-offs in hardware</p>
+        <p class="ptitle">Portable Metal-Detector Circuit
+          <span class="pmeta">LC-tank oscillator + BJT signal chain · LTspice + Excel model · ≈47 h battery</span></p>
+        <div class="chips">
+          <span class="chip">f = 1/(2π√(L·C))</span><span class="chip">Sensitivity sweep (−20,000 kHz/H)</span>
+          <span class="chip">Linearity region 10–30 mH</span><span class="chip">Model vs LTspice &lt;15%</span>
+        </div>
+        <p class="ref" style="color:var(--green)">Impact on CalEyeZ: this is where sensitivity vs linearity and accuracy vs sampling rate became physical realities of a transducer, the exact trade-offs the BLE scale's median filter + stability gate implement above.</p>
+      </div>
+      <div class="found">
+        <p class="lab">Analog foundation: Analog Electronics &amp; VLSI</p>
+        <div class="chips" style="margin-top:6px">
+          <span class="chip"><b>CMOS Op-Amp</b> - 69 dB · 4.075 MHz · 67° PM · 113 dB CMRR</span>
+          <span class="chip"><b>CMOS Ring Oscillator</b> - 5-stage, 413 MHz, temp/V<sub>DD</sub> swept</span>
+        </div>
+        <p class="ref" style="color:var(--amber);margin-top:8px">A strain-gauge load cell outputs microvolts; recovering it needs the differential amplification and offset behaviour I designed in the <b>op-amp</b> project, and the scale + BLE radio run on the kind of on-chip <b>oscillator</b> I characterised. These are the analog physics that make "read grams over Bluetooth" possible.</p>
+      </div>
+      <div class="ref">Code: <code>scripts/ble/scale_reader.py</code>; same protocol in <code>scripts/demo/caleyez_demo.py</code>.</div>
+    </div>
+  </div>
+
+  <!-- COURSE 7 : SIGNAL & IMAGE -->
+  <div class="course">
+    <div class="head"><div class="ix">7</div><div>
+      <p class="nm">Signal &amp; Image Processing <span class="he">· עיבוד אות ותמונה</span></p>
+      <div class="meta">Course 3603834 · 1-D signals + 2-D images, filtering, pattern recognition</div></div></div>
+    <div class="body">
+      <p class="lab">What it put into CalEyeZ</p>
+      <div class="built">A 2-D image front-end (center-ROI crop, gray-world white balance, CLAHE) and 1-D filtering on the sensor stream. The course teaches that 1-D signals and 2-D images are the same maths in different dimensions, and CalEyeZ uses both.</div>
+      <p class="lab" style="margin-top:14px">The CalEyeZ code</p>
+<pre><span class="cm"># scripts/demo/caleyez_demo.py - 2-D image filtering before recognition</span>
+<span class="kw">def</span> <span class="fn">center_roi</span>(bgr):
+    h, w = bgr.shape[:<span class="nu">2</span>]
+    s = <span class="kw">int</span>(min(h, w) * ROI_FRAC)        <span class="cm"># deterministic 2-D crop</span>
+    y0, x0 = (h - s)//<span class="nu">2</span>, (w - s)//<span class="nu">2</span>
+    <span class="kw">return</span> bgr[y0:y0+s, x0:x0+s].copy()
+<span class="cm"># scripts/ble/scale_reader.py - the SAME course's 1-D filtering, on the sensor signal</span>
+weight = sorted(raw_buffer)[len(raw_buffer)//<span class="nu">2</span>]   <span class="cm"># median = a non-linear 1-D digital filter</span></pre>
+      <div class="eebox"><p class="lab">Immediate impact</p>The same filtering instinct cleans the camera image (2-D) and the scale's weight stream (1-D). The convolution the GPU course accelerates is the very operation this course defines.</div>
+      <div class="ref">Code: <code>scripts/demo/caleyez_demo.py</code> (image front-end), <code>scripts/ble/scale_reader.py</code> (1-D filter).</div>
+    </div>
+  </div>
+
+  <h3 style="margin-top:34px">Recap: course → subsystem → proof</h3>
+  <table>
+    <thead><tr><th>#</th><th>Course</th><th>Subsystem it became</th><th>Proof in the repo</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>Python for E&amp;E</td><td>The whole hardware-driving program</td><td><code>caleyez_demo.py</code></td></tr>
+      <tr><td>2</td><td>Software / C (OOP)</td><td>Classes, buffers, algorithms, bounds-checks</td><td><code>caleyez_demo.py</code></td></tr>
+      <tr><td>3</td><td>GPU Accelerator (CUDA)</td><td>The GPU that runs the models (FP16, convolutions)</td><td><code>train_general_model.py</code></td></tr>
+      <tr><td>4</td><td>Practical ML</td><td>Two supervised deep-learning classifiers</td><td><code>train_israeli_food_v2.py</code></td></tr>
+      <tr><td>5</td><td>Applications in AI</td><td>The XGBoost decision-tree arbiter / router</td><td><code>arbiter/train_arbiter_xgb.py</code></td></tr>
+      <tr><td>6</td><td>Sensors &amp; Actuators</td><td>The BLE load-cell scale + stability spec</td><td><code>ble/scale_reader.py</code></td></tr>
+      <tr><td>7</td><td>Signal &amp; Image Processing</td><td>1-D weight filter + 2-D image normalisation</td><td><code>caleyez_demo.py</code> · <code>scale_reader.py</code></td></tr>
+      <tr><td style="color:var(--mut)">+</td><td style="color:var(--mut)">Computer Architecture</td><td style="color:var(--mut)">Von-Neumann/FDE model behind the GPU + a MIPS CPU in Verilog</td><td style="color:var(--mut)">folded into ③ · MIPS project</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout green"><b>The conclusion.</b> Remove any one course and a real part of CalEyeZ vanishes:
+    no sensor, no signal conditioning, no GPU acceleration, no classifier, no router, no scaffolding. The software
+    is the nervous system, but the project itself is electronics: transducers, analog front-ends, parallel silicon,
+    and the floating-point math that runs on it. The camera is the easy part to see; the engineering is everything
+    that turns its photons and the load cell's microvolts into a trustworthy number.</div>
+
+  <div class="foot">CalEyeZ · Electronic Engineering · how each course and its project became a working subsystem.</div>
 </section>
 
 </main>
