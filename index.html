@@ -90,16 +90,41 @@
   #tab-riv .prov{background:rgba(57,208,196,.07);border:1px solid rgba(57,208,196,.32);border-radius:10px;padding:15px 18px;margin:16px 0}
   #tab-riv .prov .chip{background:var(--panel2)}
 
-  /* header + tab bar */
-  header.top{padding:26px 40px 0;border-bottom:1px solid var(--line);background:var(--panel)}
+  /* header */
+  header.top{padding:26px 40px 14px;background:var(--panel)}
   header.top h1{font-size:26px;margin:0;letter-spacing:-.3px}
   header.top .sub{color:var(--mut);margin:6px 0 2px;font-size:14px}
-  header.top .meta{color:var(--mut);font-size:12.5px;margin:0 0 18px}
-  .tabs{display:flex;flex-wrap:wrap;gap:2px}
+  header.top .meta{color:var(--mut);font-size:12.5px;margin:0}
+
+  /* grouped, sticky tab bar: always reachable, sections labelled instead of 19 flat buttons */
+  nav.tabwrap{position:sticky;top:0;z-index:60;background:var(--panel);border-bottom:1px solid var(--line);
+    box-shadow:0 6px 18px rgba(0,0,0,.45);padding:6px 40px 0}
+  .tabs{display:flex;flex-wrap:wrap;gap:0 22px;align-items:stretch}
+  .tgroup{display:flex;flex-direction:column;padding-bottom:0}
+  .tgroup .glab{font-size:9.5px;letter-spacing:1.2px;text-transform:uppercase;color:#6e7681;
+    font-weight:700;padding:2px 6px 0;user-select:none}
+  .tgroup .gbtns{display:flex;flex-wrap:wrap}
   .tabs button{background:none;border:none;border-bottom:2px solid transparent;color:var(--mut);
-    padding:11px 15px;font-size:13.5px;cursor:pointer;font-weight:600;border-radius:6px 6px 0 0}
+    padding:7px 10px 9px;font-size:13px;cursor:pointer;font-weight:600;border-radius:6px 6px 0 0;
+    transition:color .15s,background .15s}
   .tabs button:hover{color:var(--ink);background:#1f2633}
   .tabs button.on{color:var(--accent);border-bottom-color:var(--accent)}
+  .tabs button:focus-visible{outline:2px solid var(--accent);outline-offset:-2px}
+
+  /* prev/next footer navigation injected into every tab */
+  .pn{display:flex;justify-content:space-between;gap:12px;margin-top:46px;border-top:1px solid var(--line);padding-top:16px}
+  .pn button{background:var(--panel);border:1px solid var(--line);color:var(--ink);border-radius:9px;
+    padding:10px 16px;cursor:pointer;font-size:13px;text-align:left;max-width:46%;transition:border-color .15s}
+  .pn button:hover{border-color:var(--accent)}
+  .pn button .dir{display:block;font-size:10.5px;color:var(--mut);text-transform:uppercase;letter-spacing:.8px}
+  .pn button.next{text-align:right;margin-left:auto}
+
+  /* floating back-to-top */
+  #btt{position:fixed;right:26px;bottom:26px;width:42px;height:42px;border-radius:50%;border:1px solid var(--line);
+    background:var(--panel);color:var(--accent);font-size:18px;font-weight:700;cursor:pointer;z-index:70;
+    opacity:0;pointer-events:none;transition:opacity .25s;box-shadow:0 4px 14px rgba(0,0,0,.5)}
+  #btt.show{opacity:1;pointer-events:auto}
+  #btt:hover{border-color:var(--accent)}
 
   main{max-width:1080px;margin:0 auto;padding:34px 40px 110px}
   .tab{display:none} .tab.on{display:block;animation:fade .25s ease}
@@ -187,28 +212,43 @@
     BLE gravimetric weight, and USDA nutrient lookup.</p>
   <p class="meta">Electrical &amp; Electronic Engineering B.Sc. Final Project · Shenkar ·
     Raz Dvora &amp; Roi Tzur · Supervisors: Dr. Gabriela Dorfman Furman, Dr. Zeev Weissman</p>
-  <div class="tabs" id="tabbar">
-    <button data-tab="overview" class="on">Overview</button>
-    <button data-tab="thennow">Then vs Now</button>
-    <button data-tab="dataset">Dataset</button>
-    <button data-tab="global">Global Model</button>
-    <button data-tab="israeli">Israeli Model</button>
-    <button data-tab="israeliv2">Israeli Model V2</button>
-    <button data-tab="arbiter">Arbiter</button>
-    <button data-tab="cnn">CNN Visualizer</button>
-    <button data-tab="trainlab">Training Lab</button>
-    <button data-tab="analysis">System Analysis</button>
-    <button data-tab="analysisv2">System Analysis V2</button>
-    <button data-tab="validation">Validation &amp; Risks</button>
-    <button data-tab="riv">Real Images Validation</button>
-    <button data-tab="ble">BLE Scale</button>
-    <button data-tab="demo">Live Demo</button>
-    <button data-tab="feedback">Reviewer Response</button>
-    <button data-tab="future">Limitations &amp; V2</button>
-    <button data-tab="rejected">Tried &amp; Rejected</button>
-    <button data-tab="ee">Electronic Engineering</button>
-  </div>
 </header>
+
+<nav class="tabwrap" id="tabbar">
+  <div class="tabs">
+    <div class="tgroup"><span class="glab">Project</span><div class="gbtns">
+      <button data-tab="overview" class="on">Overview</button>
+      <button data-tab="thennow">Then vs Now</button>
+      <button data-tab="dataset">Dataset</button>
+    </div></div>
+    <div class="tgroup"><span class="glab">Models</span><div class="gbtns">
+      <button data-tab="global">Global</button>
+      <button data-tab="israeli">Israeli</button>
+      <button data-tab="israeliv2">Israeli V2</button>
+      <button data-tab="arbiter">Arbiter</button>
+    </div></div>
+    <div class="tgroup"><span class="glab">Explainers</span><div class="gbtns">
+      <button data-tab="cnn">CNN Visualizer</button>
+      <button data-tab="trainlab">Training Lab</button>
+    </div></div>
+    <div class="tgroup"><span class="glab">Evaluation</span><div class="gbtns">
+      <button data-tab="analysis">Analysis</button>
+      <button data-tab="analysisv2">Analysis V2</button>
+      <button data-tab="validation">Validation &amp; Risks</button>
+      <button data-tab="riv">Real Images</button>
+    </div></div>
+    <div class="tgroup"><span class="glab">Hardware &amp; Demo</span><div class="gbtns">
+      <button data-tab="ble">BLE Scale</button>
+      <button data-tab="demo">Live Demo</button>
+    </div></div>
+    <div class="tgroup"><span class="glab">Discussion</span><div class="gbtns">
+      <button data-tab="feedback">Reviewer Response</button>
+      <button data-tab="future">Limitations &amp; V2</button>
+      <button data-tab="rejected">Tried &amp; Rejected</button>
+      <button data-tab="ee">Electronic Engineering</button>
+    </div></div>
+  </div>
+</nav>
 
 <main>
 
@@ -228,7 +268,7 @@
 
   <div class="callout green"><b>Latest improvement (V2 open-set retrain).</b> Adding a "background" class to
     the Israeli model made its confidence trustworthy, which let the arbiter route correctly:
-    <b>system top-1 83.8% &rarr; 86.2%</b>, Israeli-domain accuracy <b>60.8% &rarr; 78.0%</b>, routing
+    <b>system top-1 83.8% &rarr; 86.2%</b>, Israeli-domain accuracy <b>60.8% &rarr; 77.9%</b>, routing
     ROC-AUC <b>0.933 &rarr; 0.973</b>. Full before/after in the
     <a href="#" class="goto" data-tab="israeliv2">Israeli Model V2</a> tab.</div>
 
@@ -953,7 +993,7 @@ Oracle ceiling         : 9,988 / 11,265 = 88.7%   (= 8,784 global + 1,204 Israel
   <div class="callout green"><b>The cue that made it work:</b> in the rebuilt data, <b>donuts</b> in the
     global model are always a ring of dough <b>with a hole</b>, while <b>sufganiyah</b> in the Israeli
     model is a filled ball of dough <b>with no hole</b>. That single consistent difference gives each
-    expert a clean, separable signature, so the arbiter can tell which one it is instead of guessing.</p>
+    expert a clean, separable signature, so the arbiter can tell which one it is instead of guessing.</div>
   <table>
     <thead><tr><th>Class</th><th class="r">Then accuracy</th><th class="r">Now accuracy</th><th>Confusion with the other</th></tr></thead>
     <tbody>
@@ -1202,7 +1242,7 @@ raw = deque(maxlen=<span class="st">5</span>)
     almost all side or eye-level views, while a top-down demo camera sees a red disc with a central stem,
     which is genuinely out of distribution and can read as chocolate cake.</p>
   <div class="callout amber"><b>How the system handles it honestly.</b> This is exactly the case the
-    confidence gate is for. On the top-down pepper the Global model scored only 39%, below its 0.45 gate,
+    confidence gate is for. On the top-down pepper the Global model scored only 39%, below its 0.55 gate,
     so the app flagged <b>low confidence</b> rather than asserting a wrong answer, and routes the image to
     the Gemini fallback (when a key is configured) which is not tied to the local training distribution.
     The practical mitigations are to angle the camera nearer eye level and to enable the cloud fallback
@@ -1343,7 +1383,7 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
     <thead><tr><th>Overall system metric (held-out test)</th><th class="r">Before (V1)</th><th class="r">After (V2)</th><th class="r">Change</th></tr></thead>
     <tbody>
       <tr><td><b>System top-1 accuracy</b></td><td class="r">83.8%</td><td class="r"><b class="g" style="color:var(--green)">86.2%</b></td><td class="r"><span class="delta-up">+2.4</span></td></tr>
-      <tr><td>Israeli-domain realized accuracy</td><td class="r">60.8%</td><td class="r"><b class="g" style="color:var(--green)">78.0%</b></td><td class="r"><span class="delta-up">+17.2</span></td></tr>
+      <tr><td>Israeli-domain realized accuracy</td><td class="r">60.8%</td><td class="r"><b class="g" style="color:var(--green)">77.9%</b></td><td class="r"><span class="delta-up">+17.2</span></td></tr>
       <tr><td>Global-domain realized accuracy</td><td class="r">86.8%</td><td class="r">87.3%</td><td class="r"><span class="delta-up">+0.5</span></td></tr>
       <tr><td>Routing ROC-AUC</td><td class="r">0.933</td><td class="r"><b>0.973</b></td><td class="r"><span class="delta-up">+0.040</span></td></tr>
       <tr><td>Israeli routing recall</td><td class="r">60.8%</td><td class="r"><b>79.2%</b></td><td class="r"><span class="delta-up">+18.4</span></td></tr>
@@ -1494,7 +1534,7 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
       <tr><td>Routing ROC-AUC</td><td class="r">0.933</td><td class="r"><b class="g">0.973</b></td><td>the ROC lifted (real gain, not redistribution)</td></tr>
       <tr><td>Israeli recall (routing)</td><td class="r">60.8%</td><td class="r"><b class="g">79.2%</b></td><td>+18.4 pts</td></tr>
       <tr><td>Global recall (routing)</td><td class="r">97.6%</td><td class="r">98.4%</td><td>held</td></tr>
-      <tr><td>Israeli-domain realized acc</td><td class="r">60.8%</td><td class="r"><b class="g">78.0%</b></td><td>+17 pts (routing gap ~halved)</td></tr>
+      <tr><td>Israeli-domain realized acc</td><td class="r">60.8%</td><td class="r"><b class="g">77.9%</b></td><td>+17 pts (routing gap ~halved)</td></tr>
       <tr><td>Global-domain realized acc</td><td class="r">86.8%</td><td class="r">87.3%</td><td>+0.5 pt</td></tr>
       <tr><td><b>System top-1</b></td><td class="r">83.8%</td><td class="r"><b class="g">86.2%</b></td><td>+2.4 pts (now 77% of the way to oracle)</td></tr>
     </tbody>
@@ -1799,7 +1839,7 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
   <div class="callout"><b>The thread that connects them.</b> A camera is excellent at telling you <i>what</i>
     a food is. It is a poor instrument for <i>how much</i> it weighs. Every vision route to mass goes through
     a lossy chain (pixels to volume to density to grams, or a digital readout through OCR), and each link adds
-    error and fragility. The winning move was to stop inferring and <b>measure the mass at the source</b>.</p>
+    error and fragility. The winning move was to stop inferring and <b>measure the mass at the source</b>.</div>
 
   <h3>Approach A · Estimating weight from a single photo (volume to mass)</h3>
   <p>The idea: put a coin of known size in frame as a <b>fiducial</b> (an Israeli 1 shekel coin, 18 mm), use
@@ -1857,7 +1897,7 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     trained on normal fonts, not segmented digits; the LCD glares and washes out under room light; a slight
     camera angle merges or splits segments; and the value flickers as the reading settles, so a single frame
     is often wrong. It also still demanded that the display sit cleanly in the camera's view. We were adding a
-    fragile vision problem on top of a device that already knew the answer digitally.</p>
+    fragile vision problem on top of a device that already knew the answer digitally.</div>
 
   <h3>The decision: read mass at the source over BLE</h3>
   <p>Both rejected routes share one mistake: inferring a physical quantity the hardware already measures
@@ -2015,7 +2055,7 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     <div class="stat"><div class="n">190 ms</div><div class="l">median latency</div></div>
   </div>
   <div class="prov">
-    <p class="lab" style="color:var(--teal)">Capture provenance &mdash; these are our own photos</p>
+    <p class="lab" style="color:var(--teal)">Capture provenance - these are our own photos</p>
     <p style="margin:4px 0 10px">Every image keeps its original EXIF metadata, so each one is traceable to the physical device that took it and the moment it was taken. The capture dates run from <b>2018-09-15</b> to <b>2026-06-07</b>; the bulk were shot on a <b>Google Pixel 10 Pro</b> in June 2026, which is <b>after</b> the models were trained. None were scraped from the web. This is the anti-cherry-pick, anti-leakage evidence: real food, our cameras, datestamped.</p>
     <div class="chips">
       <span class="chip">Google Pixel 10 Pro &times;32</span>
@@ -2415,6 +2455,8 @@ function showTab(name){
   document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('on', t.id==='tab-'+name));
   document.querySelectorAll('#tabbar button').forEach(b=>b.classList.toggle('on', b.dataset.tab===name));
   window.scrollTo({top:0,behavior:'smooth'});
+  // deep-linkable tabs: the URL always reflects the open tab (no scroll jump: no element has a bare id=name)
+  if(location.hash !== '#'+name) history.replaceState(null,'','#'+name);
   if(name==='cnn') initCNN();
 }
 tabbar.addEventListener('click', e=>{ if(e.target.dataset.tab) showTab(e.target.dataset.tab); });
@@ -2847,6 +2889,60 @@ function tlLogitDraw(){
 const _tlPrevShowTab = showTab;
 showTab = function(name){_tlPrevShowTab(name);
   if(name==='trainlab')setTimeout(function(){tlGDLabel();tlGDdraw();tlBatchLabel();tlFzDraw(null);tlLogitDraw();},60);};
+</script>
+
+<script>
+/* ---------- page-level UX: deep links, prev/next, keyboard, back-to-top ----------
+   Runs last so every showTab wrapper above is already in the chain. */
+(function(){
+  const order = Array.from(document.querySelectorAll('#tabbar button'))
+                     .map(b => ({name: b.dataset.tab, label: b.textContent.trim()}));
+
+  /* restore the tab from the URL hash (refresh-safe, shareable links) */
+  function fromHash(){
+    const h = location.hash.slice(1);
+    if(h && document.getElementById('tab-'+h)) showTab(h);
+  }
+  window.addEventListener('hashchange', fromHash);
+  fromHash();
+
+  /* prev / next navigation at the bottom of every tab */
+  document.querySelectorAll('section.tab').forEach(sec => {
+    const i = order.findIndex(o => 'tab-'+o.name === sec.id);
+    if(i < 0) return;
+    const nav = document.createElement('div'); nav.className = 'pn';
+    if(i > 0){
+      const b = document.createElement('button');
+      b.innerHTML = '<span class="dir">&larr; previous</span>'+order[i-1].label;
+      b.onclick = () => showTab(order[i-1].name);
+      nav.appendChild(b);
+    }
+    if(i < order.length-1){
+      const b = document.createElement('button'); b.className = 'next';
+      b.innerHTML = '<span class="dir">next &rarr;</span>'+order[i+1].label;
+      b.onclick = () => showTab(order[i+1].name);
+      nav.appendChild(b);
+    }
+    sec.appendChild(nav);
+  });
+
+  /* left / right arrow keys switch tabs (ignored while typing or using sliders) */
+  document.addEventListener('keydown', e => {
+    if(e.altKey || e.ctrlKey || e.metaKey) return;
+    if(e.target.matches && e.target.matches('input, textarea, select, [contenteditable]')) return;
+    if(e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+    const cur = order.findIndex(o => document.getElementById('tab-'+o.name).classList.contains('on'));
+    const nxt = cur + (e.key === 'ArrowRight' ? 1 : -1);
+    if(nxt >= 0 && nxt < order.length) showTab(order[nxt].name);
+  });
+
+  /* floating back-to-top */
+  const btt = document.createElement('button');
+  btt.id = 'btt'; btt.title = 'Back to top'; btt.textContent = '↑';
+  document.body.appendChild(btt);
+  btt.onclick = () => window.scrollTo({top:0, behavior:'smooth'});
+  window.addEventListener('scroll', () => btt.classList.toggle('show', window.scrollY > 500), {passive:true});
+})();
 </script>
 </body>
 </html>
