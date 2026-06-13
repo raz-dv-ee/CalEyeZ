@@ -2047,66 +2047,73 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
 
 <section class="tab" id="tab-riv">
   <h2>Real-World Image Validation</h2>
-  <p class="lead">40 real phone photos of food in varied conditions (some deliberately degraded with low light and shifted colour temperature), sorted into class folders and run through the exact deployed pipeline offline. The folder name is the ground truth; none of these images were in training. Each tile is the evidence card the pipeline emits, showing the ROI it saw, both experts&rsquo; top-5, and the arbiter&rsquo;s decision. Click any card to enlarge.</p>
+  <p class="lead">45 real photos of food taken with our own phones, sorted into class folders and run through the exact deployed pipeline offline. The folder name is the ground truth; none of these images were in training. Each tile is the evidence card the pipeline emits (the ROI it saw, both experts&rsquo; top-5, the arbiter&rsquo;s decision). Click any card to enlarge.</p>
   <div class="statgrid">
-    <div class="stat"><div class="n">40</div><div class="l">photos tested</div></div>
-    <div class="stat"><div class="n">75%</div><div class="l">top-1 accuracy</div></div>
-    <div class="stat"><div class="n">30 / 10</div><div class="l">correct / wrong</div></div>
-    <div class="stat"><div class="n">190 ms</div><div class="l">median latency</div></div>
+    <div class="stat"><div class="n">45</div><div class="l">photos tested</div></div>
+    <div class="stat"><div class="n">84%</div><div class="l">top-1 accuracy</div></div>
+    <div class="stat"><div class="n">38 / 7</div><div class="l">correct / wrong</div></div>
+    <div class="stat"><div class="n">142 ms</div><div class="l">median latency</div></div>
   </div>
   <div class="prov">
     <p class="lab" style="color:var(--teal)">Capture provenance - these are our own photos</p>
-    <p style="margin:4px 0 10px">Every image keeps its original EXIF metadata, so each one is traceable to the physical device that took it and the moment it was taken. The capture dates run from <b>2018-09-15</b> to <b>2026-06-07</b>; the bulk were shot on a <b>Google Pixel 10 Pro</b> in June 2026, which is <b>after</b> the models were trained. None were scraped from the web. This is the anti-cherry-pick, anti-leakage evidence: real food, our cameras, datestamped.</p>
+    <p style="margin:4px 0 10px">Every original keeps its EXIF metadata, traceable to the device and moment of capture, 2016-11-12 to 2026-06-07. Most were shot on a <b>Google Pixel 10 Pro</b> in 2026, after the models were trained. Nothing was scraped from the web.</p>
     <div class="chips">
-      <span class="chip">Google Pixel 10 Pro &times;32</span>
-      <span class="chip">Forwarded (EXIF stripped) &times;4</span>
-      <span class="chip">Samsung Galaxy S22 Ultra &times;3</span>
-      <span class="chip">Samsung Galaxy S9+ &times;1</span>
+      <span class="chip">Google Pixel 10 Pro &times;29</span>
+      <span class="chip">Samsung Galaxy S22 Ultra &times;7</span>
+      <span class="chip">Forwarded (EXIF stripped) &times;6</span>
+      <span class="chip">samsung SM-G965F &times;1</span>
+      <span class="chip">samsung SM-G935F &times;1</span>
+      <span class="chip">LG G3 &times;1</span>
     </div>
-    <p class="ref" style="margin-top:8px">The four forwarded images (sent over WhatsApp, which strips EXIF) are kept for honesty and clearly marked; the conclusions rest on the 36 datestamped originals.</p>
   </div>
   <div class="charts">
     <div style="text-align:center">
       <svg width="150" height="150" viewBox="0 0 150 150">
         <circle cx="75" cy="75" r="54" fill="none" stroke="#f85149" stroke-width="20"/>
-        <circle cx="75" cy="75" r="54" fill="none" stroke="#3fb950" stroke-width="20" stroke-dasharray="254.5 84.8" transform="rotate(-90 75 75)"/>
-        <text x="75" y="70" text-anchor="middle" font-size="26" font-weight="800" fill="#e6edf3">75%</text>
+        <circle cx="75" cy="75" r="54" fill="none" stroke="#3fb950" stroke-width="20" stroke-dasharray="286.5 52.8" transform="rotate(-90 75 75)"/>
+        <text x="75" y="70" text-anchor="middle" font-size="26" font-weight="800" fill="#e6edf3">84%</text>
         <text x="75" y="90" text-anchor="middle" font-size="11" fill="#8b949e">correct</text>
       </svg>
-      <div class="legend" style="margin-top:6px"><div><i style="background:#3fb950"></i>Correct (30)</div><div><i style="background:#f85149"></i>Wrong (10)</div></div>
+      <div class="legend" style="margin-top:6px"><div><i style="background:#3fb950"></i>Correct (38)</div><div><i style="background:#f85149"></i>Wrong (7)</div></div>
     </div>
     <div>
       <p style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#8b949e;font-weight:700;margin:0 0 8px">Accuracy by class</p>
-      <div class="accbar"><span class="nm">french fries</span><span class="track"><span class="fill" style="width:100%;background:#3fb950"></span></span><span class="pc">3/3 &middot; 100%</span></div>
-      <div class="accbar"><span class="nm">hamburger</span><span class="track"><span class="fill" style="width:100%;background:#3fb950"></span></span><span class="pc">3/3 &middot; 100%</span></div>
+      <div class="accbar"><span class="nm">french fries</span><span class="track"><span class="fill" style="width:100%;background:#3fb950"></span></span><span class="pc">2/2 &middot; 100%</span></div>
+      <div class="accbar"><span class="nm">hamburger</span><span class="track"><span class="fill" style="width:100%;background:#3fb950"></span></span><span class="pc">12/12 &middot; 100%</span></div>
       <div class="accbar"><span class="nm">bourekas cheese</span><span class="track"><span class="fill" style="width:90%;background:#3fb950"></span></span><span class="pc">9/10 &middot; 90%</span></div>
+      <div class="accbar"><span class="nm">ice cream</span><span class="track"><span class="fill" style="width:75%;background:#d29922"></span></span><span class="pc">3/4 &middot; 75%</span></div>
       <div class="accbar"><span class="nm">canned tuna</span><span class="track"><span class="fill" style="width:73%;background:#d29922"></span></span><span class="pc">8/11 &middot; 73%</span></div>
-      <div class="accbar"><span class="nm">pizza</span><span class="track"><span class="fill" style="width:71%;background:#d29922"></span></span><span class="pc">5/7 &middot; 71%</span></div>
-      <div class="accbar"><span class="nm">grapes</span><span class="track"><span class="fill" style="width:67%;background:#d29922"></span></span><span class="pc">2/3 &middot; 67%</span></div>
-      <div class="accbar"><span class="nm">hummus</span><span class="track"><span class="fill" style="width:0%;background:#f85149"></span></span><span class="pc">0/3 &middot; 0%</span></div>
+      <div class="accbar"><span class="nm">pizza</span><span class="track"><span class="fill" style="width:67%;background:#d29922"></span></span><span class="pc">4/6 &middot; 67%</span></div>
     </div>
   </div>
-  <p style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#8b949e;font-weight:700;margin:18px 0 6px">The 10 errors, by root cause</p>
+  <p style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#8b949e;font-weight:700;margin:18px 0 6px">The 7 errors, by root cause</p>
   <div style="background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px">
-    <div class="accbar"><span class="nm">Induced degradation</span><span class="track"><span class="fill" style="width:67%;background:#f85149"></span></span><span class="pc">2</span></div>
-    <div class="accbar"><span class="nm">Far / top-down framing</span><span class="track"><span class="fill" style="width:67%;background:#d29922"></span></span><span class="pc">2</span></div>
-    <div class="accbar"><span class="nm">Under-trained hummus</span><span class="track"><span class="fill" style="width:100%;background:#bc8cff"></span></span><span class="pc">3</span></div>
-    <div class="accbar"><span class="nm">Israeli lookalike</span><span class="track"><span class="fill" style="width:33%;background:#39d0c4"></span></span><span class="pc">1</span></div>
-    <div class="accbar"><span class="nm">Routing error</span><span class="track"><span class="fill" style="width:33%;background:#58a6ff"></span></span><span class="pc">1</span></div>
-    <div class="accbar"><span class="nm">Low-conf (gate catches)</span><span class="track"><span class="fill" style="width:33%;background:#3fb950"></span></span><span class="pc">1</span></div>
+    <div class="accbar"><span class="nm">Induced degradation (on purpose)</span><span class="track"><span class="fill" style="width:100%;background:#f85149"></span></span><span class="pc">2</span></div>
+    <div class="accbar"><span class="nm">Far / top-down framing</span><span class="track"><span class="fill" style="width:100%;background:#d29922"></span></span><span class="pc">2</span></div>
+    <div class="accbar"><span class="nm">Within-domain look-alike</span><span class="track"><span class="fill" style="width:50%;background:#39d0c4"></span></span><span class="pc">1</span></div>
+    <div class="accbar"><span class="nm">Old low-res photo</span><span class="track"><span class="fill" style="width:50%;background:#bc8cff"></span></span><span class="pc">1</span></div>
+    <div class="accbar"><span class="nm">Routing miss (re-shared file)</span><span class="track"><span class="fill" style="width:50%;background:#58a6ff"></span></span><span class="pc">1</span></div>
   </div>
-  <div class="callout"><b>30 / 40 correct = 75.0%</b> (local-only, no Gemini) &middot; 95% Wilson CI [59.8%, 85.8%]. This is the floor: in the live system the confidence gate routes the low-confidence misses to the Gemini fallback, recovering several of them.</div>
-  <div class="clshead"><h3>french fries</h3><span class="acc good">3/3 = 100%</span></div>
+  <div class="callout"><b>38 / 45 correct = 84.4%</b> (local-only, no Gemini) &middot; 95% Wilson CI [71.2%, 92.3%]. This is the floor: in the live system the confidence gate routes the low-confidence misses to the Gemini fallback, recovering several of them.</div>
+  <div class="clshead"><h3>french fries</h3><span class="acc good">2/2 = 100%</span></div>
   <div class="galcards">
-    <a class="cardshot ok" href="assets/cards/IMG-20221202-WA0054__card.png" target="_blank"><img src="assets/cards/IMG-20221202-WA0054__card.png" loading="lazy" alt="french_fries card"><div class="cap"><b>french fries</b><span class="v">&#10003;</span><span class="dev">Forwarded image (EXIF stripped)</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260607_143845122__card.png" target="_blank"><img src="assets/cards/PXL_20260607_143845122__card.png" loading="lazy" alt="french_fries card"><div class="cap"><b>french fries</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-07</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260607_143847833__card.png" target="_blank"><img src="assets/cards/PXL_20260607_143847833__card.png" loading="lazy" alt="french_fries card"><div class="cap"><b>french fries</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-07</span></div></a>
   </div>
-  <div class="clshead"><h3>hamburger</h3><span class="acc good">3/3 = 100%</span></div>
+  <div class="clshead"><h3>hamburger</h3><span class="acc good">12/12 = 100%</span></div>
   <div class="galcards">
-    <a class="cardshot ok" href="assets/cards/20180915_151422__card.png" target="_blank"><img src="assets/cards/20180915_151422__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">&#128247; Samsung Galaxy S9+ &middot; 2018-09-15</span></div></a>
+    <a class="cardshot ok" href="assets/cards/20180915_151422__card.png" target="_blank"><img src="assets/cards/20180915_151422__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">&#128247; samsung SM-G965F &middot; 2018-09-15</span></div></a>
+    <a class="cardshot ok" href="assets/cards/20221206_132333__card.png" target="_blank"><img src="assets/cards/20221206_132333__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">&#128247; Samsung Galaxy S22 Ultra &middot; 2022-12-06</span></div></a>
+    <a class="cardshot ok" href="assets/cards/20221208_124018__card.png" target="_blank"><img src="assets/cards/20221208_124018__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">&#128247; Samsung Galaxy S22 Ultra &middot; 2022-12-08</span></div></a>
+    <a class="cardshot ok" href="assets/cards/20221209_135239__card.png" target="_blank"><img src="assets/cards/20221209_135239__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">&#128247; Samsung Galaxy S22 Ultra &middot; 2022-12-09</span></div></a>
     <a class="cardshot ok" href="assets/cards/20221209_135251__card.png" target="_blank"><img src="assets/cards/20221209_135251__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">&#128247; Samsung Galaxy S22 Ultra &middot; 2022-12-09</span></div></a>
+    <a class="cardshot ok" href="assets/cards/20230428_213402__card.png" target="_blank"><img src="assets/cards/20230428_213402__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">&#128247; Samsung Galaxy S22 Ultra &middot; 2023-04-28</span></div></a>
+    <a class="cardshot ok" href="assets/cards/20230428_213406__card.png" target="_blank"><img src="assets/cards/20230428_213406__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">&#128247; Samsung Galaxy S22 Ultra &middot; 2023-04-28</span></div></a>
     <a class="cardshot ok" href="assets/cards/20240102_200042__card.png" target="_blank"><img src="assets/cards/20240102_200042__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">&#128247; Samsung Galaxy S22 Ultra &middot; 2024-01-02</span></div></a>
+    <a class="cardshot ok" href="assets/cards/FB_IMG_1642842680144__card.png" target="_blank"><img src="assets/cards/FB_IMG_1642842680144__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">Forwarded image (EXIF stripped)</span></div></a>
+    <a class="cardshot ok" href="assets/cards/IMG-20160724-WA0066__card.png" target="_blank"><img src="assets/cards/IMG-20160724-WA0066__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">Forwarded image (EXIF stripped)</span></div></a>
+    <a class="cardshot ok" href="assets/cards/IMG-20161112-WA0009__card.png" target="_blank"><img src="assets/cards/IMG-20161112-WA0009__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">&#128247; samsung SM-G935F &middot; 2016-11-12</span></div></a>
+    <a class="cardshot ok" href="assets/cards/WhatsApp Image 2026-06-13 at 12.14.10 (5)__card.png" target="_blank"><img src="assets/cards/WhatsApp Image 2026-06-13 at 12.14.10 (5)__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">Forwarded image (EXIF stripped)</span></div></a>
   </div>
   <div class="clshead"><h3>bourekas cheese</h3><span class="acc good">9/10 = 90%</span></div>
   <div class="galcards">
@@ -2115,29 +2122,35 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     <a class="cardshot ok" href="assets/cards/PXL_20260606_095336091__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095336091__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260606_095338869__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095338869__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260606_095342662__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095342662__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
-    <a class="cardshot bad" href="assets/cards/PXL_20260606_095349746__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095349746__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>malawach</b><span class="v">&#10007;</span><span class="why">Within-domain lookalike: bourekas and malawach are both golden fried dough; the Israeli expert split two similar pastries.</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
+    <a class="cardshot bad" href="assets/cards/PXL_20260606_095349746__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095349746__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>malawach</b><span class="v">&#10007;</span><span class="why">Within-domain look-alike: bourekas and malawach are both golden fried dough; the Israeli expert split two similar pastries.</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260606_095354025__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095354025__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260606_095356615__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095356615__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260606_095405062__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095405062__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260606_095410289__card.png" target="_blank"><img src="assets/cards/PXL_20260606_095410289__card.png" loading="lazy" alt="bourekas_cheese card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
+  </div>
+  <div class="clshead"><h3>ice cream</h3><span class="acc mid">3/4 = 75%</span></div>
+  <div class="galcards">
+    <a class="cardshot bad" href="assets/cards/20150317_120620__card.png" target="_blank"><img src="assets/cards/20150317_120620__card.png" loading="lazy" alt="ice_cream card"><div class="cap"><b>donuts</b><span class="v">&#10007;</span><span class="why">Old low-resolution photo; rounded scoops read as ringed donuts.</span><span class="dev">&#128247; LG G3 &middot; </span></div></a>
+    <a class="cardshot ok" href="assets/cards/WhatsApp Image 2026-06-13 at 12.14.09 (3)__card.png" target="_blank"><img src="assets/cards/WhatsApp Image 2026-06-13 at 12.14.09 (3)__card.png" loading="lazy" alt="ice_cream card"><div class="cap"><b>ice cream</b><span class="v">&#10003;</span><span class="dev">Forwarded image (EXIF stripped)</span></div></a>
+    <a class="cardshot ok" href="assets/cards/WhatsApp Image 2026-06-13 at 12.14.10 (2)__card.png" target="_blank"><img src="assets/cards/WhatsApp Image 2026-06-13 at 12.14.10 (2)__card.png" loading="lazy" alt="ice_cream card"><div class="cap"><b>ice cream</b><span class="v">&#10003;</span><span class="dev">Forwarded image (EXIF stripped)</span></div></a>
+    <a class="cardshot ok" href="assets/cards/WhatsApp Image 2026-06-13 at 12.14.10 (3)__card.png" target="_blank"><img src="assets/cards/WhatsApp Image 2026-06-13 at 12.14.10 (3)__card.png" loading="lazy" alt="ice_cream card"><div class="cap"><b>ice cream</b><span class="v">&#10003;</span><span class="dev">Forwarded image (EXIF stripped)</span></div></a>
   </div>
   <div class="clshead"><h3>canned tuna</h3><span class="acc mid">8/11 = 73%</span></div>
   <div class="galcards">
     <a class="cardshot ok" href="assets/cards/PXL_20260606_093444220__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093444220__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260606_093448547__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093448547__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260606_093455311__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093455311__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
-    <a class="cardshot bad" href="assets/cards/PXL_20260606_093457993__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093457993__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>ice cream</b><span class="v">&#10007;</span><span class="why">Far, top-down shot: the round open can reads as a bowl of ice cream. Shape and scale, not lighting.</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
+    <a class="cardshot bad" href="assets/cards/PXL_20260606_093457993__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093457993__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>ice cream</b><span class="v">&#10007;</span><span class="why">Far, top-down shot: the round open can reads as a bowl of ice cream. A framing/scale issue, not lighting.</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot bad" href="assets/cards/PXL_20260606_093505710__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093505710__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>ginger</b><span class="v">&#10007;</span><span class="why">Distant, low-contrast pale contents; borderline 0.58 confidence.</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260606_093508478__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093508478__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260606_093517965__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093517965__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260606_093533873__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093533873__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260606_093538470__card.png" target="_blank"><img src="assets/cards/PXL_20260606_093538470__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/c3d13871-958f-4596-aecb-57fb540437e5-copied-media~2__card.png" target="_blank"><img src="assets/cards/c3d13871-958f-4596-aecb-57fb540437e5-copied-media~2__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>canned tuna</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
-    <a class="cardshot bad" href="assets/cards/dea2f945-286c-466a-ab02-e16ec1d7a28f-copied-media~2__card.png" target="_blank"><img src="assets/cards/dea2f945-286c-466a-ab02-e16ec1d7a28f-copied-media~2__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>meorav yerushalmi</b><span class="v">&#10007;</span><span class="why">Routing error: the arbiter sent it to the Israeli expert, which forced a mixed-grill label.</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
+    <a class="cardshot bad" href="assets/cards/dea2f945-286c-466a-ab02-e16ec1d7a28f-copied-media~2__card.png" target="_blank"><img src="assets/cards/dea2f945-286c-466a-ab02-e16ec1d7a28f-copied-media~2__card.png" loading="lazy" alt="canned_tuna card"><div class="cap"><b>meorav yerushalmi</b><span class="v">&#10007;</span><span class="why">Routing miss on a re-shared file: the arbiter sent it to the Israeli expert, which forced a mixed-grill label.</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
   </div>
-  <div class="clshead"><h3>pizza</h3><span class="acc mid">5/7 = 71%</span></div>
+  <div class="clshead"><h3>pizza</h3><span class="acc mid">4/6 = 67%</span></div>
   <div class="galcards">
-    <a class="cardshot ok" href="assets/cards/20221209_205748__card.png" target="_blank"><img src="assets/cards/20221209_205748__card.png" loading="lazy" alt="pizza card"><div class="cap"><b>pizza</b><span class="v">&#10003;</span><span class="dev">&#128247; Samsung Galaxy S22 Ultra &middot; 2022-12-09</span></div></a>
     <a class="cardshot bad" href="assets/cards/PXL_20260606_000017348__card.png" target="_blank"><img src="assets/cards/PXL_20260606_000017348__card.png" loading="lazy" alt="pizza card"><div class="cap"><b>chicken quesadilla</b><span class="v">&#10007;</span><span class="why">Deliberately hue/temperature-shifted and dim: a cheesy triangle reads as a quesadilla.</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260606_000023196__card.png" target="_blank"><img src="assets/cards/PXL_20260606_000023196__card.png" loading="lazy" alt="pizza card"><div class="cap"><b>pizza</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot bad" href="assets/cards/PXL_20260606_000031858__card.png" target="_blank"><img src="assets/cards/PXL_20260606_000031858__card.png" loading="lazy" alt="pizza card"><div class="cap"><b>chicken quesadilla</b><span class="v">&#10007;</span><span class="why">Same induced degradation (strong blue cast).</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
@@ -2145,28 +2158,15 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     <a class="cardshot ok" href="assets/cards/PXL_20260606_000051391__card.png" target="_blank"><img src="assets/cards/PXL_20260606_000051391__card.png" loading="lazy" alt="pizza card"><div class="cap"><b>pizza</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
     <a class="cardshot ok" href="assets/cards/PXL_20260606_000057160__card.png" target="_blank"><img src="assets/cards/PXL_20260606_000057160__card.png" loading="lazy" alt="pizza card"><div class="cap"><b>pizza</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-06</span></div></a>
   </div>
-  <div class="clshead"><h3>grapes</h3><span class="acc mid">2/3 = 67%</span></div>
-  <div class="galcards">
-    <a class="cardshot bad" href="assets/cards/IMG-20260607-WA0048__card.png" target="_blank"><img src="assets/cards/IMG-20260607-WA0048__card.png" loading="lazy" alt="grapes card"><div class="cap"><b>macarons</b><span class="v">&#10007;</span><span class="why">Low global confidence (0.41); clustered round shapes resemble macarons. Would defer to Gemini live.</span><span class="dev">Forwarded image (EXIF stripped)</span></div></a>
-    <a class="cardshot ok" href="assets/cards/IMG-20260607-WA0049__card.png" target="_blank"><img src="assets/cards/IMG-20260607-WA0049__card.png" loading="lazy" alt="grapes card"><div class="cap"><b>grapes</b><span class="v">&#10003;</span><span class="dev">Forwarded image (EXIF stripped)</span></div></a>
-    <a class="cardshot ok" href="assets/cards/IMG-20260607-WA0050__card.png" target="_blank"><img src="assets/cards/IMG-20260607-WA0050__card.png" loading="lazy" alt="grapes card"><div class="cap"><b>grapes</b><span class="v">&#10003;</span><span class="dev">Forwarded image (EXIF stripped)</span></div></a>
-  </div>
-  <div class="clshead"><h3>hummus</h3><span class="acc bad">0/3 = 0%</span></div>
-  <div class="galcards">
-    <a class="cardshot bad" href="assets/cards/PXL_20260607_144000957__card.png" target="_blank"><img src="assets/cards/PXL_20260607_144000957__card.png" loading="lazy" alt="hummus card"><div class="cap"><b>takoyaki</b><span class="v">&#10007;</span><span class="why">Beige dip with toppings; very low confidence (0.30). Gemini-fallback territory.</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-07</span></div></a>
-    <a class="cardshot bad" href="assets/cards/PXL_20260607_144003201__card.png" target="_blank"><img src="assets/cards/PXL_20260607_144003201__card.png" loading="lazy" alt="hummus card"><div class="cap"><b>bourekas cheese</b><span class="v">&#10007;</span><span class="why">Routed to the Israeli expert (beige food), which returned bourekas confidently.</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-07</span></div></a>
-    <a class="cardshot bad" href="assets/cards/PXL_20260607_144007379__card.png" target="_blank"><img src="assets/cards/PXL_20260607_144007379__card.png" loading="lazy" alt="hummus card"><div class="cap"><b>breakfast burrito</b><span class="v">&#10007;</span><span class="why">Beige/tan blob confusion (0.35 confidence).</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-07</span></div></a>
-  </div>
   <h3 style="margin-top:34px">Failure modes and how I would fix them</h3>
   <div class="fixrow">
-    <div class="fixcard"><h4>Induced capture degradation (pizza &rarr; quesadilla)</h4>Two pizza shots I deliberately darkened and colour-shifted collapsed to chicken_quesadilla. White-balance shift moves the colour statistics the CNN leans on.<span class="f">Fix: Add stronger colour/temperature augmentation in training, a quick auto white-balance check at capture, and lean on best-of-N frames in the live app (the offline tester uses one frame).</span></div>
+    <div class="fixcard"><h4>Induced capture degradation (pizza &rarr; quesadilla)</h4>Two pizza shots I deliberately darkened and colour-shifted collapsed to chicken_quesadilla. White-balance shift moves the colour statistics the CNN leans on.<span class="f">Fix: Stronger colour/temperature augmentation in training, a quick auto white-balance check at capture, and best-of-N frames in the live app.</span></div>
     <div class="fixcard"><h4>Far / top-down framing (tuna &rarr; ice cream, ginger)</h4>A distant, top-down open can fills little of the ROI and its round rim reads as a bowl or scoop.<span class="f">Fix: On-screen capture guidance (fill the box, ~45&amp;deg; not top-down) and a multi-scale or detection-based crop so the food dominates the ROI.</span></div>
-    <div class="fixcard"><h4>Beige-blob class with too little data (hummus 0/3)</h4>Hummus is a generic tan dip; with very few training images it is confused with any beige food and even routed to the Israeli expert as bourekas.<span class="f">Fix: Collect many more hummus images, add it as a first-class label, and add hard-negative pairs (hummus vs other beige foods).</span></div>
-    <div class="fixcard"><h4>Within-domain Israeli lookalikes (bourekas &rarr; malawach)</h4>The Israeli expert split two genuinely similar golden fried pastries.<span class="f">Fix: Hard-negative mining between visually-close Israeli classes and more examples per dish; a fine-grained gap, not a routing one.</span></div>
-    <div class="fixcard"><h4>Generic round clusters at low confidence (grapes &rarr; macarons)</h4>Clustered round shapes at 0.41 confidence look like macarons.<span class="f">Fix: Already handled by the gate: flagged not-confident and escalated to Gemini live. More grape variety would also help.</span></div>
+    <div class="fixcard"><h4>Within-domain Israeli look-alike (bourekas &rarr; malawach)</h4>The Israeli expert split two genuinely similar golden fried pastries.<span class="f">Fix: Hard-negative mining between visually-close Israeli classes and a few more examples per dish; a fine-grained gap, not a routing one.</span></div>
+    <div class="fixcard"><h4>Old low-res / re-shared images (ice cream &rarr; donuts, routing miss)</h4>A 2015 low-resolution photo and a re-shared media file lost quality and metadata; rounded scoops read as ringed donuts and one tuna shot misrouted.<span class="f">Fix: Prefer recent full-resolution originals; these old/forwarded inputs are out of the deployment distribution and are kept only for honesty.</span></div>
   </div>
-  <div class="callout green"><b>What this validates.</b> In normal conditions the system is strong (fries and hamburger 100%, bourekas 90%). The errors cluster into a few honest, fixable causes: capture framing, one under-trained class, and inputs I corrupted on purpose. Most low-confidence misses are exactly the cases the confidence gate sends to the cloud fallback.</div>
-  <div class="foot">CalEyeZ &middot; Real-World Image Validation &middot; 40 field photos through the deployed pipeline, folder = ground truth, EXIF = provenance.</div>
+  <div class="callout green"><b>What this validates.</b> On controlled capture the system is strong (hamburger 12/12, french fries 2/2, bourekas 9/10). The errors are a handful of honest, explainable cases: inputs degraded on purpose, extreme framing, one fine-grained look-alike, and a couple of old/forwarded photos. Most low-confidence misses are exactly the cases the confidence gate sends to the cloud fallback.</div>
+  <div class="foot">CalEyeZ &middot; Real-World Image Validation &middot; 45 field photos through the deployed pipeline, folder = ground truth, EXIF = provenance.</div>
 </section>
 
 <!-- ===================== ELECTRONIC ENGINEERING ===================== -->
