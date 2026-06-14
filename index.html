@@ -2047,12 +2047,12 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
 
 <section class="tab" id="tab-riv">
   <h2>Real-World Image Validation</h2>
-  <p class="lead">45 real photos of food taken with our own phones, sorted into class folders and run through the exact deployed pipeline offline. The folder name is the ground truth; none of these images were in training. Each tile is the evidence card the pipeline emits (the ROI it saw, both experts&rsquo; top-5, the arbiter&rsquo;s decision). Click any card to enlarge.</p>
+  <p class="lead">47 real photos of food taken with our own phones, sorted into class folders and run through the exact deployed pipeline offline. The folder name is the ground truth; none of these images were in training. Each tile is the evidence card the pipeline emits (the ROI it saw, both experts&rsquo; top-5, the arbiter&rsquo;s decision). Click any card to enlarge.</p>
   <div class="statgrid">
-    <div class="stat"><div class="n">45</div><div class="l">photos tested</div></div>
-    <div class="stat"><div class="n">84%</div><div class="l">top-1 accuracy</div></div>
-    <div class="stat"><div class="n">38 / 7</div><div class="l">correct / wrong</div></div>
-    <div class="stat"><div class="n">142 ms</div><div class="l">median latency</div></div>
+    <div class="stat"><div class="n">47</div><div class="l">photos tested</div></div>
+    <div class="stat"><div class="n">85%</div><div class="l">top-1 accuracy</div></div>
+    <div class="stat"><div class="n">40 / 7</div><div class="l">correct / wrong</div></div>
+    <div class="stat"><div class="n">156 ms</div><div class="l">median latency</div></div>
   </div>
   <div class="prov">
     <p class="lab" style="color:var(--teal)">Capture provenance - these are our own photos</p>
@@ -2061,6 +2061,7 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
       <span class="chip">Google Pixel 10 Pro &times;29</span>
       <span class="chip">Samsung Galaxy S22 Ultra &times;7</span>
       <span class="chip">Forwarded (EXIF stripped) &times;6</span>
+      <span class="chip">Apple iPhone 13 &times;2</span>
       <span class="chip">samsung SM-G965F &times;1</span>
       <span class="chip">samsung SM-G935F &times;1</span>
       <span class="chip">LG G3 &times;1</span>
@@ -2070,16 +2071,18 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     <div style="text-align:center">
       <svg width="150" height="150" viewBox="0 0 150 150">
         <circle cx="75" cy="75" r="54" fill="none" stroke="#f85149" stroke-width="20"/>
-        <circle cx="75" cy="75" r="54" fill="none" stroke="#3fb950" stroke-width="20" stroke-dasharray="286.5 52.8" transform="rotate(-90 75 75)"/>
-        <text x="75" y="70" text-anchor="middle" font-size="26" font-weight="800" fill="#e6edf3">84%</text>
+        <circle cx="75" cy="75" r="54" fill="none" stroke="#3fb950" stroke-width="20" stroke-dasharray="288.8 50.5" transform="rotate(-90 75 75)"/>
+        <text x="75" y="70" text-anchor="middle" font-size="26" font-weight="800" fill="#e6edf3">85%</text>
         <text x="75" y="90" text-anchor="middle" font-size="11" fill="#8b949e">correct</text>
       </svg>
-      <div class="legend" style="margin-top:6px"><div><i style="background:#3fb950"></i>Correct (38)</div><div><i style="background:#f85149"></i>Wrong (7)</div></div>
+      <div class="legend" style="margin-top:6px"><div><i style="background:#3fb950"></i>Correct (40)</div><div><i style="background:#f85149"></i>Wrong (7)</div></div>
     </div>
     <div>
       <p style="font-size:11px;letter-spacing:1px;text-transform:uppercase;color:#8b949e;font-weight:700;margin:0 0 8px">Accuracy by class</p>
+      <div class="accbar"><span class="nm">falafel</span><span class="track"><span class="fill" style="width:100%;background:#3fb950"></span></span><span class="pc">1/1 &middot; 100%</span></div>
       <div class="accbar"><span class="nm">french fries</span><span class="track"><span class="fill" style="width:100%;background:#3fb950"></span></span><span class="pc">2/2 &middot; 100%</span></div>
       <div class="accbar"><span class="nm">hamburger</span><span class="track"><span class="fill" style="width:100%;background:#3fb950"></span></span><span class="pc">12/12 &middot; 100%</span></div>
+      <div class="accbar"><span class="nm">sabich</span><span class="track"><span class="fill" style="width:100%;background:#3fb950"></span></span><span class="pc">1/1 &middot; 100%</span></div>
       <div class="accbar"><span class="nm">bourekas cheese</span><span class="track"><span class="fill" style="width:90%;background:#3fb950"></span></span><span class="pc">9/10 &middot; 90%</span></div>
       <div class="accbar"><span class="nm">ice cream</span><span class="track"><span class="fill" style="width:75%;background:#d29922"></span></span><span class="pc">3/4 &middot; 75%</span></div>
       <div class="accbar"><span class="nm">canned tuna</span><span class="track"><span class="fill" style="width:73%;background:#d29922"></span></span><span class="pc">8/11 &middot; 73%</span></div>
@@ -2094,7 +2097,11 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     <div class="accbar"><span class="nm">Old low-res photo</span><span class="track"><span class="fill" style="width:50%;background:#bc8cff"></span></span><span class="pc">1</span></div>
     <div class="accbar"><span class="nm">Routing miss (re-shared file)</span><span class="track"><span class="fill" style="width:50%;background:#58a6ff"></span></span><span class="pc">1</span></div>
   </div>
-  <div class="callout"><b>38 / 45 correct = 84.4%</b> (local-only, no Gemini) &middot; 95% Wilson CI [71.2%, 92.3%]. This is the floor: in the live system the confidence gate routes the low-confidence misses to the Gemini fallback, recovering several of them.</div>
+  <div class="callout"><b>40 / 47 correct = 85.1%</b> (local-only, no Gemini) &middot; 95% Wilson CI [72.3%, 92.6%]. This is the floor: in the live system the confidence gate routes the low-confidence misses to the Gemini fallback, recovering several of them. The Israeli dishes (<b>sabich</b>, <b>falafel</b>, <b>bourekas</b>) exercise the arbiter&rsquo;s routing &mdash; and it routes them to the Israeli expert correctly.</div>
+  <div class="clshead"><h3>falafel</h3><span class="acc good">1/1 = 100%</span></div>
+  <div class="galcards">
+    <a class="cardshot ok" href="assets/cards/7A7F5C0C-56B2-41E7-95A3-F72616184787__card.png" target="_blank"><img src="assets/cards/7A7F5C0C-56B2-41E7-95A3-F72616184787__card.png" loading="lazy" alt="falafel card"><div class="cap"><b>falafel</b><span class="v">&#10003;</span><span class="dev">&#128247; Apple iPhone 13 &middot; 2023-05-24</span></div></a>
+  </div>
   <div class="clshead"><h3>french fries</h3><span class="acc good">2/2 = 100%</span></div>
   <div class="galcards">
     <a class="cardshot ok" href="assets/cards/PXL_20260607_143845122__card.png" target="_blank"><img src="assets/cards/PXL_20260607_143845122__card.png" loading="lazy" alt="french_fries card"><div class="cap"><b>french fries</b><span class="v">&#10003;</span><span class="dev">&#128247; Google Pixel 10 Pro &middot; 2026-06-07</span></div></a>
@@ -2114,6 +2121,10 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     <a class="cardshot ok" href="assets/cards/IMG-20160724-WA0066__card.png" target="_blank"><img src="assets/cards/IMG-20160724-WA0066__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">Forwarded image (EXIF stripped)</span></div></a>
     <a class="cardshot ok" href="assets/cards/IMG-20161112-WA0009__card.png" target="_blank"><img src="assets/cards/IMG-20161112-WA0009__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">&#128247; samsung SM-G935F &middot; 2016-11-12</span></div></a>
     <a class="cardshot ok" href="assets/cards/WhatsApp Image 2026-06-13 at 12.14.10 (5)__card.png" target="_blank"><img src="assets/cards/WhatsApp Image 2026-06-13 at 12.14.10 (5)__card.png" loading="lazy" alt="hamburger card"><div class="cap"><b>hamburger</b><span class="v">&#10003;</span><span class="dev">Forwarded image (EXIF stripped)</span></div></a>
+  </div>
+  <div class="clshead"><h3>sabich</h3><span class="acc good">1/1 = 100%</span></div>
+  <div class="galcards">
+    <a class="cardshot ok" href="assets/cards/IMG_7292__card.png" target="_blank"><img src="assets/cards/IMG_7292__card.png" loading="lazy" alt="sabich card"><div class="cap"><b>sabich</b><span class="v">&#10003;</span><span class="dev">&#128247; Apple iPhone 13 &middot; 2023-06-25</span></div></a>
   </div>
   <div class="clshead"><h3>bourekas cheese</h3><span class="acc good">9/10 = 90%</span></div>
   <div class="galcards">
@@ -2165,8 +2176,8 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     <div class="fixcard"><h4>Within-domain Israeli look-alike (bourekas &rarr; malawach)</h4>The Israeli expert split two genuinely similar golden fried pastries.<span class="f">Fix: Hard-negative mining between visually-close Israeli classes and a few more examples per dish; a fine-grained gap, not a routing one.</span></div>
     <div class="fixcard"><h4>Old low-res / re-shared images (ice cream &rarr; donuts, routing miss)</h4>A 2015 low-resolution photo and a re-shared media file lost quality and metadata; rounded scoops read as ringed donuts and one tuna shot misrouted.<span class="f">Fix: Prefer recent full-resolution originals; these old/forwarded inputs are out of the deployment distribution and are kept only for honesty.</span></div>
   </div>
-  <div class="callout green"><b>What this validates.</b> On controlled capture the system is strong (hamburger 12/12, french fries 2/2, bourekas 9/10). The errors are a handful of honest, explainable cases: inputs degraded on purpose, extreme framing, one fine-grained look-alike, and a couple of old/forwarded photos. Most low-confidence misses are exactly the cases the confidence gate sends to the cloud fallback.</div>
-  <div class="foot">CalEyeZ &middot; Real-World Image Validation &middot; 45 field photos through the deployed pipeline, folder = ground truth, EXIF = provenance.</div>
+  <div class="callout green"><b>What this validates.</b> On controlled capture the system is strong (hamburger 12/12, french fries 2/2, falafel and sabich routed correctly, bourekas 9/10). The errors are a handful of honest, explainable cases: inputs degraded on purpose, extreme framing, one fine-grained look-alike, and a couple of old/forwarded photos. Most low-confidence misses are exactly the cases the confidence gate sends to the cloud fallback.</div>
+  <div class="foot">CalEyeZ &middot; Real-World Image Validation &middot; 47 field photos through the deployed pipeline, folder = ground truth, EXIF = provenance.</div>
 </section>
 
 <!-- ===================== ELECTRONIC ENGINEERING ===================== -->
