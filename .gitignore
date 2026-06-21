@@ -151,3 +151,6 @@ build_edge_onnx/.venv_onnx/
 build_edge_onnx/*.log
 build_edge_onnx/models/*.onnx
 runs/**/best.onnx
+
+# Superpowers-generated spec files (not part of the project)
+docs/superpowers/
