@@ -99,6 +99,43 @@ For the demo:
   "LOW CONFIDENCE" chip), the ROI is sent to Gemini, which handles the unusual views the local models
   were never trained on. This is the intended path for out-of-distribution inputs.
 
+## Edge build — run on a basic laptop (no GPU), torch-free via ONNX
+
+The same app runs on a low-end laptop (8 GB RAM, basic CPU, no GPU) using **ONNX Runtime** instead of
+PyTorch. Both YOLO11-cls experts are exported to ONNX and served by a torch-free backend
+(`scripts/demo/onnx_backend.py`) that feeds the arbiter the **identical** features, so routing is unchanged
+(verified: 0% top-1 mismatch vs the `.pt` on 200 test images/model; full-pipeline routing agrees on every
+image). Measured ~0.35 s per analysis on CPU.
+
+- Backend selection: set `CALEYEZ_ONNX=1` to force the ONNX backend (the app also auto-falls back to ONNX
+  if PyTorch isn't installed). Otherwise it uses PyTorch/ultralytics (GPU dev).
+- Build a standalone exe: see `build_edge_onnx/` (`build_onnx.ps1`, `caleyez_onnx.spec`, `README.md`).
+- Export the ONNX models first: `py -3 scripts/edge/onnx_export_and_check.py`.
+
+## Choosing the camera (integrated vs external USB)
+
+The app scans camera indices 0–3 and uses the first that delivers frames (usually the integrated camera).
+To use an external **USB webcam**:
+
+- Click **`⟳ Switch camera`** under the video (or press **`c`**) to cycle to the next webcam; the label shows
+  the active `Camera #n`.
+- Or force an index: `CALEYEZ_CAM=1` (try `2`), **or** a `caleyez_camera.txt` next to the exe with just the
+  number.
+- Or disable the integrated camera in Windows Device Manager → Cameras.
+
+## Nutrition values are empty?
+
+That means no API key is set (the packaged exe ships no secrets). Set `USDA_API_KEY` (and optionally
+`GEMINI_API_KEY`) in the environment, **or** drop a `caleyez_keys.txt` next to the exe:
+
+```
+USDA_API_KEY=your_usda_key
+GEMINI_API_KEY=your_gemini_key
+```
+
+Restart afterwards (keys are read once at startup). Without a key, only the small built-in food table
+returns values; the laptop also needs internet for the lookups.
+
 ## Notes
 
 - Inference runs on a worker thread, so the preview and weight never freeze.

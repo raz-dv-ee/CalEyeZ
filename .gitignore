@@ -137,3 +137,17 @@ temp.jpg
 tagging_data/
 ft_*.log
 ROADMAP_israeli_retrain.html
+
+# edge exe build artifacts (huge) + any local keys file
+build_edge/.venv_edge/
+build_edge/build/
+build_edge/dist/
+caleyez_keys.txt
+
+# ONNX edge build artifacts (large; regenerate with build_edge_onnx/build_onnx.ps1)
+build_edge_onnx/dist/
+build_edge_onnx/build/
+build_edge_onnx/.venv_onnx/
+build_edge_onnx/*.log
+build_edge_onnx/models/*.onnx
+runs/**/best.onnx

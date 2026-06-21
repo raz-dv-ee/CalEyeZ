@@ -1227,7 +1227,20 @@ raw = deque(maxlen=<span class="st">5</span>)
   <div class="sub-nav">
     <a href="#d-pipe">Pipeline</a><a href="#d-prep">Preprocessing</a><a href="#d-robust">What we avoid</a>
     <a href="#d-roi">ROI choice</a><a href="#d-arb">Arbiter wiring</a><a href="#d-fall">Gemini fallback</a><a href="#d-ui">UI / UX</a>
+    <a href="#d-edge">Edge deployment</a>
   </div>
+
+  <div class="callout green" id="d-edge"><b>Runs on a basic CPU laptop (no GPU) &mdash; the ONNX edge build.</b>
+    For deployment on an edge device (8&nbsp;GB RAM, a basic CPU, no GPU) we export both YOLO11l-cls experts
+    to <b>ONNX</b> and run them with <b>ONNX Runtime</b> instead of PyTorch. A torch-free backend
+    (<code>scripts/demo/onnx_backend.py</code>) feeds the arbiter the identical features, so routing is
+    unchanged. We verified the ONNX models match the PyTorch ones to <b>0% top-1 mismatch on 200 test images
+    per model</b>, and the full pipeline (two ONNX models + the XGBoost arbiter) agrees on the routing
+    decision for every image (max&nbsp;&Delta;P(israeli)&nbsp;=&nbsp;0.013). Measured inference is
+    <b>~0.35&nbsp;s per analysis</b> on a CPU (versus ~1&ndash;3&nbsp;s for the PyTorch-CPU build), in a much
+    smaller, torch-free executable. PyInstaller then packages it into a single standalone <code>.exe</code>
+    with the ONNX models bundled inside &mdash; copy the folder to any Windows laptop and run it. Build:
+    <code>build_edge_onnx/</code>.</div>
 
   <h3 id="d-pipe">The pipeline per capture</h3>
   <div class="flow">

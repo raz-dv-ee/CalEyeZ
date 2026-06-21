@@ -35,14 +35,38 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 # ---- heavy / optional deps are imported defensively so the UI still opens if one is missing ----
+# Backend selection. CALEYEZ_ONNX=1 forces the torch-free ONNX backend (used by the edge .exe build);
+# otherwise we use ultralytics/torch (GPU dev), and fall back to ONNX automatically if torch is missing.
+import os as _os
+ONNX_MODE = _os.environ.get("CALEYEZ_ONNX", "").strip().lower() not in ("", "0", "false", "no")
 try:
-    import torch  # noqa: F401  (ultralytics needs it; import surfaces a clear error early)
-    from ultralytics import YOLO
-    import xgboost as xgb
-    _ML_OK = True
-except Exception as e:  # pragma: no cover
-    print(f"[WARN] ML stack unavailable: {e}")
-    _ML_OK = False
+    import xgboost as xgb           # the arbiter needs xgboost in BOTH backends
+except Exception as e:
+    xgb = None
+    print(f"[WARN] xgboost unavailable: {e}")
+YOLO = None
+_TORCH_OK = False
+if not ONNX_MODE:
+    try:
+        import torch  # noqa: F401
+        from ultralytics import YOLO
+        _TORCH_OK = True
+    except Exception as e:
+        print(f"[WARN] torch/ultralytics unavailable -> switching to ONNX backend: {e}")
+        ONNX_MODE = True
+OnnxExpert = None
+_ONNX_OK = False
+if ONNX_MODE:
+    try:
+        from onnx_backend import OnnxExpert        # bundled next to this file in the edge build
+        _ONNX_OK = True
+    except Exception:
+        try:
+            from scripts.demo.onnx_backend import OnnxExpert
+            _ONNX_OK = True
+        except Exception as e:
+            print(f"[WARN] ONNX backend unavailable: {e}")
+_ML_OK = (xgb is not None) and (_TORCH_OK or _ONNX_OK)
 
 try:
     import requests
@@ -81,6 +105,12 @@ else:
 GLOBAL_W = os.path.join(ROOT, "runs", "general_model_flattened", "weights", "best.pt")
 ISRAELI_W = os.path.join(ROOT, "runs", "israeli_food_yolo11l_v2", "weights", "best.pt")  # V2: 13 dishes + background
 ARBITER_J = os.path.join(ROOT, "scripts", "arbiter", "arbiter_xgb.json")
+# ONNX edge models (torch-free backend). Exported by scripts/edge/onnx_export_and_check.py.
+ONNX_DIR = os.path.join(ROOT, "build_edge_onnx", "models")
+GLOBAL_ONNX = os.path.join(ONNX_DIR, "global.onnx")
+GLOBAL_NAMES = os.path.join(ONNX_DIR, "global_names.json")
+ISRAELI_ONNX = os.path.join(ONNX_DIR, "israeli.onnx")
+ISRAELI_NAMES = os.path.join(ONNX_DIR, "israeli_names.json")
 
 GLOBAL_IMGSZ = 320            # matches how the global model was trained / the arbiter dataset
 ISRAELI_IMGSZ = 224          # matches how the Israeli model was trained
@@ -185,12 +215,16 @@ LOCAL_DB = {
 # ==========================================================================================
 # 1 · MODELS
 # ==========================================================================================
-print("[SYSTEM] loading models...")
+print(f"[SYSTEM] loading models ({'ONNX' if ONNX_MODE else 'PyTorch'} backend)...")
 model_g = model_i = arbiter = None
 if _ML_OK:
     try:
-        model_g = YOLO(GLOBAL_W)
-        model_i = YOLO(ISRAELI_W)
+        if ONNX_MODE and _ONNX_OK:
+            model_g = OnnxExpert(GLOBAL_ONNX, GLOBAL_NAMES)
+            model_i = OnnxExpert(ISRAELI_ONNX, ISRAELI_NAMES)
+        else:
+            model_g = YOLO(GLOBAL_W)
+            model_i = YOLO(ISRAELI_W)
         arbiter = xgb.XGBClassifier()
         arbiter.load_model(ARBITER_J)
         print("[SYSTEM] models + arbiter ready.")
@@ -216,27 +250,54 @@ else:
 # ==========================================================================================
 # 2 · IMAGE ROBUSTNESS  (why: a live demo faces any webcam resolution and any room lighting)
 # ==========================================================================================
-def open_camera():
-    """Open the webcam robustly across Windows machines.
+def _try_open(idx):
+    """Open one camera index, trying the reliable backends. Returns (cap, idx) or (None, idx)."""
+    for be in (cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY):   # DSHOW first (most reliable on Windows)
+        cap = cv2.VideoCapture(idx, be)
+        if cap.isOpened():
+            ok, _ = cap.read()        # actually pull a frame; MSMF "opens" dead devices
+            if ok:
+                print(f"[CAMERA] opened index {idx} via backend {be}")
+                return cap, idx
+        cap.release()
+    return None, idx
 
-    cv2.VideoCapture(0) defaults to the MSMF backend on Windows, which on many laptops fails with
-    'CvCapture_MSMF::grabFrame ... can't grab frame. Error: -1072875772' (it opens but never delivers
-    frames). DirectShow (CAP_DSHOW) is far more reliable for consumer webcams, so we try it first, then
-    MSMF, then the plain default, across the first few device indices. Returns the first capture that
-    actually yields a frame (a handle that merely 'opens' is not enough — MSMF lies about that).
+
+def open_camera(prefer=None):
+    """Open the webcam robustly. If `prefer` (a device index) is given, try it first, then scan.
+
+    To use an EXTERNAL USB webcam instead of the integrated one (usually index 0), point CalEyeZ at a
+    different index. Two ways, no rebuild needed once this exe exists:
+      - set the environment variable  CALEYEZ_CAM=1  (or 2) before launching, or
+      - drop a file  caleyez_camera.txt  next to the exe containing just the number, e.g.  1
+    You can also press the "Cam" button (or the 'c' key) in the app to cycle to the next working camera.
     """
-    backends = [cv2.CAP_DSHOW, cv2.CAP_MSMF, cv2.CAP_ANY]
-    for idx in range(3):              # device 0,1,2 (external cams / virtual cams shift the index)
-        for be in backends:
-            cap = cv2.VideoCapture(idx, be)
-            if cap.isOpened():
-                ok, _ = cap.read()    # actually pull one frame to confirm the device delivers
-                if ok:
-                    print(f"[CAMERA] opened index {idx} via backend {be}")
-                    return cap
-            cap.release()
+    order = []
+    if prefer is not None:
+        order.append(int(prefer))
+    order += [i for i in range(4) if i not in order]   # then scan 0..3
+    for idx in order:
+        cap, i = _try_open(idx)
+        if cap is not None:
+            return cap, i
     print("[CAMERA] WARNING: no working webcam found; preview will be blank.")
-    return cv2.VideoCapture(0)        # last resort, keeps the app alive
+    return cv2.VideoCapture(0), 0     # last resort, keeps the app alive
+
+
+def preferred_cam_index():
+    """Preferred camera index from env CALEYEZ_CAM or a caleyez_camera.txt next to the program."""
+    v = os.environ.get("CALEYEZ_CAM", "").strip()
+    if v.isdigit():
+        return int(v)
+    cfg = os.path.join(EXE_DIR, "caleyez_camera.txt")
+    if os.path.exists(cfg):
+        try:
+            t = "".join(c for c in open(cfg, encoding="utf-8").read() if c.isdigit())
+            if t:
+                return int(t)
+        except Exception:
+            pass
+    return None
 
 
 def center_roi(bgr: np.ndarray) -> np.ndarray:
@@ -282,6 +343,9 @@ def expert_features(model, bgr: np.ndarray, imgsz: int) -> dict:
     broke routing (it sent confident Israeli dishes to the global model). predict() also letterboxes
     internally, so the result is already resolution independent.
     """
+    if OnnxExpert is not None and isinstance(model, OnnxExpert):
+        with MODEL_LOCK:
+            return model.features(bgr, imgsz)          # torch-free edge backend, identical dict shape
     with MODEL_LOCK:
         r = model.predict(bgr, imgsz=imgsz, verbose=False)[0]
     p = r.probs
@@ -322,7 +386,12 @@ def embed_vectors(roi: np.ndarray):
 
     These are the features just before each model's classifier. Stored per tagged sample, they let us
     later train an embeddings-based router or an OSR detector (the V2 directions) on real-world data.
+
+    Not available in the ONNX edge backend (the exported graphs expose only the classifier output), so we
+    return zeros there: data-tagging still saves the image + verification row, just without the 512-D 'DNA'.
     """
+    if OnnxExpert is not None and isinstance(model_g, OnnxExpert):
+        return np.zeros(512, np.float32), np.zeros(512, np.float32)
     with MODEL_LOCK:
         g = model_g.embed(roi, imgsz=GLOBAL_IMGSZ, verbose=False)[0].detach().cpu().numpy().astype(np.float32)
         i = model_i.embed(roi, imgsz=ISRAELI_IMGSZ, verbose=False)[0].detach().cpu().numpy().astype(np.float32)
@@ -662,7 +731,9 @@ class CalEyeZDemo:
         self._build_left(root)
         self._build_right(root)
 
-        self.cap = open_camera()
+        self.cap, self.cam_idx = open_camera(preferred_cam_index())
+        self._set_cam_label()
+        self.root.bind("c", lambda _e: self.switch_camera())   # press 'c' to cycle cameras
         self._tick_camera()
         self._tick_weight()
 
@@ -686,7 +757,14 @@ class CalEyeZDemo:
         left.pack(side="left", fill="both", expand=True, padx=12, pady=12)
 
         self.video = tk.Label(left, bg="black", bd=1, relief="solid")
-        self.video.pack(pady=(0, 10))
+        self.video.pack(pady=(0, 6))
+        # camera selector: shows the active index; click (or press 'c') to switch to the next webcam.
+        camrow = tk.Frame(left, bg=BG)
+        camrow.pack(fill="x", pady=(0, 8))
+        self.cam_lbl = tk.Label(camrow, text="", bg=BG, fg=MUT, font=("Segoe UI", 9))
+        self.cam_lbl.pack(side="left")
+        tk.Button(camrow, text="⟳ Switch camera", bg=CARD, fg=INK, bd=0, cursor="hand2",
+                  font=("Segoe UI", 9, "bold"), command=self.switch_camera).pack(side="right")
 
         # live decision panel (explains every prediction)
         dec = tk.Frame(left, bg=PANEL, bd=1, relief="solid")
@@ -857,17 +935,25 @@ class CalEyeZDemo:
         # interactive log embedded in the main window (no popups)
         tk.Label(right, text="TODAY'S LOG", bg=PANEL, fg=MUT,
                  font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=24)
+
+        # Clickable daily totals + an explicit button -> popup with a bar breakdown of the day's macros.
+        # Placed ABOVE the table so it is always visible (the table can push lower content off-screen).
+        self.totals = tk.Label(right, text="", bg=PANEL, fg=INK, font=("Segoe UI", 10, "bold"),
+                               justify="left", cursor="hand2")
+        self.totals.pack(anchor="w", padx=24, pady=(2, 0))
+        self.totals.bind("<Button-1>", lambda _e: self.show_day_breakdown())
+        tk.Button(right, text="📊  VIEW TODAY'S BREAKDOWN", bg=ACCENT, fg="#08111f", bd=0,
+                  font=("Segoe UI", 9, "bold"), cursor="hand2", activebackground=TEAL,
+                  command=self.show_day_breakdown).pack(fill="x", padx=24, pady=(4, 8))
+
         cols = ("time", "food", "g", "kcal")
-        self.tree = ttk.Treeview(right, columns=cols, show="headings", height=8)
+        self.tree = ttk.Treeview(right, columns=cols, show="headings", height=7)
         for c, w in zip(cols, (60, 150, 50, 60)):
             self.tree.heading(c, text=c.upper())
             self.tree.column(c, width=w, anchor="center")
         self.tree.pack(fill="x", padx=24, pady=6)
         self.tree.tag_configure("isr", foreground=TEAL)
         self.tree.tag_configure("glb", foreground=ACCENT)
-
-        self.totals = tk.Label(right, text="", bg=PANEL, fg=INK, font=("Segoe UI", 10, "bold"), justify="left")
-        self.totals.pack(anchor="w", padx=24, pady=(2, 6))
 
         bar = tk.Frame(right, bg=PANEL)
         bar.pack(fill="x", padx=24)
@@ -876,6 +962,30 @@ class CalEyeZDemo:
         self._refresh_log()
 
     # ---------- camera / weight loops ----------
+    def _set_cam_label(self):
+        if hasattr(self, "cam_lbl"):
+            self.cam_lbl.config(text=f"Camera #{self.cam_idx}  ·  press 'c' or the button to switch")
+
+    def switch_camera(self):
+        """Cycle to the next working camera (e.g. integrated -> external USB)."""
+        start = getattr(self, "cam_idx", 0)
+        for off in range(1, 5):                 # try the next 4 indices, wrapping
+            nxt = (start + off) % 5
+            cap, idx = _try_open(nxt)
+            if cap is not None:
+                try:
+                    if self.cap is not None:
+                        self.cap.release()
+                except Exception:
+                    pass
+                self.cap, self.cam_idx = cap, idx
+                self._set_cam_label()
+                print(f"[CAMERA] switched to index {idx}")
+                return
+        self._set_cam_label()
+        messagebox.showinfo("Camera", "No other camera found. Plug in the USB webcam, or disable the "
+                                      "integrated camera in Device Manager.")
+
     def _tick_camera(self):
         if not self.running:
             return
@@ -1147,6 +1257,71 @@ class CalEyeZDemo:
                     tc += int(float(row["Calories"])); tp += float(row["Protein"])
                     tcb += float(row["Carbs"]); tf += float(row["Fat"])
         self.totals.config(text=f"TODAY   {tc} kcal   ·   P {tp:.0f}g   C {tcb:.0f}g   F {tf:.0f}g")
+
+    def show_day_breakdown(self):
+        """Popup: today's intake as bars for Calories, Protein, Carbs, Fat (vs FDA daily values)."""
+        today = datetime.now().strftime("%Y-%m-%d")
+        cal = pro = carb = fat = 0.0
+        foods = []
+        if os.path.exists(LOG_FILE):
+            with open(LOG_FILE) as f:
+                for row in csv.DictReader(f):
+                    if row.get("Date") != today:
+                        continue
+                    try:
+                        cal += float(row["Calories"]); pro += float(row["Protein"])
+                        carb += float(row["Carbs"]); fat += float(row["Fat"])
+                        foods.append(row["Food"])
+                    except (ValueError, KeyError):
+                        continue
+        if not foods:
+            messagebox.showinfo("Today's breakdown", "Nothing logged today yet. Press SAVE after an analysis.")
+            return
+
+        win = tk.Toplevel(self.root)
+        win.title("Today's nutrition breakdown")
+        win.configure(bg=BG)
+        win.resizable(False, False)
+        win.transient(self.root)
+
+        tk.Label(win, text="WHAT I ATE TODAY", bg=BG, fg=MUT,
+                 font=("Segoe UI", 9, "bold")).pack(anchor="w", padx=20, pady=(16, 0))
+        tk.Label(win, text=f"{len(foods)} item{'s' if len(foods) != 1 else ''}  ·  {int(cal)} kcal total",
+                 bg=BG, fg=INK, font=("Segoe UI", 15, "bold")).pack(anchor="w", padx=20)
+        items = ", ".join(foods)
+        if len(items) > 70:
+            items = items[:67] + "..."
+        tk.Label(win, text=items, bg=BG, fg=MUT, font=("Segoe UI", 9),
+                 wraplength=440, justify="left").pack(anchor="w", padx=20, pady=(0, 8))
+
+        # Where the day's calories came from: each macro's calorie contribution (protein 4, carbs 4,
+        # fat 9 kcal/g). The three macro bars are scaled to total macro calories, so they sum to 100%.
+        # The Calories bar is the full reference (the whole day's intake).
+        kcal_macro = {"Protein": pro * 4, "Carbs": carb * 4, "Fat": fat * 9}
+        macro_sum = sum(kcal_macro.values()) or 1.0
+        bars = [("Calories", cal, "kcal", 1.0, ACCENT, "total today"),
+                ("Protein", pro, "g", kcal_macro["Protein"] / macro_sum, TEAL, None),
+                ("Carbs",   carb, "g", kcal_macro["Carbs"] / macro_sum, AMBER, None),
+                ("Fat",     fat,  "g", kcal_macro["Fat"] / macro_sum, RED, None)]
+        W, rowh, x0, x1 = 480, 46, 95, 360
+        cv = tk.Canvas(win, width=W, height=len(bars) * rowh + 16, bg=BG, highlightthickness=0)
+        cv.pack(padx=20, pady=(0, 6))
+        for i, (name, val, unit, frac, col, note) in enumerate(bars):
+            y = 18 + i * rowh
+            frac = max(0.0, min(frac, 1.0))
+            cv.create_text(x0 - 10, y + 10, text=name, anchor="e", fill=INK, font=("Segoe UI", 10, "bold"))
+            cv.create_rectangle(x0, y, x1, y + 20, fill=CARD, outline="#30363d")
+            if frac > 0:
+                cv.create_rectangle(x0, y, x0 + (x1 - x0) * frac, y + 20, fill=col, outline=col)
+            label = f"{val:.0f} {unit}" + (f"  ·  {note}" if note else f"  ·  {frac*100:.0f}% of calories")
+            cv.create_text(x1 + 10, y + 10, anchor="w", fill=MUT, font=("Segoe UI", 9), text=label)
+
+        tk.Label(win, text="Macro bars show what share of today's calories came from protein, carbs and fat "
+                           "(protein/carbs 4 kcal per g, fat 9). The Calories bar is the day's total.",
+                 bg=BG, fg=MUT, font=("Segoe UI", 8), wraplength=440,
+                 justify="left").pack(anchor="w", padx=20, pady=(0, 6))
+        tk.Button(win, text="Close", bg=CARD, fg=INK, bd=0, font=("Segoe UI", 9, "bold"),
+                  command=win.destroy).pack(pady=(0, 16))
 
     def delete_selected(self):
         sel = self.tree.selection()
