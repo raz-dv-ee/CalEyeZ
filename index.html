@@ -764,6 +764,62 @@ clf.<span class="fn">fit</span>(X[train], y[train], eval_set=[(X[test], y[test])
 clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter_xgb.json"</span>)</pre>
 
   <h3 id="a-res">Results (V2 arbiter)</h3>
+
+  <div class="callout"><b>What is ROC-AUC, in plain words?</b> The arbiter outputs a score
+    <code>P(israeli)</code> for every image. We sweep a decision threshold from high to low; at each setting
+    we plot two numbers: how many <b>Israeli</b> images it correctly catches (the <b>True Positive Rate</b>,
+    up) against how many <b>global</b> images it wrongly sends to the Israeli model (the <b>False Positive
+    Rate</b>, right). Joining those points draws the <b>ROC curve</b>. The <b>area under that curve (AUC)</b>
+    is a single 0&ndash;1 score: <b>1.0</b> = perfect separation, <b>0.5</b> = a coin flip (the dashed
+    diagonal). Equivalently, AUC is the probability the arbiter ranks a random Israeli image above a random
+    global one. A curve that hugs the <b>top-left corner</b> is better &mdash; it catches Israeli images
+    without misrouting global ones.</div>
+
+  <div class="chartwrap" style="height:auto;padding:18px 18px 8px">
+    <div style="display:grid;grid-template-columns:auto 1fr;gap:22px;align-items:center">
+      <svg viewBox="0 0 480 372" style="width:100%;max-width:480px;height:auto">
+        <!-- grid -->
+        <g stroke="#26303f" stroke-width="1">
+          <line x1="64" y1="24" x2="64" y2="330"/><line x1="258" y1="24" x2="258" y2="330"/><line x1="452" y1="24" x2="452" y2="330"/>
+          <line x1="64" y1="24" x2="452" y2="24"/><line x1="64" y1="177" x2="452" y2="177"/><line x1="64" y1="330" x2="452" y2="330"/>
+        </g>
+        <!-- area under V2 ROC -->
+        <polygon points="64.0,330.0 64.0,329.8 64.0,273.1 64.1,217.0 64.5,162.5 66.5,117.0 70.8,84.7 77.9,68.0 85.9,56.1 95.0,51.0 104.0,45.3 113.5,41.8 122.8,37.6 132.6,36.1 142.4,34.8 152.1,32.8 161.9,31.7 171.8,30.6 181.7,29.7 191.7,29.3 201.5,28.2 211.5,28.0 221.5,27.5 231.5,27.5 241.5,27.1 251.5,26.9 261.5,26.6 271.6,26.6 281.6,26.2 291.6,26.2 301.7,26.2 311.7,26.2 321.8,26.2 331.7,25.8 341.7,25.1 351.7,24.9 361.7,24.7 371.8,24.7 381.8,24.7 391.8,24.4 401.9,24.4 411.9,24.4 422.0,24.4 432.0,24.4 442.1,24.4 452.0,24.0 452.0,330.0" fill="rgba(57,208,196,.15)"/>
+        <!-- random diagonal -->
+        <line x1="64" y1="330" x2="452" y2="24" stroke="#5b6573" stroke-width="1.6" stroke-dasharray="6 5"/>
+        <text x="300" y="206" fill="#7f8b9c" font-family="JetBrains Mono" font-size="11" transform="rotate(-38 300 206)">random &middot; AUC 0.5</text>
+        <!-- V2 ROC curve (real, from 11,352 test images) -->
+        <polyline points="64.0,330.0 64.0,329.8 64.0,273.1 64.1,217.0 64.5,162.5 66.5,117.0 70.8,84.7 77.9,68.0 85.9,56.1 95.0,51.0 104.0,45.3 113.5,41.8 122.8,37.6 132.6,36.1 142.4,34.8 152.1,32.8 161.9,31.7 171.8,30.6 181.7,29.7 191.7,29.3 201.5,28.2 211.5,28.0 221.5,27.5 231.5,27.5 241.5,27.1 251.5,26.9 261.5,26.6 271.6,26.6 281.6,26.2 291.6,26.2 301.7,26.2 311.7,26.2 321.8,26.2 331.7,25.8 341.7,25.1 351.7,24.9 361.7,24.7 371.8,24.7 381.8,24.7 391.8,24.4 401.9,24.4 411.9,24.4 422.0,24.4 432.0,24.4 442.1,24.4 452.0,24.0" fill="none" stroke="#39d0c4" stroke-width="2.6" stroke-linejoin="round" style="filter:drop-shadow(0 0 5px rgba(57,208,196,.6))"/>
+        <!-- ideal corner marker -->
+        <circle cx="64" cy="24" r="4" fill="none" stroke="#3fb950" stroke-width="1.6"/>
+        <text x="74" y="20" fill="#3fb950" font-family="JetBrains Mono" font-size="10.5">perfect</text>
+        <!-- ticks -->
+        <g fill="#7f8b9c" font-family="JetBrains Mono" font-size="11" text-anchor="middle">
+          <text x="64" y="348">0.0</text><text x="258" y="348">0.5</text><text x="452" y="348">1.0</text>
+          <text x="50" y="334" text-anchor="end">0.0</text><text x="50" y="181" text-anchor="end">0.5</text><text x="50" y="28" text-anchor="end">1.0</text>
+        </g>
+        <!-- axis titles -->
+        <text x="258" y="368" fill="#c4cfdc" font-family="Hanken Grotesk" font-size="12.5" text-anchor="middle">False Positive Rate &mdash; global images mis-routed to Israeli &rarr;</text>
+        <text x="20" y="177" fill="#c4cfdc" font-family="Hanken Grotesk" font-size="12.5" text-anchor="middle" transform="rotate(-90 20 177)">True Positive Rate &mdash; Israeli caught &rarr;</text>
+        <!-- AUC label -->
+        <text x="300" y="120" fill="#39d0c4" font-family="Bricolage Grotesque" font-weight="800" font-size="22">AUC = 0.973</text>
+        <text x="300" y="140" fill="#7f8b9c" font-family="JetBrains Mono" font-size="12">V2 arbiter &middot; V1 was 0.933</text>
+      </svg>
+      <div>
+        <p class="legend" style="margin-top:0"><b>How to read it.</b> This is the <b>real</b> V2 routing ROC,
+          computed on the <b>11,352-image held-out test set</b> (<code>route_prob_israeli</code> vs. true
+          domain in <code>datasets/system_evaluation.csv</code>). The teal curve shoots almost straight up the
+          left edge then runs along the top &mdash; it catches most Israeli images while misrouting very few
+          global ones. The area beneath it is <b>0.973</b>.</p>
+        <p class="legend"><b>Why it matters here.</b> Moving the threshold just slides you <i>along</i> one
+          curve (more Israeli caught costs more global misrouted &mdash; zero-sum). The only way to win net
+          accuracy is to <b>lift the whole curve</b>, i.e. raise the AUC. V2's open-set
+          <code>i_p_background</code> signal did exactly that: <b>0.933 &rarr; 0.973</b>.</p>
+      </div>
+    </div>
+    <figcaption style="margin-top:6px">Routing ROC curve (V2 arbiter), real test-set data. Closer to the top-left = better separation between the two food domains.</figcaption>
+  </div>
+
   <p class="legend"><b>ROC-AUC in one line:</b> the probability that the arbiter gives a randomly chosen
     Israeli image a higher P(israeli) than a randomly chosen global image. 1.0 is perfect separation,
     0.5 is a coin flip. 0.973 means it ranks the two domains correctly 97% of the time. Recall = the
