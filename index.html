@@ -230,6 +230,7 @@
     <div class="tgroup"><span class="glab">Explainers</span><div class="gbtns">
       <button data-tab="cnn">CNN Visualizer</button>
       <button data-tab="trainlab">Training Lab</button>
+      <button data-tab="voice">Voice Analogy</button>
     </div></div>
     <div class="tgroup"><span class="glab">Evaluation</span><div class="gbtns">
       <button data-tab="analysis">Analysis</button>
@@ -2526,6 +2527,346 @@ weight = sorted(raw_buffer)[len(raw_buffer)//<span class="nu">2</span>]   <span 
   <div class="foot">CalEyeZ · Electronic Engineering · how each course and its project became a working subsystem.</div>
 </section>
 
+<!-- ============ VOICE ANALOGY ============ -->
+<section class="tab" id="tab-voice">
+<style>
+  #tab-voice .vstage{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px 8px 4px;margin:18px 0}
+  #tab-voice .vbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:0 6px 8px}
+  #tab-voice .vbar button{background:var(--accent);color:#08111f;border:0;border-radius:8px;padding:8px 16px;font-weight:700;cursor:pointer;font-size:13px}
+  #tab-voice .vbar button.ghost{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+  #tab-voice .vbar .hint{color:var(--mut);font-size:12px}
+  #tab-voice svg{width:100%;height:auto;display:block}
+  #tab-voice .vlab{fill:var(--mut);font:600 11px 'Segoe UI',sans-serif}
+  #tab-voice .vtit{fill:var(--ink);font:700 13px 'Segoe UI',sans-serif}
+  #tab-voice .vmono{fill:var(--teal);font:600 11px ui-monospace,Consolas,monospace}
+  #tab-voice .step{display:grid;grid-template-columns:42px 1fr;gap:14px;margin:16px 0;align-items:start}
+  #tab-voice .step .ix{font-size:18px;font-weight:800;color:var(--panel);background:var(--accent);border-radius:9px;width:42px;height:42px;display:flex;align-items:center;justify-content:center}
+  #tab-voice .step.t .ix{background:var(--teal)} #tab-voice .step.p .ix{background:var(--purple)} #tab-voice .step.a .ix{background:var(--amber);color:#08111f}
+  #tab-voice .step h3{margin:2px 0 5px;color:var(--ink);font-size:15px}
+  #tab-voice .map{width:100%;border-collapse:collapse;margin:10px 0;font-size:13px}
+  #tab-voice .map th,#tab-voice .map td{border:1px solid var(--line);padding:9px 12px;text-align:left;vertical-align:top}
+  #tab-voice .map th{background:var(--panel2);color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.5px}
+  #tab-voice .map td.a{color:var(--teal)} #tab-voice .map td.c{color:var(--accent);font-weight:600}
+  #tab-voice .fix{background:rgba(210,153,34,.07);border:1px solid rgba(210,153,34,.32);border-radius:9px;padding:6px 16px;margin:14px 0}
+  #tab-voice .fix .lab{color:var(--amber);font-size:11px;letter-spacing:1px;text-transform:uppercase;font-weight:700;margin:10px 0 2px}
+  /* animation states (added by JS on Play) */
+  #tab-voice .wave{stroke:var(--accent);stroke-width:2.5;fill:none;opacity:.9}
+  #tab-voice.run .wave{animation:vwave 2.4s linear infinite}
+  @keyframes vwave{to{stroke-dashoffset:-220}}
+  #tab-voice .flt{fill:var(--panel2);stroke:var(--line);transition:.3s}
+  #tab-voice.run .flt{animation:vglow 4.8s ease-in-out infinite}
+  @keyframes vglow{0%,100%{fill:var(--panel2)}12%{fill:rgba(57,208,196,.28);stroke:var(--teal)}24%{fill:var(--panel2)}}
+  #tab-voice .dna rect{transform-box:fill-box;transform-origin:bottom;transform:scaleY(.05)}
+  #tab-voice.run .dna rect{animation:vgrow 4.8s ease-out infinite}
+  @keyframes vgrow{0%,20%{transform:scaleY(.05)}45%,100%{transform:scaleY(1)}}
+  #tab-voice .pulse{opacity:0}
+  #tab-voice.run .pulse{animation:vpulse 4.8s linear infinite}
+  @keyframes vpulse{0%{opacity:0;transform:translateX(0)}8%{opacity:1}55%{opacity:1}65%{opacity:0;transform:translateX(760px)}100%{opacity:0}}
+  #tab-voice .prob{transform-box:fill-box;transform-origin:left;transform:scaleX(.02)}
+  #tab-voice.run .prob{animation:vprob 4.8s ease-out infinite}
+  @keyframes vprob{0%,55%{transform:scaleX(.02)}80%,100%{transform:scaleX(1)}}
+  /* ---- stage 2: router split ---- */
+  #tab-voice .rbox{fill:var(--panel2);stroke:var(--line);stroke-width:1.5}
+  #tab-voice .rpulse{opacity:0}
+  #tab-voice.run .rpulse{animation:rpulse 5s linear infinite}
+  @keyframes rpulse{0%{opacity:0;transform:translateX(0)}4%{opacity:1}22%{opacity:1;transform:translateX(150px)}28%{opacity:0}100%{opacity:0}}
+  #tab-voice .rexp{transition:.3s}
+  #tab-voice.run .rexp{animation:rexp 5s ease-in-out infinite}
+  @keyframes rexp{0%,22%{fill:var(--panel2);stroke:var(--line)}32%,100%{fill:rgba(88,166,255,.10)}}
+  #tab-voice .rexp.isr{}
+  #tab-voice.run .rexp.isr{animation:rexpI 5s ease-in-out infinite}
+  @keyframes rexpI{0%,22%{fill:var(--panel2);stroke:var(--line)}32%,100%{fill:rgba(57,208,196,.12)}}
+  #tab-voice .rconf{transform-box:fill-box;transform-origin:left;transform:scaleX(.02)}
+  #tab-voice.run .rconf{animation:rconf 5s ease-out infinite}
+  @keyframes rconf{0%,28%{transform:scaleX(.02)}48%,100%{transform:scaleX(1)}}
+  #tab-voice .rsig{opacity:0}
+  #tab-voice.run .rsig{animation:rsig 5s linear infinite}
+  @keyframes rsig{0%,46%{opacity:0;transform:translate(0,0)}52%{opacity:1}66%{opacity:1}70%{opacity:0}100%{opacity:0}}
+  #tab-voice .rwin{opacity:.25}
+  #tab-voice.run .rwin{animation:rwin 5s ease-out infinite}
+  @keyframes rwin{0%,64%{opacity:.25}76%,100%{opacity:1}}
+  #tab-voice .rans{opacity:0}
+  #tab-voice.run .rans{animation:rans 5s ease-out infinite}
+  @keyframes rans{0%,70%{opacity:0;transform:translateY(7px)}84%,100%{opacity:1;transform:translateY(0)}}
+</style>
+
+  <h2>The Voice-Fingerprint Analogy</h2>
+  <p class="lead">CalEyeZ is a convolutional neural network, but you can understand exactly what it does
+    without any deep-learning vocabulary — just signals and filters. Imagine building a system that
+    recognises <b>who is speaking</b>. That system and CalEyeZ are the same machine; only the input
+    changes from a voiceprint to a food photo.</p>
+
+  <div class="vstage">
+    <div class="vbar">
+      <button id="vPlay">▶ Play pipeline</button>
+      <button class="ghost" id="vStop">■ Pause</button>
+      <span class="hint">A voice enters on the left, passes the learned filter bank, becomes a feature
+        vector ("voice DNA"), and is scored into probabilities by softmax.</span>
+    </div>
+    <svg viewBox="0 0 1000 360" role="img" aria-label="Voice recognition pipeline animation">
+      <!-- 1. SOURCE -->
+      <g transform="translate(20,150)">
+        <circle cx="22" cy="0" r="20" fill="none" stroke="#58a6ff" stroke-width="2"/>
+        <circle cx="22" cy="-8" r="7" fill="#58a6ff"/>
+        <path d="M8,14 Q22,4 36,14" fill="none" stroke="#58a6ff" stroke-width="2"/>
+        <text class="vlab" x="22" y="42" text-anchor="middle">speaker</text>
+        <!-- travelling waveform -->
+        <path class="wave" d="M50,0 q12,-26 24,0 t24,0 t24,0 t24,0 t24,0 t24,0 t24,0"
+              stroke-dasharray="6 6"/>
+      </g>
+
+      <!-- 2. FILTER BANK -->
+      <g transform="translate(250,40)">
+        <text class="vtit" x="90" y="-12" text-anchor="middle">Learned filter bank (backbone)</text>
+        <g class="flt"><rect x="0"   y="0"   width="180" height="34" rx="7" style="animation-delay:0s"/></g>
+        <g class="flt"><rect x="0"   y="48"  width="180" height="34" rx="7" style="animation-delay:.18s"/></g>
+        <g class="flt"><rect x="0"   y="96"  width="180" height="34" rx="7" style="animation-delay:.36s"/></g>
+        <g class="flt"><rect x="0"   y="144" width="180" height="34" rx="7" style="animation-delay:.54s"/></g>
+        <g class="flt"><rect x="0"   y="192" width="180" height="34" rx="7" style="animation-delay:.72s"/></g>
+        <text class="vmono" x="12" y="22">band-pass → pitch f0</text>
+        <text class="vmono" x="12" y="70">band-pass → timbre</text>
+        <text class="vmono" x="12" y="118">band-pass → cadence</text>
+        <text class="vmono" x="12" y="166">band-pass → loudness</text>
+        <text class="vmono" x="12" y="214">band-pass → formants</text>
+        <!-- pulse travelling across the bank -->
+        <circle class="pulse" cx="-8" cy="113" r="6" fill="#bc8cff"/>
+      </g>
+
+      <!-- 3. VOICE DNA VECTOR -->
+      <g transform="translate(500,40)" class="dna">
+        <text class="vtit" x="55" y="-12" text-anchor="middle">Voice DNA (vector v)</text>
+        <line x1="-6" y1="226" x2="118" y2="226" stroke="#1f2633" stroke-width="2"/>
+        <rect x="0"  y="0"   width="16" height="226" rx="3" fill="#39d0c4" style="animation-delay:.6s"/>
+        <rect x="24" y="76"  width="16" height="150" rx="3" fill="#39d0c4" style="animation-delay:.7s"/>
+        <rect x="48" y="26"  width="16" height="200" rx="3" fill="#39d0c4" style="animation-delay:.8s"/>
+        <rect x="72" y="130" width="16" height="96"  rx="3" fill="#39d0c4" style="animation-delay:.9s"/>
+        <rect x="96" y="56"  width="16" height="170" rx="3" fill="#39d0c4" style="animation-delay:1s"/>
+      </g>
+
+      <!-- 4. DOT-PRODUCT WITH TEMPLATES -> LOGITS -> SOFTMAX -->
+      <g transform="translate(640,40)">
+        <text class="vtit" x="170" y="-12" text-anchor="middle">·template + bias → logit → softmax → P</text>
+        <g font="600 11px ui-monospace,Consolas,monospace">
+          <!-- rows: name, logit, prob bar -->
+          <g transform="translate(0,8)">
+            <text class="vmono" x="0" y="14">Alice</text>
+            <text class="vlab"  x="60" y="14">z=4.1</text>
+            <rect x="110" y="3" width="200" height="16" rx="4" fill="#1f2633"/>
+            <rect class="prob" x="110" y="3" width="170" height="16" rx="4" fill="#3fb950" style="animation-delay:.2s"/>
+            <text class="vmono" x="318" y="14" fill="#3fb950">0.71</text>
+          </g>
+          <g transform="translate(0,40)">
+            <text class="vmono" x="0" y="14">Bob</text>
+            <text class="vlab"  x="60" y="14">z=2.0</text>
+            <rect x="110" y="3" width="200" height="16" rx="4" fill="#1f2633"/>
+            <rect class="prob" x="110" y="3" width="48" height="16" rx="4" fill="#58a6ff" style="animation-delay:.3s"/>
+            <text class="vmono" x="318" y="14">0.17</text>
+          </g>
+          <g transform="translate(0,72)">
+            <text class="vmono" x="0" y="14">Carol</text>
+            <text class="vlab"  x="60" y="14">z=1.1</text>
+            <rect x="110" y="3" width="200" height="16" rx="4" fill="#1f2633"/>
+            <rect class="prob" x="110" y="3" width="22" height="16" rx="4" fill="#58a6ff" style="animation-delay:.4s"/>
+            <text class="vmono" x="318" y="14">0.08</text>
+          </g>
+          <g transform="translate(0,104)">
+            <text class="vmono" x="0" y="14">Dan</text>
+            <text class="vlab"  x="60" y="14">z=0.3</text>
+            <rect x="110" y="3" width="200" height="16" rx="4" fill="#1f2633"/>
+            <rect class="prob" x="110" y="3" width="11" height="16" rx="4" fill="#58a6ff" style="animation-delay:.5s"/>
+            <text class="vmono" x="318" y="14">0.04</text>
+          </g>
+        </g>
+        <text class="vlab" x="0" y="156">winner = highest probability → "this is Alice"</text>
+      </g>
+    </svg>
+  </div>
+
+  <h3>The story, step by step</h3>
+
+  <div class="step"><div class="ix">1</div><div>
+    <h3>Collect many voices, all speaking the same language</h3>
+    <p>We record many people speaking, say, English. Each raw recording is just a pressure
+      wave — far too much data to compare directly. We need to boil every voice down to a few
+      numbers that capture <i>what makes it that voice</i>.</p>
+  </div></div>
+
+  <div class="step t"><div class="ix">2</div><div>
+    <h3>Pass each voice through a bank of filters</h3>
+    <p>Classic signal processing gives us band-pass filters (IIR, Butterworth, …). Each one isolates
+      one aspect of the sound: the pitch (fundamental frequency f0), the timbre, the speaking cadence,
+      the loudness, the vowel formants. The difference here is that these filters are not hand-designed
+      with fixed coefficients — they <b>start random and are learned from the data</b>. In a CNN these
+      "filters" are the convolution kernels, and the stack of them is called the <b>backbone</b>.</p>
+  </div></div>
+
+  <div class="step"><div class="ix">3</div><div>
+    <h3>Training tunes the filters — but only the final answer is graded</h3>
+    <p>This is the one place the intuition needs care. We do <b>not</b> tell the network the "true pitch"
+      or "true timbre" of each voice — there is no measured target for the intermediate features.
+      The only thing we grade is the <b>final guess</b>: did it name the right speaker? We measure how
+      wrong that guess was (the <span class="vmono">loss</span>) and <b>backpropagation</b> pushes that
+      single error backwards through every filter, nudging each one a little at every epoch. Over many
+      epochs the filters <i>self-organise</i> to extract whatever features make the final answer correct.
+      They discover "pitch and timbre matter" on their own — nobody hands them that.</p>
+  </div></div>
+
+  <div class="step p"><div class="ix">4</div><div>
+    <h3>The output is a vector — the voice's "DNA"</h3>
+    <p>After the filter bank, each voice is reduced to a short list of numbers,
+      <span class="vmono">v = {pitch, timbre, cadence, loudness, …}</span>. This vector is the
+      <b>fingerprint</b> of that voice. In CNN terms it is the <b>embedding</b> (or feature vector).</p>
+  </div></div>
+
+  <div class="step a"><div class="ix">5</div><div>
+    <h3>Recognition: dot-product against every learned template</h3>
+    <p>To recognise a new voice, we run it through the very same filters to get its vector
+      <span class="vmono">v</span>. The final layer stores one <b>learned template</b> (a weight vector)
+      for every speaker it knows. We take the <b>dot product</b> of <span class="vmono">v</span> with each
+      template and add a bias: <span class="vmono">z_c = w_c · v + b_c</span>. The bigger the dot product,
+      the more the input lines up with that speaker's template. Those raw scores
+      <span class="vmono">z</span> (e.g. 4.1, 2.0, 1.1, 0.3) are the <b>logits</b>.</p>
+  </div></div>
+
+  <div class="step"><div class="ix">6</div><div>
+    <h3>Softmax turns scores into probabilities</h3>
+    <p>Logits are unbounded numbers, not probabilities. <b>Softmax</b> exponentiates each one and
+      normalises so they sum to 1:</p>
+    <div class="mathline" style="color:var(--teal)">p_i = e^{z_i} / Σ_j e^{z_j}&nbsp;&nbsp;&nbsp;→&nbsp;&nbsp;&nbsp;{0.71, 0.17, 0.08, 0.04}&nbsp;&nbsp;(sums to 1)</div>
+    <p>The largest probability is the system's answer. That is the entire recognition pipeline.</p>
+  </div></div>
+
+  <h3>Adding a second accent — the catastrophic-forgetting problem</h3>
+  <p>Now suppose we want the same system to also recognise <b>Israeli</b> speakers. They use the same
+    physics of speech, but the statistics differ — louder on average, different cadence and formants.
+    We have three options:</p>
+  <table class="map">
+    <tr><th>Option</th><th>What you change</th><th>Result</th></tr>
+    <tr><td class="c">1 · Retrain all filters</td>
+        <td>Re-tune the whole backbone on Israeli voices.</td>
+        <td>The filters drift to fit the new voices and <b>forget the English ones</b> —
+            <i>catastrophic forgetting</i>. We measured exactly this and rejected it.</td></tr>
+    <tr><td class="c">2 · Fine-tune only the head</td>
+        <td>Freeze the filters; only re-weight the features (e.g. trust cadence ×10, loudness ×0.5).</td>
+        <td>Standard transfer-learning fix. Cheap, keeps old knowledge, but limited if the new
+            domain really needs different features.</td></tr>
+    <tr><td class="c">3 · Two specialists + a router</td>
+        <td>Keep the English expert untouched, train a <b>separate Israeli specialist</b>, and add a
+            learned <b>router</b> that decides per input which expert to trust.</td>
+        <td><b>What CalEyeZ does.</b> No forgetting, and each expert stays sharp on its own domain.</td></tr>
+  </table>
+  <p>CalEyeZ took option 3. The Israeli specialist even carries an extra <b>"background / not-mine"</b>
+    class, so when an English voice reaches it, it can say "this isn't mine" — which is the strongest
+    signal the router uses to send the input back to the English expert.</p>
+
+  <div class="vstage">
+    <div class="vbar">
+      <span class="hint" style="font-size:13px;color:var(--ink)"><b>Stage 2 — the router in action.</b>
+        Both experts always run. The router reads their confidence, uncertainty and the "not-mine"
+        signal, then decides which answer to trust. (Uses the same ▶ Play above.)</span>
+    </div>
+    <svg viewBox="0 0 1000 300" role="img" aria-label="Router split animation">
+      <!-- INPUT -->
+      <g transform="translate(15,120)">
+        <circle cx="22" cy="20" r="20" fill="none" stroke="#bc8cff" stroke-width="2"/>
+        <path d="M9,16 a13,13 0 0 0 26,0 z" fill="#bc8cff"/>
+        <path d="M9,16 h26" stroke="#bc8cff" stroke-width="2"/>
+        <text class="vlab" x="22" y="62" text-anchor="middle">hummus photo</text>
+        <text class="vmono" x="0" y="84">→ feature vector v</text>
+        <circle class="rpulse" cx="50" cy="20" r="6" fill="#bc8cff"/>
+        <circle class="rpulse" cx="50" cy="20" r="6" fill="#bc8cff" style="animation-delay:.05s"/>
+      </g>
+
+      <!-- split lines -->
+      <path d="M150,140 C190,140 190,70 230,70"  fill="none" stroke="#30363d" stroke-width="2"/>
+      <path d="M150,140 C190,140 190,210 230,210" fill="none" stroke="#30363d" stroke-width="2"/>
+
+      <!-- GLOBAL EXPERT -->
+      <g transform="translate(230,28)">
+        <rect class="rexp" width="300" height="92" rx="10"/>
+        <text class="vtit" x="14" y="24" style="fill:#58a6ff">Global expert · 132 classes</text>
+        <text class="vmono" x="14" y="46" style="fill:var(--mut)">top: mashed_potato</text>
+        <rect x="150" y="36" width="120" height="11" rx="3" fill="#1f2633"/>
+        <rect class="rconf" x="150" y="36" width="41" height="11" rx="3" fill="#58a6ff"/>
+        <text class="vmono" x="276" y="46" style="fill:#58a6ff">.34</text>
+        <text class="vlab" x="14" y="70">entropy high → model is unsure</text>
+      </g>
+
+      <!-- ISRAELI EXPERT -->
+      <g transform="translate(230,165)">
+        <rect class="rexp isr" width="300" height="105" rx="10"/>
+        <text class="vtit" x="14" y="24" style="fill:#39d0c4">Israeli expert · 13 dishes + background</text>
+        <text class="vmono" x="14" y="46">top: hummus</text>
+        <rect x="150" y="36" width="120" height="11" rx="3" fill="#1f2633"/>
+        <rect class="rconf" x="150" y="36" width="109" height="11" rx="3" fill="#39d0c4" style="animation-delay:.1s"/>
+        <text class="vmono" x="276" y="46" style="fill:#39d0c4">.91</text>
+        <text class="vlab" x="14" y="70">P(background) = 0.04</text>
+        <text class="vlab" x="14" y="88" style="fill:#39d0c4">→ "this one IS mine"</text>
+      </g>
+
+      <!-- signal dots flowing to router -->
+      <circle class="rsig" cx="540" cy="74"  r="5" fill="#58a6ff"/>
+      <circle class="rsig" cx="540" cy="218" r="5" fill="#39d0c4" style="animation-delay:.06s"/>
+
+      <!-- ROUTER -->
+      <g transform="translate(600,96)">
+        <rect class="rbox" width="160" height="108" rx="12"/>
+        <text class="vtit" x="80" y="30" text-anchor="middle" style="fill:#d29922">XGBoost router</text>
+        <text class="vlab" x="80" y="52" text-anchor="middle">reads 20 features</text>
+        <text class="vmono" x="80" y="78" text-anchor="middle" style="fill:#d29922;font-size:14px">P(israeli)=0.88</text>
+        <text class="vlab" x="80" y="98" text-anchor="middle">≥ 0.5 → route Israeli</text>
+      </g>
+      <path d="M760,150 C800,150 800,150 840,150" fill="none" stroke="#30363d" stroke-width="2"/>
+
+      <!-- WINNER / FINAL ANSWER -->
+      <g transform="translate(840,108)" class="rans">
+        <rect class="rwin" width="150" height="84" rx="10" fill="rgba(63,185,80,.12)" stroke="#3fb950" stroke-width="2"/>
+        <text x="75" y="36" text-anchor="middle" style="font:800 22px sans-serif;fill:#3fb950">hummus</text>
+        <text class="vlab" x="75" y="60" text-anchor="middle">routed to</text>
+        <text class="vlab" x="75" y="74" text-anchor="middle" style="fill:#39d0c4">Israeli expert</text>
+      </g>
+    </svg>
+  </div>
+
+  <p>The reverse case is just as important: feed an English food and the Israeli expert returns a
+    <b>high</b> P(background) ("not mine") with low confidence, so the router sends the decision to the
+    Global expert instead. That single "not-mine" signal is the top feature in the real arbiter and is
+    why routing reaches ROC-AUC 0.973.</p>
+
+  <h3>How this maps onto CalEyeZ — exactly</h3>
+  <table class="map">
+    <tr><th>Voice analogy</th><th>CalEyeZ (the real system)</th></tr>
+    <tr><td class="a">Raw voice recording</td><td class="c">Raw food photo (RGB image)</td></tr>
+    <tr><td class="a">Band-pass filters (IIR/Butterworth)</td><td class="c">Convolution kernels (learned filters)</td></tr>
+    <tr><td class="a">The whole filter bank</td><td class="c">The CNN backbone (YOLO11l-cls feature extractor)</td></tr>
+    <tr><td class="a">Filters auto-tuned by the final error</td><td class="c">Backpropagation of cross-entropy loss (with label smoothing ε=0.1)</td></tr>
+    <tr><td class="a">Voice DNA vector v</td><td class="c">The image embedding / feature vector</td></tr>
+    <tr><td class="a">Dot product with each speaker template</td><td class="c">Final classification layer: z_c = w_c · v + b_c</td></tr>
+    <tr><td class="a">Raw scores z</td><td class="c">Logits (one per food class)</td></tr>
+    <tr><td class="a">Softmax → probabilities</td><td class="c">Softmax → per-class confidence (132 global / 13+1 Israeli)</td></tr>
+    <tr><td class="a">132 English speakers</td><td class="c">132 international food classes (Global model)</td></tr>
+    <tr><td class="a">Israeli speakers + "not-mine" class</td><td class="c">Israeli specialist: 13 dishes + open-set "background" class</td></tr>
+    <tr><td class="a">Catastrophic forgetting when retraining all filters</td><td class="c">Exactly why we did not extend the Global model — measured and rejected</td></tr>
+    <tr><td class="a">Router choosing which specialist to trust</td><td class="c">XGBoost arbiter (20 features, ROC-AUC 0.973)</td></tr>
+  </table>
+
+  <div class="fix">
+    <div class="lab">Precision note (so the analogy is honest)</div>
+    <p style="margin:4px 0 12px">The analogy is exact except for one subtlety worth stating: in pure
+      DSP you could measure pitch directly and tune a filter against that measured value. A CNN cannot
+      — there is no ground truth for any intermediate feature. The network is graded <b>only</b> on the
+      final class, and the filters are shaped indirectly by backpropagating that final error. So "we
+      fine-tune the filters" is true, but the teacher is the <i>answer at the end</i>, never the features
+      in the middle.</p>
+  </div>
+
+  <p>Want to see the softmax math live (drag the logits and watch the probabilities, entropy and margin
+    update)? Open the <a href="#" class="goto" data-tab="trainlab">Training Lab</a>. Want the routing
+    decision explained per image? See the <a href="#" class="goto" data-tab="arbiter">Arbiter</a> tab.</p>
+
+  <div class="foot">CalEyeZ · the same machine that recognises a voice recognises a plate of food.</div>
+</section>
+
 </main>
 
 <script>
@@ -2969,6 +3310,19 @@ function tlLogitDraw(){
 const _tlPrevShowTab = showTab;
 showTab = function(name){_tlPrevShowTab(name);
   if(name==='trainlab')setTimeout(function(){tlGDLabel();tlGDdraw();tlBatchLabel();tlFzDraw(null);tlLogitDraw();},60);};
+</script>
+
+<script>
+/* ---------- Voice Analogy tab: play / pause the pipeline animation ---------- */
+(function(){
+  var sec=document.getElementById('tab-voice');
+  if(!sec) return;
+  var play=document.getElementById('vPlay'), stop=document.getElementById('vStop');
+  if(play) play.onclick=function(){ sec.classList.remove('run'); void sec.offsetWidth; sec.classList.add('run'); };
+  if(stop) stop.onclick=function(){ sec.classList.remove('run'); };
+  var _vPrev=showTab;                                   // auto-start when the tab is opened
+  showTab=function(name){ _vPrev(name); if(name==='voice') setTimeout(function(){ sec.classList.add('run'); },80); };
+})();
 </script>
 
 <script>
