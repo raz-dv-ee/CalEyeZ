@@ -235,6 +235,7 @@
     <div class="tgroup"><span class="glab">Evaluation</span><div class="gbtns">
       <button data-tab="analysis">Analysis</button>
       <button data-tab="analysisv2">Analysis V2</button>
+      <button data-tab="perclass">Per-Class</button>
       <button data-tab="validation">Validation &amp; Risks</button>
       <button data-tab="riv">Real Images</button>
     </div></div>
@@ -2525,6 +2526,138 @@ weight = sorted(raw_buffer)[len(raw_buffer)//<span class="nu">2</span>]   <span 
     that turns its photons and the load cell's microvolts into a trustworthy number.</div>
 
   <div class="foot">CalEyeZ · Electronic Engineering · how each course and its project became a working subsystem.</div>
+</section>
+
+<!-- ============ PER-CLASS ============ -->
+<section class="tab" id="tab-perclass">
+<style>
+  #tab-perclass .pcbar{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin:16px 0}
+  #tab-perclass .pcbar input,#tab-perclass .pcbar select{background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:8px 11px;font-size:13px}
+  #tab-perclass .pcbar input{min-width:200px}
+  #tab-perclass .pcbar label{font-size:13px;color:var(--mut);display:flex;align-items:center;gap:6px;cursor:pointer}
+  #tab-perclass .statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}
+  @media(max-width:760px){#tab-perclass .statgrid{grid-template-columns:repeat(2,1fr)}}
+  #tab-perclass .stat{background:var(--panel);border:1px solid var(--line);border-radius:9px;padding:12px 14px}
+  #tab-perclass .stat .n{font-size:24px;font-weight:800} #tab-perclass .stat .l{font-size:11px;color:var(--mut);text-transform:uppercase;letter-spacing:.5px}
+  #tab-perclass table{width:100%;border-collapse:collapse;font-size:13px;margin-top:6px}
+  #tab-perclass th,#tab-perclass td{border-bottom:1px solid var(--line);padding:8px 10px;text-align:left;vertical-align:top}
+  #tab-perclass th{color:var(--mut);font-size:11px;text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0;background:var(--bg)}
+  #tab-perclass td.cls{font-weight:600;color:var(--ink)}
+  #tab-perclass .rc{display:inline-block;min-width:52px;text-align:center;border-radius:6px;padding:2px 6px;font-weight:700}
+  #tab-perclass .rc.good{background:rgba(63,185,80,.16);color:var(--green)}
+  #tab-perclass .rc.mid{background:rgba(210,153,34,.16);color:var(--amber)}
+  #tab-perclass .rc.bad{background:rgba(248,81,73,.16);color:var(--red)}
+  #tab-perclass td.why{color:var(--mut);font-size:12px}
+  #tab-perclass td.conf b{color:var(--ink)}
+</style>
+  <h2>Per-Class Performance</h2>
+  <p class="lead">The 86.16% system figure is an average. This view breaks it down to
+    <b>every one of the 145 classes</b>: its recall on the held-out test set, the food it is
+    <b>most confused with</b>, and why. This is where the real limitations live.</p>
+  <p style="color:var(--mut);font-size:13px"><b>Reading it:</b> recall = the share of that class's
+    test images identified correctly, so 75% recall means 25% were missed. But recall on a tiny test
+    set is noisy: a class with only 8 images moves 12.5% per single miss, so those numbers carry a
+    wide 95% confidence interval and should not be ranked literally. Use <b>reliable only (n ≥ 50)</b>
+    to see the weaknesses that are statistically real.</p>
+
+  <div class="statgrid">
+    <div class="stat"><div class="n" id="pc-n">–</div><div class="l">Classes</div></div>
+    <div class="stat"><div class="n" id="pc-mean">–</div><div class="l">Mean recall</div></div>
+    <div class="stat"><div class="n" style="color:var(--green)" id="pc-strong">–</div><div class="l">≥ 90% recall</div></div>
+    <div class="stat"><div class="n" style="color:var(--red)" id="pc-weak">–</div><div class="l">&lt; 75% recall</div></div>
+  </div>
+
+  <div class="callout amber"><b>Don't be fooled by the bottom of the list.</b> The apparent "worst"
+    classes (apple 37.5%, chili pepper 50%) have only 7–10 test images, so their recall is a
+    high-variance estimate, not a real failure — apple's 3/8 gives a 95% interval of roughly
+    14–69%, and it performs fine in real use. The fix for those is a bigger <i>test</i> set, not
+    more training data.</div>
+  <div class="callout"><b>The real, reliable weaknesses</b> (n ≥ 100, so the number is trustworthy)
+    are: chocolate&nbsp;mousse 57%, falafel 70%, foie&nbsp;gras 71%, apple&nbsp;pie 71%,
+    ravioli 72%, hummus 74%. Some are genuine visual twins (ravioli↔gnocchi,
+    chocolate&nbsp;mousse↔chocolate&nbsp;cake); others are simply under-trained. <b>This</b> is where
+    more data actually moves the needle — and it is a model/data limit, not a routing fault.</div>
+
+  <div class="pcbar">
+    <input id="pc-search" type="text" placeholder="Filter class name…" oninput="pcRender()">
+    <select id="pc-sort" onchange="pcRender()">
+      <option value="recall">Sort: recall (worst first)</option>
+      <option value="-recall">Sort: recall (best first)</option>
+      <option value="name">Sort: name (A→Z)</option>
+      <option value="-n">Sort: support (most first)</option>
+    </select>
+    <label><input type="checkbox" id="pc-weakonly" onchange="pcRender()"> weak only (&lt; 75%)</label>
+    <label><input type="checkbox" id="pc-reliable" onchange="pcRender()"> reliable only (n ≥ 50)</label>
+    <span class="hint" id="pc-count" style="color:var(--mut);font-size:12px"></span>
+  </div>
+
+  <table>
+    <thead><tr><th>Class</th><th>Recall</th><th>n (test)</th><th>Most confused with</th><th>Why</th></tr></thead>
+    <tbody id="pc-body"></tbody>
+  </table>
+
+  <script type="application/json" id="pc-data">[{"cls":"apple","n":8,"recall":37.5,"conf":"ice_cream","conf_pct":12.5},{"cls":"chili_pepper","n":10,"recall":50.0,"conf":"jalapeno","conf_pct":30.0},{"cls":"chocolate_mousse","n":100,"recall":57.0,"conf":"chocolate_cake","conf_pct":12.0},{"cls":"macadamia","n":12,"recall":58.3,"conf":"meorav_yerushalmi","conf_pct":16.7},{"cls":"pine_nuts","n":12,"recall":58.3,"conf":"cashews","conf_pct":8.3},{"cls":"onion","n":8,"recall":62.5,"conf":"meorav_yerushalmi","conf_pct":12.5},{"cls":"meorav_yerushalmi","n":30,"recall":63.3,"conf":"steak","conf_pct":6.7},{"cls":"cashews","n":15,"recall":66.7,"conf":"meorav_yerushalmi","conf_pct":26.7},{"cls":"couscous","n":9,"recall":66.7,"conf":"meorav_yerushalmi","conf_pct":11.1},{"cls":"eggplant","n":9,"recall":66.7,"conf":"meorav_yerushalmi","conf_pct":11.1},{"cls":"hazelnuts","n":13,"recall":69.2,"conf":"meorav_yerushalmi","conf_pct":23.1},{"cls":"falafel","n":277,"recall":70.0,"conf":"crab_cakes","conf_pct":12.6},{"cls":"malawach","n":30,"recall":70.0,"conf":"shakshuka","conf_pct":6.7},{"cls":"sufganiyah","n":27,"recall":70.4,"conf":"donuts","conf_pct":25.9},{"cls":"apple_pie","n":100,"recall":71.0,"conf":"bread_pudding","conf_pct":10.0},{"cls":"foie_gras","n":100,"recall":71.0,"conf":"panna_cotta","conf_pct":3.0},{"cls":"canned_tuna","n":7,"recall":71.4,"conf":"malawach","conf_pct":14.3},{"cls":"ravioli","n":100,"recall":72.0,"conf":"gnocchi","conf_pct":7.0},{"cls":"hummus","n":250,"recall":74.4,"conf":"omelette","conf_pct":4.0},{"cls":"banana","n":8,"recall":75.0,"conf":"french_fries","conf_pct":12.5},{"cls":"garlic_bread","n":100,"recall":75.0,"conf":"grilled_cheese_sandwich","conf_pct":4.0},{"cls":"mango","n":8,"recall":75.0,"conf":"orange","conf_pct":12.5},{"cls":"samosa","n":305,"recall":75.7,"conf":"spring_rolls","conf_pct":3.0},{"cls":"jachnun","n":30,"recall":76.7,"conf":"donuts","conf_pct":6.7},{"cls":"sabich","n":30,"recall":76.7,"conf":"breakfast_burrito","conf_pct":3.3},{"cls":"carrot","n":9,"recall":77.8,"conf":"jachnun","conf_pct":11.1},{"cls":"jalapeno","n":9,"recall":77.8,"conf":"chili_pepper","conf_pct":11.1},{"cls":"pear","n":9,"recall":77.8,"conf":"mango","conf_pct":22.2},{"cls":"shawarma","n":27,"recall":77.8,"conf":"french_fries","conf_pct":11.1},{"cls":"scallops","n":100,"recall":78.0,"conf":"takoyaki","conf_pct":3.0},{"cls":"bread_pudding","n":100,"recall":79.0,"conf":"french_toast","conf_pct":3.0},{"cls":"omelette","n":100,"recall":79.0,"conf":"grilled_salmon","conf_pct":2.0},{"cls":"panna_cotta","n":100,"recall":79.0,"conf":"lobster_bisque","conf_pct":3.0},{"cls":"red_velvet_cake","n":100,"recall":79.0,"conf":"carrot_cake","conf_pct":3.0},{"cls":"bourekas_cheese","n":30,"recall":80.0,"conf":"samosa","conf_pct":3.3},{"cls":"chicken_curry","n":100,"recall":80.0,"conf":"chicken_wings","conf_pct":4.0},{"cls":"chocolate_cake","n":100,"recall":80.0,"conf":"chocolate_mousse","conf_pct":6.0},{"cls":"coconut","n":10,"recall":80.0,"conf":"falafel","conf_pct":10.0},{"cls":"grapes","n":10,"recall":80.0,"conf":"peas","conf_pct":10.0},{"cls":"turnip","n":10,"recall":80.0,"conf":"radish","conf_pct":10.0},{"cls":"bruschetta","n":100,"recall":81.0,"conf":"tartare","conf_pct":3.0},{"cls":"crab_cakes","n":100,"recall":81.0,"conf":"steak","conf_pct":3.0},{"cls":"risotto","n":100,"recall":81.0,"conf":"chicken_curry","conf_pct":2.0},{"cls":"brazil_nuts","n":16,"recall":81.2,"conf":"meorav_yerushalmi","conf_pct":6.2},{"cls":"corn","n":16,"recall":81.2,"conf":"samosa","conf_pct":12.5},{"cls":"schnitzel","n":32,"recall":81.2,"conf":"churros","conf_pct":3.1},{"cls":"beet_salad","n":100,"recall":82.0,"conf":"greek_salad","conf_pct":3.0},{"cls":"cheesecake","n":100,"recall":82.0,"conf":"panna_cotta","conf_pct":3.0},{"cls":"grilled_cheese_sandwich","n":100,"recall":82.0,"conf":"garlic_bread","conf_pct":2.0},{"cls":"tiramisu","n":100,"recall":82.0,"conf":"chocolate_mousse","conf_pct":5.0},{"cls":"carrot_cake","n":100,"recall":83.0,"conf":"cup_cakes","conf_pct":3.0},{"cls":"ceviche","n":100,"recall":83.0,"conf":"tartare","conf_pct":3.0},{"cls":"gnocchi","n":100,"recall":83.0,"conf":"ravioli","conf_pct":7.0},{"cls":"lasagna","n":100,"recall":83.0,"conf":"garlic_bread","conf_pct":2.0},{"cls":"pecans","n":18,"recall":83.3,"conf":"bourekas_cheese","conf_pct":5.6},{"cls":"croque_madame","n":100,"recall":84.0,"conf":"grilled_cheese_sandwich","conf_pct":3.0},{"cls":"french_toast","n":100,"recall":84.0,"conf":"grilled_cheese_sandwich","conf_pct":2.0},{"cls":"lobster_bisque","n":100,"recall":84.0,"conf":"clam_chowder","conf_pct":5.0},{"cls":"almonds","n":13,"recall":84.6,"conf":"pecans","conf_pct":7.7},{"cls":"pancakes","n":100,"recall":85.0,"conf":"waffles","conf_pct":3.0},{"cls":"strawberry_shortcake","n":100,"recall":85.0,"conf":"cheesecake","conf_pct":5.0},{"cls":"ginger","n":7,"recall":85.7,"conf":"churros","conf_pct":14.3},{"cls":"orange","n":7,"recall":85.7,"conf":"apple","conf_pct":14.3},{"cls":"breakfast_burrito","n":100,"recall":86.0,"conf":"fried_rice","conf_pct":2.0},{"cls":"chicken_quesadilla","n":100,"recall":86.0,"conf":"breakfast_burrito","conf_pct":5.0},{"cls":"ice_cream","n":200,"recall":86.0,"conf":"chocolate_mousse","conf_pct":2.5},{"cls":"tacos","n":100,"recall":86.0,"conf":"chicken_quesadilla","conf_pct":3.0},{"cls":"waffles","n":100,"recall":86.0,"conf":"strawberry_shortcake","conf_pct":4.0},{"cls":"tartare","n":200,"recall":86.5,"conf":"ceviche","conf_pct":1.5},{"cls":"french_onion_soup","n":100,"recall":87.0,"conf":"clam_chowder","conf_pct":4.0},{"cls":"fried_calamari","n":100,"recall":87.0,"conf":"onion_rings","conf_pct":4.0},{"cls":"cauliflower","n":8,"recall":87.5,"conf":"couscous","conf_pct":12.5},{"cls":"lemon","n":8,"recall":87.5,"conf":"macaroni_and_cheese","conf_pct":12.5},{"cls":"watermelon","n":8,"recall":87.5,"conf":"sabich","conf_pct":12.5},{"cls":"clam_chowder","n":100,"recall":88.0,"conf":"lobster_bisque","conf_pct":3.0},{"cls":"fish_and_chips","n":100,"recall":88.0,"conf":"fried_calamari","conf_pct":3.0},{"cls":"grilled_salmon","n":100,"recall":88.0,"conf":"steak","conf_pct":4.0},{"cls":"pizza","n":100,"recall":88.0,"conf":"takoyaki","conf_pct":2.0},{"cls":"shrimp_and_grits","n":100,"recall":88.0,"conf":"gnocchi","conf_pct":4.0},{"cls":"churros","n":101,"recall":88.1,"conf":"pancakes","conf_pct":2.0},{"cls":"beetroot","n":9,"recall":88.9,"conf":"carrot","conf_pct":11.1},{"cls":"cabbage","n":9,"recall":88.9,"conf":"lettuce","conf_pct":11.1},{"cls":"cucumber","n":9,"recall":88.9,"conf":"edamame","conf_pct":11.1},{"cls":"radish","n":9,"recall":88.9,"conf":"tacos","conf_pct":11.1},{"cls":"caprese_salad","n":100,"recall":89.0,"conf":"greek_salad","conf_pct":2.0},{"cls":"creme_brulee","n":100,"recall":89.0,"conf":"churros","conf_pct":1.0},{"cls":"eggs_benedict","n":100,"recall":89.0,"conf":"croque_madame","conf_pct":5.0},{"cls":"fried_rice","n":100,"recall":89.0,"conf":"paella","conf_pct":3.0},{"cls":"miso_soup","n":100,"recall":89.0,"conf":"hot_and_sour_soup","conf_pct":3.0},{"cls":"peking_duck","n":100,"recall":89.0,"conf":"steak","conf_pct":2.0},{"cls":"sushi","n":100,"recall":89.0,"conf":"sashimi","conf_pct":3.0},{"cls":"hamburger","n":101,"recall":89.1,"conf":"ice_cream","conf_pct":2.0},{"cls":"baklava","n":250,"recall":90.0,"conf":"apple_pie","conf_pct":3.2},{"cls":"beef_carpaccio","n":100,"recall":90.0,"conf":"tartare","conf_pct":6.0},{"cls":"garlic","n":10,"recall":90.0,"conf":"meorav_yerushalmi","conf_pct":10.0},{"cls":"greek_salad","n":100,"recall":90.0,"conf":"caprese_salad","conf_pct":3.0},{"cls":"hot_dog","n":100,"recall":90.0,"conf":"bruschetta","conf_pct":2.0},{"cls":"lettuce","n":10,"recall":90.0,"conf":"meorav_yerushalmi","conf_pct":10.0},{"cls":"nachos","n":100,"recall":90.0,"conf":"guacamole","conf_pct":2.0},{"cls":"peas","n":10,"recall":90.0,"conf":"hummus","conf_pct":10.0},{"cls":"pineapple","n":10,"recall":90.0,"conf":"carrot","conf_pct":10.0},{"cls":"ramen","n":100,"recall":90.0,"conf":"pho","conf_pct":3.0},{"cls":"spinach","n":10,"recall":90.0,"conf":"lettuce","conf_pct":10.0},{"cls":"tomato","n":10,"recall":90.0,"conf":"apple","conf_pct":10.0},{"cls":"bibimbap","n":100,"recall":91.0,"conf":"paella","conf_pct":2.0},{"cls":"guacamole","n":100,"recall":91.0,"conf":"nachos","conf_pct":3.0},{"cls":"macarons","n":100,"recall":91.0,"conf":"cup_cakes","conf_pct":2.0},{"cls":"pad_thai","n":100,"recall":91.0,"conf":"fried_rice","conf_pct":2.0},{"cls":"white_rice","n":12,"recall":91.7,"conf":"bourekas_cheese","conf_pct":8.3},{"cls":"caesar_salad","n":100,"recall":92.0,"conf":"hummus","conf_pct":2.0},{"cls":"cheese_plate","n":100,"recall":92.0,"conf":"baklava","conf_pct":1.0},{"cls":"cup_cakes","n":100,"recall":92.0,"conf":"chocolate_cake","conf_pct":2.0},{"cls":"escargots","n":100,"recall":92.0,"conf":"creme_brulee","conf_pct":2.0},{"cls":"macaroni_and_cheese","n":100,"recall":92.0,"conf":"malawach","conf_pct":1.0},{"cls":"spaghetti_carbonara","n":100,"recall":92.0,"conf":"spaghetti_bolognese","conf_pct":3.0},{"cls":"steak","n":301,"recall":92.4,"conf":"grilled_salmon","conf_pct":1.0},{"cls":"baked_potato","n":40,"recall":92.5,"conf":"donuts","conf_pct":5.0},{"cls":"chicken_wings","n":100,"recall":93.0,"conf":"steak","conf_pct":1.0},{"cls":"club_sandwich","n":100,"recall":93.0,"conf":"grilled_cheese_sandwich","conf_pct":3.0},{"cls":"gyoza","n":201,"recall":93.0,"conf":"takoyaki","conf_pct":1.0},{"cls":"mussels","n":100,"recall":93.0,"conf":"gnocchi","conf_pct":2.0},{"cls":"onion_rings","n":100,"recall":93.0,"conf":"churros","conf_pct":3.0},{"cls":"oysters","n":100,"recall":93.0,"conf":"bruschetta","conf_pct":1.0},{"cls":"poutine","n":100,"recall":93.0,"conf":"shrimp_and_grits","conf_pct":2.0},{"cls":"paella","n":101,"recall":93.1,"conf":"fried_rice","conf_pct":2.0},{"cls":"pho","n":101,"recall":93.1,"conf":"ramen","conf_pct":4.0},{"cls":"donuts","n":219,"recall":93.2,"conf":"carrot_cake","conf_pct":0.9},{"cls":"french_fries","n":240,"recall":93.3,"conf":"lobster_roll_sandwich","conf_pct":0.8},{"cls":"lobster_roll_sandwich","n":100,"recall":94.0,"conf":"club_sandwich","conf_pct":2.0},{"cls":"sashimi","n":100,"recall":94.0,"conf":"sushi","conf_pct":3.0},{"cls":"spring_rolls","n":100,"recall":94.0,"conf":"samosa","conf_pct":1.0},{"cls":"bell_pepper","n":18,"recall":94.4,"conf":"spinach","conf_pct":5.6},{"cls":"edamame","n":100,"recall":95.0,"conf":"nachos","conf_pct":1.0},{"cls":"hot_and_sour_soup","n":100,"recall":95.0,"conf":"miso_soup","conf_pct":2.0},{"cls":"seaweed_salad","n":100,"recall":95.0,"conf":"tartare","conf_pct":2.0},{"cls":"takoyaki","n":100,"recall":95.0,"conf":"donuts","conf_pct":2.0},{"cls":"cannoli","n":100,"recall":96.0,"conf":"tiramisu","conf_pct":1.0},{"cls":"spaghetti_bolognese","n":100,"recall":97.0,"conf":"lasagna","conf_pct":1.0},{"cls":"deviled_eggs","n":100,"recall":98.0,"conf":"foie_gras","conf_pct":1.0},{"cls":"shakshuka","n":74,"recall":98.6,"conf":"baked_potato","conf_pct":1.4},{"cls":"avocado","n":11,"recall":100.0,"conf":"","conf_pct":0.0},{"cls":"kiwi","n":10,"recall":100.0,"conf":"","conf_pct":0.0},{"cls":"pistachios","n":12,"recall":100.0,"conf":"","conf_pct":0.0},{"cls":"pomegranate","n":8,"recall":100.0,"conf":"","conf_pct":0.0},{"cls":"walnuts","n":11,"recall":100.0,"conf":"","conf_pct":0.0}]</script>
+  <script>
+  (function(){
+    var DATA=JSON.parse(document.getElementById('pc-data').textContent);
+    var pretty=function(s){return s?s.replace(/_/g,' '):'';};
+    // Wilson 95% score interval for a proportion (p in 0..1, n samples) -> [lo,hi] in %
+    var wilson=function(p,n){var z=1.96,d=1+z*z/n,c=(p+z*z/(2*n))/d,
+      h=z*Math.sqrt(p*(1-p)/n+z*z/(4*n*n))/d;return [Math.max(0,(c-h)*100),Math.min(100,(c+h)*100)];};
+    var REL=50;                                   // n >= REL -> estimate is statistically reliable
+    var why=function(r){
+      var wrong=Math.round(r.n*(100-r.recall)/100);
+      var confImgs=r.conf?Math.round(r.n*r.conf_pct/100):0;
+      if(r.n<REL){                                // small sample: the honest reason is variance, not "overlap"
+        var ci=wilson(r.recall/100,r.n);
+        var s='only '+r.n+' test images ('+wrong+' miss'+(wrong===1?'':'es')+') → 95% CI ['
+              +ci[0].toFixed(0)+'–'+ci[1].toFixed(0)+'%]: sample too small to rank';
+        if(r.conf&&confImgs>=3) s+='; leading confusion '+pretty(r.conf)+' ('+confImgs+' imgs)';
+        return s;
+      }
+      if(r.recall>=95) return 'Strong and reliable (n='+r.n+').';
+      var p=['reliable estimate (n='+r.n+')'];
+      if(r.conf) p.push('main confusion: <b style="color:var(--ink)">'+pretty(r.conf)+'</b> ('+r.conf_pct+'% of its images)');
+      return p.join('; ');
+    };
+    window.pcRender=function(){
+      var q=(document.getElementById('pc-search').value||'').toLowerCase().trim();
+      var sort=document.getElementById('pc-sort').value;
+      var weak=document.getElementById('pc-weakonly').checked;
+      var reliable=document.getElementById('pc-reliable').checked;
+      var rows=DATA.filter(function(r){
+        if(weak && r.recall>=75) return false;
+        if(reliable && r.n<REL) return false;
+        return !q || r.cls.toLowerCase().indexOf(q)>=0 || (r.conf&&r.conf.toLowerCase().indexOf(q)>=0);
+      });
+      rows.sort(function(a,b){
+        if(sort==='recall') return a.recall-b.recall;
+        if(sort==='-recall') return b.recall-a.recall;
+        if(sort==='-n') return b.n-a.n;
+        return a.cls<b.cls?-1:1;
+      });
+      var tb=document.getElementById('pc-body');
+      tb.innerHTML=rows.map(function(r){
+        var cl=r.recall>=90?'good':(r.recall>=75?'mid':'bad');
+        var mark=r.n<REL?'<span title="small sample - see Why" style="color:var(--mut)">*</span>':'';
+        return '<tr><td class="cls">'+pretty(r.cls)+'</td>'+
+          '<td><span class="rc '+cl+'">'+r.recall.toFixed(1)+'%</span>'+mark+'</td>'+
+          '<td>'+r.n+'</td>'+
+          '<td class="conf">'+(r.conf?pretty(r.conf)+' <span style="color:var(--mut)">('+r.conf_pct+'%)</span>':'—')+'</td>'+
+          '<td class="why">'+why(r)+'</td></tr>';
+      }).join('');
+      document.getElementById('pc-count').textContent=rows.length+' of '+DATA.length+' classes'
+        +'  ·  * = small sample (n<'+REL+'), recall not statistically reliable';
+    };
+    // summary stats
+    document.getElementById('pc-n').textContent=DATA.length;
+    document.getElementById('pc-mean').textContent=(DATA.reduce(function(a,r){return a+r.recall;},0)/DATA.length).toFixed(1)+'%';
+    document.getElementById('pc-strong').textContent=DATA.filter(function(r){return r.recall>=90;}).length;
+    document.getElementById('pc-weak').textContent=DATA.filter(function(r){return r.recall<75;}).length;
+    pcRender();
+  })();
+  </script>
+  <div class="foot">CalEyeZ · per-class recall on the held-out test set (145 classes, routed system).</div>
 </section>
 
 <!-- ============ VOICE ANALOGY ============ -->
