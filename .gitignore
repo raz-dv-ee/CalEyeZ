@@ -112,9 +112,6 @@ desktop.ini
 
 
 # ── 7. MISC PROJECT-SPECIFIC ─────────────────────────────────
-# Local editor/tooling settings
-.claude/
-
 # Temporary / scratch files
 *.tmp
 *.log
@@ -122,7 +119,6 @@ desktop.ini
 
 # Local-only working notes (never publish)
 PROJECT_LOG.md
-CONVERSATION_HANDOFF.md
 
 # Accidental nested clone of this repo
 CalEyeZ/
@@ -151,6 +147,3 @@ build_edge_onnx/.venv_onnx/
 build_edge_onnx/*.log
 build_edge_onnx/models/*.onnx
 runs/**/best.onnx
-
-# Superpowers-generated spec files (not part of the project)
-docs/superpowers/
