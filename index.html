@@ -242,6 +242,7 @@
     <div class="tgroup"><span class="glab">Hardware &amp; Demo</span><div class="gbtns">
       <button data-tab="ble">BLE Scale</button>
       <button data-tab="demo">Live Demo</button>
+      <button data-tab="webapp">Web App</button>
     </div></div>
     <div class="tgroup"><span class="glab">Discussion</span><div class="gbtns">
       <button data-tab="feedback">Reviewer Response</button>
@@ -1376,6 +1377,184 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
   <div class="callout"><b>Result.</b> The same pipeline that scores 86.2% on the held-out test now runs
     live, with the routing on display, robustness baked into the input path, and a cloud fallback for the
     inputs the local models genuinely cannot win. Source: <code>scripts/demo/caleyez_demo.py</code>.</div>
+
+  <div class="foot">CalEyeZ · single living project document · Raz Dvora &amp; Roi Tzur · Shenkar.</div>
+</section>
+
+<!-- ============ WEB APP ============ -->
+<section class="tab" id="tab-webapp">
+  <h2>The Web App: Edge AI in the Browser</h2>
+  <p class="lead">The same two-expert pipeline that runs on the desktop also runs, unchanged, inside a phone
+    browser &mdash; no install, no app store, no server doing the inference. A judge scans a QR code and the
+    two CNNs plus the XGBoost arbiter execute on their own device. This tab documents how a browser becomes an
+    edge-AI runtime, how it uses the device's CPU/GPU and memory, where the cloud is and is not used, and the
+    hard limits of the platform. Repo: <code>caleyez-web</code> (public, GitHub&nbsp;Pages). Live:
+    <a href="https://raz-dv-ee.github.io/caleyez-web/" target="_blank" rel="noopener">raz-dv-ee.github.io/caleyez-web</a>
+    &middot; engineering console: <code>/engineering.html</code> &middot; latency bench: <code>/bench.html</code>.</p>
+
+  <div class="sub-nav">
+    <a href="#w-why">Why a browser</a><a href="#w-run">On-device runtime</a><a href="#w-mem">Memory &amp; CPU/GPU</a>
+    <a href="#w-parity">Pipeline parity</a><a href="#w-arb">Arbiter in JS</a><a href="#w-lat">Latency</a>
+    <a href="#w-cloud">Where the cloud is</a><a href="#w-prep">Prep &amp; portions</a><a href="#w-ble">BLE scale</a>
+    <a href="#w-eng">Engineering console</a><a href="#w-limits">Limitations</a><a href="#w-arch">Hosting</a>
+  </div>
+
+  <div class="callout green" id="w-why"><b>On-device, not cloud.</b> The recognition never leaves the phone:
+    the food image is turned into a class label entirely by code running in the browser tab. This is the direct
+    answer to the panel's "make it a real edge product / no cloud" note &mdash; the model literally runs on the
+    consumer device, and the app proves it by displaying the measured inference time (<code>⚡&nbsp;N&nbsp;ms
+    &middot; on-device edge</code>) next to every result, so there is no hidden HTTP round-trip to explain.</div>
+
+  <h3 id="w-run">How a browser runs a neural network on the edge</h3>
+  <p>The two YOLO11l-cls experts are exported to <b>ONNX</b> (the same models the desktop ONNX build uses) and
+    executed with <b>ONNX&nbsp;Runtime&nbsp;Web</b> (<code>onnxruntime-web</code>). ORT-Web ships the runtime as
+    a <b>WebAssembly (WASM)</b> module, so the network's operators run as near-native compiled code inside the
+    browser sandbox &mdash; this is what makes real CNN inference on a phone practical rather than a toy.</p>
+  <table>
+    <thead><tr><th>Backend</th><th>What it uses</th><th>When</th><th>Trade-off</th></tr></thead>
+    <tbody>
+      <tr><td><b>WASM</b> (default)</td><td>the device <b>CPU</b>, SIMD, single-threaded</td><td>always, unless opted out</td>
+        <td>Upcasts the fp16 weights to fp32 at run time, so it matches desktop accuracy <b>exactly</b>. Chosen as default.</td></tr>
+      <tr><td><b>WebGPU</b> (<code>?gpu=1</code>)</td><td>the device <b>GPU</b>, fp16 compute</td><td>opt-in via URL</td>
+        <td>Faster steady-state, but a ~2.6&nbsp;s one-time shader compile (hidden behind the loading splash) and
+          fp16 rounding degraded a few classes on some mobile GPUs &mdash; so it is <b>not</b> the default.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout amber">We deliberately default to the <b>CPU/WASM</b> path. On mobile GPUs the fp16 WebGPU
+    compute lost accuracy on borderline foods (pizza/hamburger), so correctness beat raw speed. WebGPU stays
+    available for benchmarking via <code>?gpu=1</code>.</div>
+
+  <h3 id="w-mem">Memory, and why we free tensors by hand</h3>
+  <p>Two fp16 ONNX models are downloaded once: <b>Global</b> &asymp;25&nbsp;MB (320&sup2;, 132 classes) and
+    <b>Israeli</b> &asymp;25&nbsp;MB (224&sup2;, 13&nbsp;classes + background) &mdash; &asymp;50&nbsp;MB total,
+    then HTTP-cached so later runs are instant. At run time WASM upcasts fp16&rarr;fp32, so a few hundred MB of
+    working memory is touched during inference; the app targets devices with <b>&ge;2&nbsp;GB RAM</b>.</p>
+  <div class="callout blue"><b>WASM memory is outside the JS garbage collector.</b> The tensors ORT allocates for
+    each inference live in the WASM (and, on WebGPU, the GPU) heap, which the browser's garbage collector does
+    <b>not</b> reclaim. After every capture the app explicitly disposes the input tensor and the run's output
+    tensors (<code>dispose(tg,ti,go,io)</code>); without this the heap would grow with every photo and eventually
+    crash the tab &mdash; the risk is largest on the WebGPU path where output tensors hold GPU buffers. A one-shot
+    <b>warm-up</b> inference on load also compiles the kernels ahead of the first real photo, so the cold-start
+    cost is paid behind the splash, not in front of a judge.</p>
+
+  <h3 id="w-parity">Bit-for-bit pipeline parity with the desktop</h3>
+  <p>The browser preprocessing is written to match <code>scripts/demo/onnx_backend.py</code> so the two runtimes
+    agree on the answer. Central <b>ROI square (0.60)</b> &rarr; resized on a canvas to each model's input
+    (<code>imageSmoothingQuality:'high'</code>) &rarr; <b>&divide;255</b>, RGB, CHW, and <b>no ImageNet
+    normalisation</b> (the &divide;255 is the only scaling &mdash; verified on the desktop as the exact
+    preprocessing). This was validated at <b>0% top-1 mismatch</b> against the reference pipeline.</p>
+  <div class="flow">
+    <span class="box">📷 frame</span><span class="arr">→</span>
+    <span class="box hl">ROI 0.60</span><span class="arr">→</span>
+    <span class="box">resize 320 / 224</span><span class="arr">→</span>
+    <span class="box">&divide;255 · CHW</span><span class="arr">→</span>
+    <span class="box hl">Global fp16</span><span class="arr">+</span>
+    <span class="box teal">Israeli fp16</span><span class="arr">→</span>
+    <span class="box">20 features</span><span class="arr">→</span>
+    <span class="box amber">XGBoost (JS)</span><span class="arr">→</span>
+    <span class="box">gate / route</span><span class="arr">→</span>
+    <span class="box purple">Gemini?</span><span class="arr">→</span>
+    <span class="box">nutrition × grams</span>
+  </div>
+
+  <h3 id="w-arb">The XGBoost arbiter, re-implemented in JavaScript</h3>
+  <p>ORT-Web has no <code>TreeEnsemble</code> operator, so the router cannot run as ONNX in the browser. Instead
+    the trained trees are exported to a flat JSON (<code>arbiter_trees.json</code>) and walked directly in
+    JavaScript: each tree descends <code>[feature, threshold, yes, no]</code> nodes to a leaf, the leaves sum to a
+    log-odds, and a sigmoid gives P(israeli). This JS tree-walk was verified <b>equal to the Python XGBoost output
+    to 1e-7</b> and reproduces the routing decision on 300/300 checked images. The same gates as the desktop apply
+    (GATE_G&nbsp;0.55, GATE_I&nbsp;0.60, both-unsure&nbsp;0.50, arbiter-band&nbsp;0.15).</p>
+
+  <h3 id="w-lat">Latency, measured and shown</h3>
+  <p>Inference is timed with <code>performance.now()</code> around the two <code>run()</code> calls and printed on
+    the result as <code>⚡&nbsp;N&nbsp;ms&nbsp;·&nbsp;on-device&nbsp;edge</code> (and in the engineering console
+    header). On a Pixel&nbsp;10&nbsp;Pro the warm inference is <b>&asymp;0.6&nbsp;s</b> for both models + arbiter on
+    the WASM path. Beyond honesty, this number is a demo argument: a live-updating on-device timer makes it
+    self-evident that recognition is not a cloud call.</p>
+
+  <h3 id="w-cloud">Where the cloud <em>is</em> used (and where it is not)</h3>
+  <p>Recognition is 100% local. Two things legitimately use the network, and both go through a
+    <b>Cloudflare Worker</b> so that the API keys are stored as Worker <b>secrets</b> and never appear in the
+    public web-app repo. The single worker routes by HTTP method: <b>GET&nbsp;=&nbsp;USDA</b>,
+    <b>POST&nbsp;=&nbsp;Gemini</b>.</p>
+  <table>
+    <thead><tr><th>Service</th><th>Purpose</th><th>Why a Worker</th><th>Notable engineering</th></tr></thead>
+    <tbody>
+      <tr><td><b>USDA</b> proxy (GET)</td><td>nutrition for foods not in the local DB</td>
+        <td>keeps the free USDA key server-side; 30-day edge cache</td>
+        <td><b>Smart filter</b>: rejects junk descriptions (juice/dried/sauce&hellip;), scores by primary-name and
+          token overlap, treats cooking words as stop-words, and penalises ALL-CAPS branded/restaurant entries &mdash;
+          so "apple"&rarr;apple, not apple juice, and "grilled salmon"&rarr;salmon. <code>?debug=1</code> returns the
+          ranked candidate list for the engineering console.</td></tr>
+      <tr><td><b>Gemini</b> vision (POST)</td><td>identify the food when the on-device system is unsure</td>
+        <td>keeps the Gemini key server-side; multimodal call</td>
+        <td>Mirrors the desktop demo's fallback: when the confidence gate / arbiter band says "not sure," the ROI
+          image is POSTed to <code>gemini-flash-latest</code> with the demo's exact prompt, and the returned food
+          label overrides the local guess (marked with a 🔮 chip). Also available as a manual override button.</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="w-prep">Cooking method, portion sub-types, and evidence-based calories</h3>
+  <p>Calories change drastically with preparation, so the app offers a cooking-method choice
+    (raw&nbsp;/&nbsp;boiled&nbsp;/&nbsp;grilled&nbsp;/&nbsp;fried&nbsp;/&nbsp;deep-fried) &mdash; but only for foods
+    where it makes sense (an apple gets no dropdown; a steak does), driven by a per-class metadata file
+    (<code>foodmeta.json</code>). A steak can also be refined to a specific cut (filet mignon, ribeye&hellip;),
+    each carrying its own curated per-100&nbsp;g macros.</p>
+  <div class="callout green"><b>The multipliers are measured, not invented.</b> The cooking-method factors are
+    derived empirically from USDA raw-vs-cooked food pairs (<code>scripts/eval/cooking_multipliers.py</code>): for
+    each pair the per-100&nbsp;g cooked/raw kcal ratio is the multiplier, aggregated with a sample count and 95%
+    confidence interval. Because the scale weighs the <b>cooked</b> food, per-100&nbsp;g-cooked is exactly the right
+    basis. Result: raw&nbsp;&times;1.0, boiled&nbsp;&times;1.04, grilled&nbsp;&times;1.17, fried&nbsp;&times;1.47,
+    deep-fried&nbsp;&times;1.99 &mdash; each shown in the engineering console with its <i>n</i> and CI.</div>
+
+  <h3 id="w-ble">Weighing: the BLE scale in the browser</h3>
+  <p>Portion mass comes from the same reverse-engineered SWAN scale, read over <b>Web Bluetooth</b>: connect to
+    device <code>SWAN</code>, subscribe to notify characteristic <code>ffb2</code>, and decode the 8-byte packet
+    (<code>weight = low + (high|carry)&times;256</code>, additive checksum over bytes 2&ndash;6). See the
+    <a href="#" class="goto" data-tab="ble">BLE Scale</a> tab for the full protocol. When no scale is present, grams
+    are entered manually. <b>Web Bluetooth is Chromium-only</b>, which is the app's sharpest platform limit (below).</p>
+
+  <h3 id="w-eng">The engineering console: the whole pipeline, exposed</h3>
+  <p><code>/engineering.html</code> is a diagnostic view that traces one capture end to end: the preprocessing
+    thumbnails, both experts' top-5 with entropy/margin/P(background), the 20-feature arbiter vector, the arbiter
+    P(israeli) with every gate shown PASS/FAIL, the USDA smart-filter candidate table (scores + reject reasons),
+    the cooking-multiplier math with <i>n</i>/CI, a live per-byte BLE packet decode with checksum verification, and
+    a compatibility/requirements section. It exists so the engineering is legible as structured evidence, not a
+    black box.</p>
+
+  <h3 id="w-limits">Limitations of the browser platform</h3>
+  <p>Running on the open web means the browser and hardware set real limits. These are stated plainly rather than
+    hidden, and are also surfaced in the app's own compatibility section.</p>
+  <table>
+    <thead><tr><th>Limit</th><th>Cause</th><th>Effect / mitigation</th></tr></thead>
+    <tbody>
+      <tr><td><b>BLE scale is Android-Chrome only</b></td><td>Web Bluetooth is unsupported on iOS (Safari <i>and</i>
+        Chrome-iOS both use WebKit) and Firefox</td><td>On iPhone the scale cannot pair &rarr; the app falls back to
+        manual grams. Best full experience is Android Chrome.</td></tr>
+      <tr><td><b>Memory / download</b></td><td>&asymp;50&nbsp;MB of models + fp32 upcast at run time</td>
+        <td>Needs &ge;2&nbsp;GB RAM; very old low-memory phones may struggle. Models cache after first load.</td></tr>
+      <tr><td><b>WebGPU accuracy</b></td><td>fp16 compute rounding on some mobile GPUs</td>
+        <td>Left off by default; CPU/WASM (fp32-accurate) is the default path.</td></tr>
+      <tr><td><b>Network for nutrition / Gemini</b></td><td>USDA and Gemini are cloud services</td>
+        <td>Recognition works fully offline after first load; only the nutrition lookup and the "unsure" Gemini
+          fallback need connectivity.</td></tr>
+      <tr><td><b>Camera needs HTTPS</b></td><td><code>getUserMedia</code> requires a secure context</td>
+        <td>Served over HTTPS via GitHub Pages; fine in practice.</td></tr>
+    </tbody>
+  </table>
+
+  <h3 id="w-arch">Hosting architecture</h3>
+  <p>The app repo (<code>caleyez-web</code>) is deliberately tiny &mdash; HTML/JS only, no models &mdash; so
+    GitHub&nbsp;Pages deploys it in seconds. The &asymp;50&nbsp;MB of ONNX models, the arbiter trees, the class-name
+    maps, <code>foodmeta.json</code>, and <code>cooking_multipliers.json</code> are hosted in <b>this</b> repo under
+    <code>/webmodels/</code> and fetched cross-origin (CORS-enabled) via <code>MODEL_BASE</code>. Keys live only in
+    the Cloudflare Worker as secrets. Net result: a phone loads a few kB of HTML, pulls the models once from a CDN,
+    and thereafter runs an entire multi-model food-recognition system locally.</p>
+
+  <div class="callout"><b>In one line.</b> CalEyeZ's web app is the desktop edge pipeline &mdash; two ONNX CNNs
+    + a JS XGBoost arbiter + BLE weight &mdash; recompiled to run inside a phone browser on the device's own CPU
+    (or GPU), with only nutrition lookups and an optional "unsure" Gemini fallback touching the network, each
+    keyed behind a Cloudflare Worker.</div>
 
   <div class="foot">CalEyeZ · single living project document · Raz Dvora &amp; Roi Tzur · Shenkar.</div>
 </section>
