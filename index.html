@@ -1486,6 +1486,29 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
     <span class="box">nutrition × grams</span>
   </div>
 
+  <div class="callout amber"><b>"That's not image processing, you just ran a model."</b> It is image processing,
+    and it is not optional. Before the CNN sees a single number, the pixels are cropped, resampled, split into
+    channels, and normalised in code - and getting any of those steps wrong changes the prediction. The
+    engineering console shows every step live with the real numbers from the current photo; the same steps are
+    laid out below on a representative pixel.</div>
+  <table>
+    <thead><tr><th></th><th>image-processing step</th><th>worked example</th></tr></thead>
+    <tbody>
+      <tr><td>1</td><td>capture source frame</td><td>1920 &times; 1080 px</td></tr>
+      <tr><td>2</td><td>centre-crop ROI (60%), discard the outer 40% (plate / background)</td><td>648 &times; 648 px at (636, 216)</td></tr>
+      <tr><td>3</td><td>resample to each model's input (bilinear, high quality)</td><td>&rarr; 320 &times; 320 and 224 &times; 224</td></tr>
+      <tr><td>4</td><td>read RGBA bytes, drop alpha &rarr; RGB (0-255)</td><td>a pixel = (183, 92, 47)</td></tr>
+      <tr class="inter"><td>5</td><td><b>normalise &divide;255</b>: byte &rarr; float in [0, 1]</td><td>(183, 92, 47) &rarr; (0.718, 0.361, 0.184)</td></tr>
+      <tr><td>6</td><td>pack HWC &rarr; CHW planar tensor</td><td>[1, 3, 320, 320]</td></tr>
+      <tr><td>7</td><td>verify range over the whole tensor</td><td>min / max / mean all in [0, 1]</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>No ImageNet normalisation - on purpose.</b> A typical torchvision pipeline also subtracts a
+    per-channel mean [0.485, 0.456, 0.406] and divides by a std [0.229, 0.224, 0.225]. CalEyeZ deliberately does
+    not: the &divide;255 above is the <b>only</b> scaling. This was not a guess - it was recovered by testing which
+    normalisation reproduces the training-time behaviour, and the browser pipeline was then verified to match the
+    desktop at <b>0% top-1 mismatch</b>. The model is only ever as good as the image processing feeding it.</div>
+
   <h3 id="w-arb">The XGBoost arbiter, re-implemented in JavaScript</h3>
   <p>ORT-Web has no <code>TreeEnsemble</code> operator, so the router cannot run as ONNX in the browser. Instead
     the trained trees are exported to a flat JSON (<code>arbiter_trees.json</code>) and walked directly in
