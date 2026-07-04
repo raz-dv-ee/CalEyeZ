@@ -1462,6 +1462,79 @@ raw = deque(maxlen=<span class="st">5</span>)
     <a href="#" class="goto" data-tab="validation">Validation &amp; Risks</a> tab). BLE removes the
     measurement from the vision path entirely. Source: <code>gui_scale.py</code>, used live in
     <code>DEMO.py</code>.</div>
+
+  <h3 id="ble-fsm">Step 5 · The connection state machine</h3>
+  <p>The BLE driver is a <b>finite state machine</b>: it discovers the scale, subscribes, streams and
+    decodes packets, judges stability, and <b>self-heals</b> if the stream goes silent. Every packet is
+    validated (length &ge; 8, <code>AC</code> header, and the additive checksum over bytes 2..6) before it
+    is decoded, so a corrupt frame is dropped rather than shown.</p>
+  <svg viewBox="0 0 880 360" style="width:100%;max-width:880px;background:#0b0f15;border:1px solid var(--line);border-radius:12px" font-family="ui-sans-serif,system-ui" font-size="12">
+    <defs><marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8b949e"/></marker></defs>
+    <!-- nodes -->
+    <g>
+      <rect x="12" y="60" width="120" height="44" rx="9" fill="#12161d" stroke="#6e7681"/><text x="72" y="87" fill="#e6edf3" text-anchor="middle">DISCONNECTED</text>
+      <rect x="180" y="60" width="120" height="44" rx="9" fill="#12161d" stroke="#58a6ff"/><text x="240" y="87" fill="#e6edf3" text-anchor="middle">SCANNING</text>
+      <rect x="348" y="60" width="120" height="44" rx="9" fill="#12161d" stroke="#58a6ff"/><text x="408" y="87" fill="#e6edf3" text-anchor="middle">CONNECTING</text>
+      <rect x="516" y="60" width="120" height="44" rx="9" fill="#12161d" stroke="#58a6ff"/><text x="576" y="87" fill="#e6edf3" text-anchor="middle">SUBSCRIBING</text>
+      <!-- streaming container -->
+      <rect x="670" y="34" width="196" height="150" rx="12" fill="#0d1a12" stroke="#3fb950"/><text x="768" y="52" fill="#3fb950" text-anchor="middle" font-weight="700">STREAMING</text>
+      <rect x="686" y="66" width="164" height="38" rx="8" fill="#1c1408" stroke="#d29922"/><text x="768" y="90" fill="#e6edf3" text-anchor="middle">MOVING</text>
+      <rect x="686" y="120" width="164" height="38" rx="8" fill="#0d1a12" stroke="#3fb950"/><text x="768" y="144" fill="#e6edf3" text-anchor="middle">STABLE</text>
+      <text x="768" y="176" fill="#8b949e" text-anchor="middle" font-size="10.5">validate → decode → median</text>
+      <!-- stale -->
+      <rect x="348" y="266" width="120" height="44" rx="9" fill="#1d1113" stroke="#f85149"/><text x="408" y="293" fill="#e6edf3" text-anchor="middle">STALE</text>
+    </g>
+    <!-- transitions -->
+    <g stroke="#8b949e" fill="none">
+      <line x1="132" y1="82" x2="176" y2="82" marker-end="url(#ah)"/>
+      <line x1="300" y1="82" x2="344" y2="82" marker-end="url(#ah)"/>
+      <line x1="468" y1="82" x2="512" y2="82" marker-end="url(#ah)"/>
+      <line x1="636" y1="82" x2="682" y2="84" marker-end="url(#ah)"/>
+      <!-- moving <-> stable -->
+      <path d="M740,104 C720,112 720,112 740,120" marker-end="url(#ah)"/>
+      <path d="M796,120 C816,112 816,112 796,104" marker-end="url(#ah)"/>
+      <!-- streaming -> stale (silent) -->
+      <path d="M768,184 C768,240 520,250 470,278" marker-end="url(#ah)"/>
+      <!-- stale -> connecting (reconnect) -->
+      <path d="M408,266 C408,200 408,160 408,106" marker-end="url(#ah)"/>
+      <!-- streaming -> disconnected (disconnect) -->
+      <path d="M768,34 C768,10 72,10 72,56" marker-end="url(#ah)"/>
+      <!-- self drop loop on streaming -->
+      <path d="M866,80 C900,80 900,130 866,130" marker-end="url(#ah)"/>
+    </g>
+    <!-- labels -->
+    <g fill="#8b949e" font-size="10.5" text-anchor="middle">
+      <text x="154" y="76">connect</text>
+      <text x="322" y="76">SWAN / RSSI</text>
+      <text x="490" y="76">GATT up</text>
+      <text x="655" y="70">notify ffb2</text>
+      <text x="768" y="116" fill="#d29922">&le;2g / &gt;2g</text>
+      <text x="600" y="238" fill="#f85149">no packet &gt; 4 s</text>
+      <text x="430" y="190" fill="#3fb950">reconnect</text>
+      <text x="420" y="22">gatt disconnect</text>
+      <text x="892" y="107" transform="rotate(90 892 107)">bad checksum → drop</text>
+    </g>
+  </svg>
+  <table>
+    <thead><tr><th>State</th><th>Event</th><th>Action</th><th>Next state</th></tr></thead>
+    <tbody>
+      <tr><td>DISCONNECTED</td><td>user connects</td><td>start BLE scan</td><td>SCANNING</td></tr>
+      <tr><td>SCANNING</td><td>advertiser <code>SWAN</code> / strongest RSSI</td><td>open GATT connection</td><td>CONNECTING</td></tr>
+      <tr><td>CONNECTING</td><td>GATT connected</td><td>enable notifications on <code>ffb2</code></td><td>SUBSCRIBING</td></tr>
+      <tr><td>SUBSCRIBING</td><td>notify enabled</td><td>start the packet loop</td><td>STREAMING (MOVING)</td></tr>
+      <tr><td>STREAMING</td><td>valid packet</td><td>decode, push to 5-sample median</td><td>MOVING or STABLE</td></tr>
+      <tr><td>STREAMING</td><td>bad header / length / checksum</td><td>drop the frame</td><td>STREAMING (no change)</td></tr>
+      <tr><td>MOVING</td><td>last 10 samples vary &le; 2 g</td><td>latch a reading as settled</td><td>STABLE</td></tr>
+      <tr><td>STABLE</td><td>a later sample varies &gt; 2 g</td><td>reading is moving again</td><td>MOVING</td></tr>
+      <tr><td>STREAMING</td><td>no packet for &gt; 4 s (watchdog)</td><td>tear down and re-scan</td><td>STALE &rarr; CONNECTING</td></tr>
+      <tr><td>any</td><td>GATT disconnect</td><td>reset weight to 0</td><td>DISCONNECTED</td></tr>
+    </tbody>
+  </table>
+  <div class="callout green"><b>Why a state machine.</b> A live sensor link is never "connected or not" &mdash;
+    it drops, flickers, and goes silent. Modelling it as explicit states with a <b>staleness watchdog</b>
+    (no packet for 4 s &rarr; automatic reconnect) and a <b>stability gate</b> (STABLE only when ten
+    consecutive samples agree to 2 g) is what makes the reading trustworthy enough to multiply into a
+    calorie figure. The manual-grams entry is the fallback path when the machine cannot reach STREAMING.</div>
 </section>
 
 <!-- ============ LIVE DEMO ============ -->
