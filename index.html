@@ -5,6 +5,8 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>CalEyeZ · Project Documentation</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
+<script src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <style>
   :root{
     --bg:#0d1117; --panel:#161b22; --panel2:#1c2230; --line:#30363d; --ink:#e6edf3; --mut:#8b949e;
@@ -1548,9 +1550,9 @@ raw = deque(maxlen=<span class="st">5</span>)
     <code>&#375;</code> onto the true mass. Every candidate is scored by its <b>mean absolute error (MAE)</b>
     over the <i>n</i> = 10 reference masses - the average gap between the corrected reading and the truth:</p>
 
-  <div style="background:#0b0f15;border:1px solid var(--line);border-radius:8px;padding:12px;margin:10px 0;text-align:center;font-size:15px;color:#e6edf3">
-    MAE = (1/<i>n</i>) &Sigma;<sub>i=1..n</sub> |&#375;<sub>i</sub> &minus; true<sub>i</sub>|
-    &nbsp;&nbsp;&middot;&nbsp;&nbsp; <span style="color:#8b949e;font-size:13px">&#375;<sub>i</sub> = corrected reading, true<sub>i</sub> = reference mass</span>
+  <div style="background:#0b0f15;border:1px solid var(--line);border-radius:8px;padding:14px;margin:10px 0;text-align:center;color:#e6edf3">
+    <div id="eq-mae"></div>
+    <div style="color:#8b949e;font-size:13px;margin-top:8px">&#375;<sub>i</sub> = corrected reading, &nbsp; true<sub>i</sub> = reference mass, &nbsp; n = 10</div>
   </div>
 
   <p>We fit two candidates to the same 10 masses by <b>least squares</b> and compared their MAE:</p>
@@ -1570,12 +1572,18 @@ raw = deque(maxlen=<span class="st">5</span>)
     model is forced through the origin (<code>a = 0</code>), and its single gain <code>k</code> is the
     least-squares through-origin slope - literally the two sums from our data divided:</p>
 
-  <div style="background:#0b0f15;border:1px solid var(--line);border-radius:8px;padding:14px;margin:12px 0;text-align:center;font-size:16px;color:#e6edf3">
-    corrected<sub>g</sub> = k &middot; raw, &nbsp;&nbsp;
-    k = <sup>&Sigma;(raw<sub>i</sub> &middot; true<sub>i</sub>)</sup>&frasl;<sub>&Sigma;(raw<sub>i</sub><sup>2</sup>)</sub>
-    = <sup>1&thinsp;775&thinsp;157</sup>&frasl;<sub>1&thinsp;506&thinsp;877</sub>
-    = <b style="color:#3fb950">1.178</b>
+  <div style="background:#0b0f15;border:1px solid var(--line);border-radius:8px;padding:18px 14px;margin:12px 0;text-align:center;color:#e6edf3;overflow-x:auto">
+    <div id="eq-k"></div>
   </div>
+  <script>
+    (function renderCalMath(){
+      if(!window.katex){ return; }
+      katex.render(String.raw`\mathrm{MAE}=\frac{1}{n}\sum_{i=1}^{n}\bigl|\hat{y}_i-\mathrm{true}_i\bigr|`,
+        document.getElementById('eq-mae'), {displayMode:true, throwOnError:false});
+      katex.render(String.raw`\mathrm{corrected}_g = k\cdot\mathrm{raw}\qquad k=\frac{\sum_i \mathrm{raw}_i\cdot\mathrm{true}_i}{\sum_i \mathrm{raw}_i^{2}}=\frac{1{,}775{,}157}{1{,}506{,}877}=\textcolor{#3fb950}{1.178}`,
+        document.getElementById('eq-k'), {displayMode:true, throwOnError:false});
+    })();
+  </script>
 
   <p><b>The result.</b> The correction collapses the error from a <b>16% span</b> to a <b>flat few grams</b>
     across the entire range. The chart below shows absolute error before and after: the raw error grows
