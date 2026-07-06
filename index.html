@@ -1649,10 +1649,10 @@ raw = deque(maxlen=<span class="st">5</span>)
       <rect x="348" y="60" width="120" height="44" rx="9" fill="#12161d" stroke="#58a6ff"/><text x="408" y="87" fill="#e6edf3" text-anchor="middle">CONNECTING</text>
       <rect x="516" y="60" width="120" height="44" rx="9" fill="#12161d" stroke="#58a6ff"/><text x="576" y="87" fill="#e6edf3" text-anchor="middle">SUBSCRIBING</text>
       <!-- streaming container -->
-      <rect x="670" y="34" width="196" height="150" rx="12" fill="#0d1a12" stroke="#3fb950"/><text x="768" y="52" fill="#3fb950" text-anchor="middle" font-weight="700">STREAMING</text>
-      <rect x="686" y="66" width="164" height="38" rx="8" fill="#1c1408" stroke="#d29922"/><text x="768" y="90" fill="#e6edf3" text-anchor="middle">MOVING</text>
-      <rect x="686" y="120" width="164" height="38" rx="8" fill="#0d1a12" stroke="#3fb950"/><text x="768" y="144" fill="#e6edf3" text-anchor="middle">STABLE</text>
-      <text x="768" y="176" fill="#8b949e" text-anchor="middle" font-size="10.5">validate → decode → median</text>
+      <rect x="670" y="34" width="196" height="184" rx="12" fill="#0d1a12" stroke="#3fb950"/><text x="768" y="54" fill="#3fb950" text-anchor="middle" font-weight="700">STREAMING</text>
+      <rect x="686" y="66" width="164" height="36" rx="8" fill="#1c1408" stroke="#d29922"/><text x="768" y="89" fill="#e6edf3" text-anchor="middle">MOVING</text>
+      <rect x="686" y="158" width="164" height="36" rx="8" fill="#0d1a12" stroke="#3fb950"/><text x="768" y="181" fill="#e6edf3" text-anchor="middle">STABLE</text>
+      <text x="768" y="212" fill="#8b949e" text-anchor="middle" font-size="10">validate → decode → median</text>
       <!-- stale -->
       <rect x="348" y="266" width="120" height="44" rx="9" fill="#1d1113" stroke="#f85149"/><text x="408" y="293" fill="#e6edf3" text-anchor="middle">STALE</text>
     </g>
@@ -1663,10 +1663,10 @@ raw = deque(maxlen=<span class="st">5</span>)
       <line x1="468" y1="82" x2="512" y2="82" marker-end="url(#ah)"/>
       <line x1="636" y1="82" x2="682" y2="84" marker-end="url(#ah)"/>
       <!-- moving <-> stable -->
-      <path d="M740,104 C720,112 720,112 740,120" marker-end="url(#ah)"/>
-      <path d="M796,120 C816,112 816,112 796,104" marker-end="url(#ah)"/>
+      <line x1="724" y1="104" x2="724" y2="156" marker-end="url(#ah)"/>
+      <line x1="812" y1="156" x2="812" y2="104" marker-end="url(#ah)"/>
       <!-- streaming -> stale (silent) -->
-      <path d="M768,184 C768,240 520,250 470,278" marker-end="url(#ah)"/>
+      <path d="M768,218 C768,248 520,252 470,278" marker-end="url(#ah)"/>
       <!-- stale -> connecting (reconnect) -->
       <path d="M408,266 C408,200 408,160 408,106" marker-end="url(#ah)"/>
       <!-- streaming -> disconnected (disconnect) -->
@@ -1680,7 +1680,10 @@ raw = deque(maxlen=<span class="st">5</span>)
       <text x="322" y="76">SWAN / RSSI</text>
       <text x="490" y="76">GATT up</text>
       <text x="655" y="70">notify ffb2</text>
-      <text x="768" y="116" fill="#d29922">&le;2g / &gt;2g</text>
+      <text x="706" y="127" fill="#3fb950">&le; 2 g</text>
+      <text x="706" y="140" fill="#8b949e" font-size="9">settled</text>
+      <text x="830" y="127" fill="#d29922">&gt; 2 g</text>
+      <text x="830" y="140" fill="#8b949e" font-size="9">moving</text>
       <text x="600" y="238" fill="#f85149">no packet &gt; 4 s</text>
       <text x="430" y="190" fill="#3fb950">reconnect</text>
       <text x="420" y="22">gatt disconnect</text>
