@@ -1562,6 +1562,17 @@ raw = deque(maxlen=<span class="st">5</span>)
 
   <div class="chartwrap"><canvas id="calError"></canvas></div>
 
+  <p><b>Formula output vs the truth (the whole calibration in one picture).</b> The most honest way to
+    show the engineering is to plot, for every object, three numbers at once: the
+    <span style="color:#f85149">raw reading the scale actually gave</span> (before any software touched
+    it), the <span style="color:#3fb950">exact output of our formula</span> <code>1.178 &times; raw</code>,
+    and the <b>true weight</b> (the dashed diagonal, where reading = truth). The raw readings sit
+    visibly <i>below</i> the diagonal - the scale under-reports - while the formula output lands
+    <b>on</b> it. This is measured, corrected, and verified against ground truth in a single view: it is
+    a real correction of a physical instrument, not a number we invented.</p>
+
+  <div class="chartwrap"><canvas id="calCompare"></canvas></div>
+
   <table>
     <thead><tr><th>Reference</th><th>True (g)</th><th>Mean raw (g)</th><th>Raw error</th>
       <th>Corrected = 1.178&times;raw</th><th>Corrected error</th></tr></thead>
@@ -3832,10 +3843,12 @@ new Chart(document.getElementById('v2Domain'),{type:'bar',
 /* ---------- BLE scale calibration (data: scripts/eval/weights_cal.csv) ---------- */
 /* [raw_mean(g), true(g), isHeldOutValidation] : 10 fit (water/food) + 10 unseen everyday objects */
 const CAL=[
-  [15.8,21,0],[25.4,29,0],[81.0,95,0],[135.0,154,0],[133.6,162,0],[175.0,209,0],
-  [301.6,362,0],[401.8,477,0],[590.4,708,0],[912.0,1062,0],
-  [4.2,5,1],[20.6,23,1],[37.6,44,1],[38.6,47,1],[100.2,116,1],[103.0,123,1],
-  [194.2,224,1],[202.4,241,1],[242.6,289,1],[0.0,3,1]];
+  [15.8,21,0,'20 g ref'],[25.4,29,0,'30 g ref'],[81.0,95,0,'100 g ref'],[135.0,154,0,'150 g ref'],
+  [133.6,162,0,'tuna'],[175.0,209,0,'yogurt'],[301.6,362,0,'water 362'],[401.8,477,0,'water 477'],
+  [590.4,708,0,'water 708'],[912.0,1062,0,'water 1062'],
+  [4.2,5,1,'screwdriver ×2'],[20.6,23,1,'ball toy'],[37.6,44,1,'carrot toy'],[38.6,47,1,'cardboard'],
+  [100.2,116,1,'camera'],[103.0,123,1,'remote'],[194.2,224,1,'battery'],[202.4,241,1,'phone'],
+  [242.6,289,1,'glass'],[0.0,3,1,'screwdriver 3 g']];
 const CAL_K=1.17804;                 // slope fit on the 10 water/food masses; refit on all 20 = 1.17825 (unchanged)
 const CAL_FIT=CAL.filter(p=>!p[2]), CAL_VAL=CAL.filter(p=>p[2]);
 const CAL_SORT=[...CAL].sort((a,b)=>a[1]-b[1]);   // by true mass, for the before/after error lines
@@ -3876,6 +3889,24 @@ new Chart(document.getElementById('calError'),{
               title:{display:true,text:'true mass (g)',color:'#8b949e'}},
             y:{min:0,grid:GRID,ticks:{color:'#e6edf3'},
               title:{display:true,text:'|error| (g)',color:'#8b949e'}}}}});
+new Chart(document.getElementById('calCompare'),{
+  data:{datasets:[
+    {type:'line',label:'true weight (target: reading = true)',
+      data:[{x:0,y:0},{x:1100,y:1100}],borderColor:'#8b949e',borderDash:[6,5],borderWidth:1.5,pointRadius:0,fill:false},
+    {type:'scatter',label:'raw LCD reading (before correction)',
+      data:CAL.map(p=>({x:p[1],y:p[0]})),backgroundColor:'#f85149',pointRadius:4},
+    {type:'scatter',label:'corrected = 1.178 × raw (formula output)',
+      data:CAL.map(p=>({x:p[1],y:CAL_K*p[0]})),backgroundColor:'#3fb950',pointRadius:4}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{title:{display:true,text:'Raw reading vs formula output vs true weight',color:'#e6edf3',font:{size:15}},
+      legend:{labels:{color:'#e6edf3'}},
+      tooltip:{callbacks:{label:c=>{ if(c.dataset.type!=='scatter') return 'true weight (the diagonal)';
+        const nm=CAL[c.dataIndex][3]; return nm+' · '+c.dataset.label.split(' (')[0]+' = '+c.parsed.y.toFixed(0)+' g (true '+c.parsed.x.toFixed(0)+' g)'; }}}},
+    scales:{x:{type:'linear',min:0,max:1100,grid:GRID,ticks:{color:'#e6edf3'},
+              title:{display:true,text:'true weight (g)',color:'#8b949e'}},
+            y:{min:0,max:1100,grid:GRID,ticks:{color:'#e6edf3'},
+              title:{display:true,text:'reading (g)',color:'#8b949e'}}}}});
 
 /* ---------- CNN visualizer ---------- */
 let cnnInit=false, INPUT='circle', KERNEL='vert', N=16, scale=10, imgData=[];
