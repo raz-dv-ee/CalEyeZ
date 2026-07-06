@@ -1573,6 +1573,14 @@ raw = deque(maxlen=<span class="st">5</span>)
 
   <div class="chartwrap"><canvas id="calCompare"></canvas></div>
 
+  <p style="margin-top:2px"><b>Zoomed to the light end (0 to 130 g).</b> On the full-range plot above the
+    lightest items are crushed into the corner, so here is the same data zoomed in. Even a 5 g object
+    follows the exact same relationship - raw below the truth, formula output on it - and the 3 g item is
+    the <b>dead-zone</b> case: the scale reads 0, so both the raw point and the formula output sit on the
+    axis while the true weight is 3 g (no multiplicative fix can lift a zero).</p>
+
+  <div class="chartwrap" style="height:300px"><canvas id="calCompareLow"></canvas></div>
+
   <table>
     <thead><tr><th>Reference</th><th>True (g)</th><th>Mean raw (g)</th><th>Raw error</th>
       <th>Corrected = 1.178&times;raw</th><th>Corrected error</th></tr></thead>
@@ -3889,24 +3897,28 @@ new Chart(document.getElementById('calError'),{
               title:{display:true,text:'true mass (g)',color:'#8b949e'}},
             y:{min:0,grid:GRID,ticks:{color:'#e6edf3'},
               title:{display:true,text:'|error| (g)',color:'#8b949e'}}}}});
-new Chart(document.getElementById('calCompare'),{
-  data:{datasets:[
-    {type:'line',label:'true weight (target: reading = true)',
-      data:[{x:0,y:0},{x:1100,y:1100}],borderColor:'#8b949e',borderDash:[6,5],borderWidth:1.5,pointRadius:0,fill:false},
-    {type:'scatter',label:'raw LCD reading (before correction)',
-      data:CAL.map(p=>({x:p[1],y:p[0]})),backgroundColor:'#f85149',pointRadius:4},
-    {type:'scatter',label:'corrected = 1.178 × raw (formula output)',
-      data:CAL.map(p=>({x:p[1],y:CAL_K*p[0]})),backgroundColor:'#3fb950',pointRadius:4}
-  ]},
-  options:{responsive:true,maintainAspectRatio:false,
-    plugins:{title:{display:true,text:'Raw reading vs formula output vs true weight',color:'#e6edf3',font:{size:15}},
-      legend:{labels:{color:'#e6edf3'}},
-      tooltip:{callbacks:{label:c=>{ if(c.dataset.type!=='scatter') return 'true weight (the diagonal)';
-        const nm=CAL[c.dataIndex][3]; return nm+' · '+c.dataset.label.split(' (')[0]+' = '+c.parsed.y.toFixed(0)+' g (true '+c.parsed.x.toFixed(0)+' g)'; }}}},
-    scales:{x:{type:'linear',min:0,max:1100,grid:GRID,ticks:{color:'#e6edf3'},
-              title:{display:true,text:'true weight (g)',color:'#8b949e'}},
-            y:{min:0,max:1100,grid:GRID,ticks:{color:'#e6edf3'},
-              title:{display:true,text:'reading (g)',color:'#8b949e'}}}}});
+function calCompareChart(id,maxg){
+  new Chart(document.getElementById(id),{
+    data:{datasets:[
+      {type:'line',label:'true weight (target: reading = true)',
+        data:[{x:0,y:0},{x:maxg,y:maxg}],borderColor:'#8b949e',borderDash:[6,5],borderWidth:1.5,pointRadius:0,fill:false},
+      {type:'scatter',label:'raw LCD reading (before correction)',
+        data:CAL.map(p=>({x:p[1],y:p[0]})),backgroundColor:'#f85149',pointRadius:4},
+      {type:'scatter',label:'corrected = 1.178 × raw (formula output)',
+        data:CAL.map(p=>({x:p[1],y:CAL_K*p[0]})),backgroundColor:'#3fb950',pointRadius:4}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{title:{display:true,text: maxg<300 ? ('Zoomed to the light items (0 to '+maxg+' g)') : 'Raw reading vs formula output vs true weight',color:'#e6edf3',font:{size:15}},
+        legend:{labels:{color:'#e6edf3'}},
+        tooltip:{callbacks:{label:c=>{ if(c.dataset.type!=='scatter') return 'true weight (the diagonal)';
+          const nm=CAL[c.dataIndex][3]; return nm+' · '+c.dataset.label.split(' (')[0]+' = '+c.parsed.y.toFixed(0)+' g (true '+c.parsed.x.toFixed(0)+' g)'; }}}},
+      scales:{x:{type:'linear',min:0,max:maxg,grid:GRID,ticks:{color:'#e6edf3'},
+                title:{display:true,text:'true weight (g)',color:'#8b949e'}},
+              y:{type:'linear',min:0,max:maxg,grid:GRID,ticks:{color:'#e6edf3'},
+                title:{display:true,text:'reading (g)',color:'#8b949e'}}}}});
+}
+calCompareChart('calCompare',1100);
+calCompareChart('calCompareLow',130);
 
 /* ---------- CNN visualizer ---------- */
 let cnnInit=false, INPUT='circle', KERNEL='vert', N=16, scale=10, imgData=[];
