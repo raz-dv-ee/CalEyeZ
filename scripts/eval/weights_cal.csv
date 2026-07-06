@@ -1,0 +1,27 @@
+# FULL-RANGE scale calibration (adds low-mass points to refit and test dropping the intercept).,,,,,,
+# IMPORTANT: r1..r5 = the RAW reading on the SCALE'S OWN LCD (uncorrected), NOT the app.,,,,,
+# Same placement every time: spreader plate, centered, tare to 0, lift-and-replace 5x.,,,
+# Make the low masses with your accurate scale (water: 50 ml ~= 50 g), then read the IDOdan.,,,,,
+# Run:  py -3 scripts/eval/weight_calibration.py scripts/eval/weights_cal.csv,,,,,,
+#,,,,,,
+item,true_g,r1,r2,r3,r4,r5
+low_20,21,17,18,15,15,14
+low_50,29,24,25,24,27,27
+low_100,95,82,87,83,78,75
+low_150,154,138,134,135,130,138
+tuna,162,134,136,131,134,133
+yogurt,209,177,174,178,172,174
+water_362,362,295,305,303,302,303
+water_477,477,397,401,397,411,403
+water_708,708,600,588,600,574,590
+water_1062,1062,913,900,900,931,916
+PHONE LOW200,241,195,202,203,207,205
+BATTERY,224,192,190,194,199,196
+GLASS,289,242,237,251,238,245
+REMOTE,123,98,110,98,106,103
+CARBOARD,47,36,40,39,39,39
+CAMERA,116,96,94,107,102,102
+TINY SCREWDRIVER,3,0,0,0,0,0
+TINY SCREWDRIVER X2,5,4,5,4,4,4
+BALL TOY,23,19,20,20,20,24
+CARROT TOY,44,39,38,36,39,36
