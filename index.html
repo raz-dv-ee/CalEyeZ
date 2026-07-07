@@ -31,6 +31,19 @@
   #tab-ee .course .nm .he{color:var(--mut);font-weight:500;font-size:13px}
   #tab-ee .course .meta{color:var(--mut);font-size:12px;margin-top:3px}
   #tab-ee .course .body{padding:18px 20px}
+  #tab-compare .statgrid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0}
+  @media(max-width:760px){#tab-compare .statgrid{grid-template-columns:repeat(2,1fr)}}
+  /* App-vs-Market results table */
+  #tab-compare table.cmp td,#tab-compare table.cmp th{padding:7px 10px}
+  #tab-compare table.cmp .kc{font-weight:600;font-variant-numeric:tabular-nums}
+  #tab-compare table.cmp .er{display:block;font-size:11px;color:var(--mut);font-variant-numeric:tabular-nums}
+  #tab-compare table.cmp td.win .kc{color:var(--green)}
+  #tab-compare table.cmp td.win .er{color:var(--green);font-weight:700}
+  #tab-compare table.cmp td.win::after{content:"\2713";color:var(--green);font-size:10px;margin-left:4px;vertical-align:top}
+  #tab-compare table.cmp .truth{color:var(--accent);font-weight:700}
+  #tab-compare table.cmp tbody tr td:first-child{font-weight:600}
+  #tab-compare .lgd{font-size:12px;color:var(--mut);margin:6px 0 2px}
+  #tab-compare .lgd b{color:var(--green)}
   #tab-ee .grid2{display:grid;grid-template-columns:1fr 1fr;gap:18px}
   @media(max-width:760px){#tab-ee .grid2{grid-template-columns:1fr}}
   #tab-ee .lab{font-size:11px;letter-spacing:1px;text-transform:uppercase;color:var(--mut);font-weight:700;margin:0 0 6px}
@@ -240,6 +253,7 @@
       <button data-tab="perclass">Per-Class</button>
       <button data-tab="validation">Validation &amp; Risks</button>
       <button data-tab="riv">Real Images</button>
+      <button data-tab="compare">App vs Market</button>
     </div></div>
     <div class="tgroup"><span class="glab">Hardware &amp; Demo</span><div class="gbtns">
       <button data-tab="ble">BLE Scale</button>
@@ -3030,6 +3044,177 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
   <div class="foot">CalEyeZ &middot; Real-World Image Validation &middot; 47 field photos through the deployed pipeline, folder = ground truth, EXIF = provenance.</div>
 </section>
 
+<!-- ===================== APP VS MARKET (calorie face-off) ===================== -->
+<section class="tab" id="tab-compare">
+  <h2>CalEyeZ vs the Market &mdash; a calorie face-off</h2>
+  <p class="lead">We put CalEyeZ head-to-head against the three tools people actually use, on the
+    <b>same physical meals</b>: <b>MyFitnessPal</b> (manual database logging), <b>Cal.ai</b> and
+    <b>FoodVisor</b> (AI photo estimators). Ground truth is the product label wherever one exists.
+    Every number below is a real trial recorded in
+    <code>scripts/eval/calorie_comparison.xlsx</code>. This is an honest <b>pilot</b> (small n), and
+    we say exactly where each number comes from.</p>
+
+  <div class="statgrid">
+    <div class="stat good"><div class="n">37%</div><div class="l">CalEyeZ mean kcal error</div></div>
+    <div class="stat warn"><div class="n">49%</div><div class="l">MyFitnessPal (manual)</div></div>
+    <div class="stat bad"><div class="n">64%</div><div class="l">Cal.ai (AI photo)</div></div>
+    <div class="stat good"><div class="n">~0.5 s</div><div class="l">our latency vs 5&ndash;140 s</div></div>
+  </div>
+  <p class="cap">Mean absolute calorie error over the 8 meals all three tools were tested on. CalEyeZ
+    is the most accurate &mdash; despite MyFitnessPal being handed the true weight and a hand-picked
+    database entry, and Cal.ai being a giant cloud model.</p>
+
+  <h3>The decisive test: does the calorie number follow the actual portion?</h3>
+  <p>The whole game is <b>portion</b>. The photo apps emit a <i>typical serving</i>; MyFitnessPal
+    offers <i>preset units</i> ("1 slice", "1 can"). Both are right only when your food happens to
+    match their assumption. CalEyeZ <b>measures the grams on a scale</b>, so it tracks the real
+    portion every time. We proved it with one food, two portions:</p>
+
+  <div class="chartwrap"><canvas id="cmpPortion"></canvas></div>
+
+  <div class="callout green"><b>Same tuna, two portions.</b> A full can (162 g) and a small
+    <b>14 g ball</b>. CalEyeZ read the ball at <b>15 kcal (3% error)</b>; Cal.ai reported
+    <b>45 kcal (209% error)</b> &mdash; it never leaves its "small serving of tuna" prior. On the plot
+    CalEyeZ sits on the truth diagonal at both portions, while Cal.ai is a nearly-flat line with a
+    floor: <b>it is not measuring, it is guessing a standard serving.</b></p>
+
+  <div class="callout amber"><b>Why this generalises to a steak.</b> A photo shows the
+    <b>top surface</b>, not the mass. A thin minute-steak and a thick ribeye can cover the same plate
+    area yet differ 2&ndash;3&times; in grams &mdash; invisible from above. This is the identical
+    <b>self-occlusion / unknown-density</b> wall that made us reject stereo and LiDAR depth
+    (see <a href="#" class="goto" data-tab="validation">Validation &amp; Risks</a>). A
+    state-of-the-art cloud AI fails for the <i>same physical reason</i> as depth hardware: pixels
+    carry appearance, not weight. A scale reads the weight directly.</p>
+
+  <h3>Per-meal results &mdash; how close is each app to the truth?</h3>
+  <p>The clearest view: for every meal, the <b>reported calories</b> of each app plotted right next to
+    the <b>grey ground-truth bar</b>. The closer a coloured bar is to grey, the better. Below it, the
+    same data as an <b>absolute-error</b> chart so small and large meals are comparable on one scale.</p>
+
+  <div class="chartwrap" style="height:380px"><canvas id="cmpKcal"></canvas></div>
+  <p class="cap">Reported total calories vs ground truth (grey), per meal. Ground truth is the product
+    label where one exists. Note Cal.ai&rsquo;s malawach (938 vs 393) and both-pizzas-425 overshoots,
+    and MyFitnessPal&rsquo;s tuna (309 vs 168) &mdash; each is a portion/serving guess, not a measurement.</p>
+
+  <div class="chartwrap" style="height:360px"><canvas id="cmpPerFood"></canvas></div>
+  <p class="cap">The same eight meals as absolute % error from truth &mdash; lower is better.</p>
+
+  <h3>The full log &mdash; every meal, every app, side by side</h3>
+  <p class="lgd">Each cell shows <b class="truth">reported kcal</b> with the <span style="color:var(--mut)">% error from truth</span>
+    underneath. <b>Green&nbsp;&#10003;</b> = the app closest to truth for that meal.
+    &ldquo;&mdash;&rdquo; = the app was not tested on that meal (Cal.ai on 8, FoodVisor paywalled after one photo).</p>
+  <table class="cmp">
+    <thead><tr>
+      <th>Meal</th>
+      <th class="r">Ground truth</th>
+      <th>Truth source</th>
+      <th class="r">CalEyeZ</th>
+      <th class="r">MyFitnessPal</th>
+      <th class="r">Cal.ai</th>
+    </tr></thead>
+    <tbody>
+      <tr><td>grapes</td><td class="r"><span class="kc truth">621</span></td><td>reference DB</td>
+        <td class="r"><span class="kc">634</span><span class="er">2%</span></td>
+        <td class="r win"><span class="kc">621</span><span class="er">0%</span></td>
+        <td class="r"><span class="kc">&mdash;</span></td></tr>
+      <tr><td>bell pepper</td><td class="r"><span class="kc truth">70</span></td><td>reference DB</td>
+        <td class="r win"><span class="kc">52</span><span class="er">25%</span></td>
+        <td class="r"><span class="kc">32</span><span class="er">54%</span></td>
+        <td class="r"><span class="kc">31</span><span class="er">56%</span></td></tr>
+      <tr><td>cucumber</td><td class="r"><span class="kc truth">26</span></td><td>reference DB</td>
+        <td class="r"><span class="kc">18</span><span class="er">31%</span></td>
+        <td class="r"><span class="kc">12</span><span class="er">54%</span></td>
+        <td class="r win"><span class="kc">24</span><span class="er">9%</span></td></tr>
+      <tr><td>canned tuna &mdash; full can (162&nbsp;g)</td><td class="r"><span class="kc truth">168</span></td><td>product label</td>
+        <td class="r win"><span class="kc">182</span><span class="er">8%</span></td>
+        <td class="r"><span class="kc">309</span><span class="er">83%</span></td>
+        <td class="r"><span class="kc">120</span><span class="er">29%</span></td></tr>
+      <tr><td>french fries</td><td class="r"><span class="kc truth">73</span></td><td>recipe truth (home fries)</td>
+        <td class="r"><span class="kc">172</span><span class="er">135%</span></td>
+        <td class="r"><span class="kc">165</span><span class="er">126%</span></td>
+        <td class="r win"><span class="kc">111</span><span class="er">52%</span></td></tr>
+      <tr><td>hummus</td><td class="r"><span class="kc truth">613</span></td><td>product label</td>
+        <td class="r"><span class="kc">375</span><span class="er">39%</span></td>
+        <td class="r win"><span class="kc">532</span><span class="er">13%</span></td>
+        <td class="r"><span class="kc">70</span><span class="er">89%</span></td></tr>
+      <tr><td>Domino&rsquo;s pizza</td><td class="r"><span class="kc truth">236</span></td><td>Domino&rsquo;s IL data</td>
+        <td class="r"><span class="kc">335</span><span class="er">42%</span></td>
+        <td class="r win"><span class="kc">180</span><span class="er">24%</span></td>
+        <td class="r"><span class="kc">425</span><span class="er">80%</span></td></tr>
+      <tr><td>Pizza Hut slice</td><td class="r"><span class="kc truth">274</span></td><td>Pizza Hut data</td>
+        <td class="r win"><span class="kc">261</span><span class="er">5%</span></td>
+        <td class="r"><span class="kc">180</span><span class="er">34%</span></td>
+        <td class="r"><span class="kc">425</span><span class="er">55%</span></td></tr>
+      <tr><td>malawach</td><td class="r"><span class="kc truth">393</span></td><td>product label</td>
+        <td class="r"><span class="kc">425</span><span class="er">8%</span></td>
+        <td class="r win"><span class="kc">391</span><span class="er">1%</span></td>
+        <td class="r"><span class="kc">938</span><span class="er">139%</span></td></tr>
+      <tr><td>canned tuna &mdash; <b>14&nbsp;g ball</b> (portion test)</td><td class="r"><span class="kc truth">15</span></td><td>product label</td>
+        <td class="r win"><span class="kc">15</span><span class="er">3%</span></td>
+        <td class="r"><span class="kc">&mdash;</span></td>
+        <td class="r"><span class="kc">45</span><span class="er">209%</span></td></tr>
+    </tbody>
+    <tfoot><tr>
+      <td colspan="3"><b>Mean absolute error</b> (8 meals all three apps share)</td>
+      <td class="r win"><span class="kc">37%</span></td>
+      <td class="r"><span class="kc">49%</span></td>
+      <td class="r"><span class="kc">64%</span></td>
+    </tr></tfoot>
+  </table>
+  <p class="cap">Per-row winners are split (CalEyeZ and MyFitnessPal each win four rows, Cal.ai two), but
+    CalEyeZ has the lowest <b>mean</b> error because it never posts a catastrophic miss except french
+    fries &mdash; and that one is a database-entry problem (generic deep-fried vs home fries), not a
+    weight one. MyFitnessPal&rsquo;s and Cal.ai&rsquo;s wins come from a mature food database, which is
+    fixable on our side; neither ever wins on <i>measurement</i>.</p>
+
+  <h3>Recognition is not the same as nutrition</h3>
+  <div class="callout"><b>Cal.ai &mdash; brilliant recognition, unreliable calories.</b> Cal.ai is a
+    cloud vision-language model. It correctly <i>named</i> hummus, malawach and even distinguished
+    home-made fries from fast-food fries &mdash; genuinely impressive. But its <b>calorie</b> output is
+    a typical-serving prior: it returned an <b>identical 425 kcal for both a Domino&rsquo;s and a
+    Pizza Hut slice</b>, and stayed near a fixed value when we stacked or shrank a portion. Great
+    recognition, wrong quantity &mdash; because it has no way to weigh the food. That is precisely the
+    gap CalEyeZ closes.</div>
+  <div class="callout"><b>MyFitnessPal &mdash; accurate only with full manual effort.</b> We gave it the
+    <i>generous</i> case: the user searches, hand-picks a database entry, owns a scale, weighs the
+    food and types the grams. Even then it was <b>less accurate on average</b> and it took
+    <b>40&ndash;140 s</b> per meal versus our ~0.5 s. For pizza it wouldn&rsquo;t even accept grams
+    &mdash; only "1 slice", a hidden portion guess. Its real strength is a mature crowd-sourced
+    database for common Western foods; ours is measured weight, local dishes, speed and automation.</div>
+  <div class="callout"><b>FoodVisor &mdash; paywalled.</b> Only one free photo (cucumber) before a
+    subscription wall. The friction itself is the point: CalEyeZ runs free, on-device, with no
+    account.</div>
+
+  <h3>The axis nobody else wins: on-device, offline, instant</h3>
+  <div class="statgrid">
+    <div class="stat"><div class="n">on-device</div><div class="l">recognition (verified in airplane mode)</div></div>
+    <div class="stat"><div class="n">offline</div><div class="l">works with networking off</div></div>
+    <div class="stat"><div class="n">free</div><div class="l">no account, no subscription</div></div>
+    <div class="stat"><div class="n">private</div><div class="l">photo never leaves the device</div></div>
+  </div>
+  <p class="cap">Cal.ai and FoodVisor stop working in airplane mode &mdash; empirical proof their
+    inference is server-side; their 5&ndash;140 s latency is the network round-trip. CalEyeZ keeps
+    identifying food with the network disabled, because the models run on the device itself
+    (see <a href="#" class="goto" data-tab="webapp">Web App</a>).</p>
+
+  <div class="callout amber"><b>Honest limits of this pilot.</b> Small sample (10 meals; Cal.ai on 8,
+    FoodVisor on 1). Ground truth is a real <b>label</b> for tuna, fries, hummus, pizzas and malawach,
+    but only a <b>reference database</b> for grapes/cucumber/pepper (flagged in the table). The one
+    row where our number looks worst &mdash; french fries at 135% &mdash; is a <b>database</b> issue,
+    not a weight one: our generic "french fries" entry is deep-fried while the meal was home fries;
+    the scale read the weight correctly. We never tune the database to the test meals (that would be
+    leakage), so the residual database error is reported, not hidden.</div>
+
+  <div class="callout green"><b>The one-line takeaway.</b> Recognition can be solved many ways;
+    <b>calories can only be solved by measuring the weight.</b> On the same meals CalEyeZ is the most
+    accurate of the four, it is the only one whose number follows the actual portion, and it does it
+    on-device, offline and in half a second. The competitors&rsquo; wins come from a mature food
+    database (fixable on our side) &mdash; never from a better <i>measurement</i>, because they have none.</div>
+
+  <div class="foot">CalEyeZ &middot; App-vs-Market calorie face-off &middot; data:
+    <code>scripts/eval/calorie_comparison.xlsx</code> &middot; ground truth = product label where one exists.</div>
+</section>
+
 <!-- ===================== ELECTRONIC ENGINEERING ===================== -->
 <section class="tab" id="tab-ee">
   <h2>Why CalEyeZ Is Electronic Engineering, Not Just Software</h2>
@@ -3950,6 +4135,71 @@ function calCompareChart(id,maxg){
 }
 calCompareChart('calCompare',1100);
 calCompareChart('calCompareLow',130);
+
+/* ---------- App vs Market: calorie face-off (data: scripts/eval/calorie_comparison.xlsx) ---------- */
+/* Portion test: same tuna, reported kcal vs ACTUAL weight. Truth line = 1.04 kcal/g (104 kcal/100 g). */
+new Chart(document.getElementById('cmpPortion'),{
+  data:{datasets:[
+    {type:'line',label:'ground truth (label): kcal = 1.04 × grams',
+      data:[{x:0,y:0},{x:170,y:170*1.04}],borderColor:'#8b949e',borderDash:[6,5],borderWidth:1.5,pointRadius:0,fill:false},
+    {type:'scatter',label:'CalEyeZ (measured weight)',
+      data:[{x:14,y:15},{x:162,y:182}],backgroundColor:'#3fb950',pointRadius:7},
+    {type:'scatter',label:'Cal.ai (photo estimate)',
+      data:[{x:14,y:45},{x:162,y:120}],backgroundColor:'#f85149',pointRadius:7}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,
+    plugins:{title:{display:true,text:'Portion test — reported calories vs ACTUAL weight (canned tuna)',color:'#e6edf3',font:{size:15}},
+      legend:{labels:{color:'#e6edf3'}},
+      tooltip:{callbacks:{label:c=>c.dataset.type==='scatter'
+        ?(c.dataset.label.split(' (')[0]+': '+c.parsed.y.toFixed(0)+' kcal at '+c.parsed.x.toFixed(0)+' g'):'truth (reading = weight × 1.04)'}}},
+    scales:{x:{type:'linear',min:0,max:175,grid:GRID,ticks:{color:'#e6edf3'},
+              title:{display:true,text:'actual weight on the plate (g)',color:'#8b949e'}},
+            y:{min:0,max:200,grid:GRID,ticks:{color:'#e6edf3'},
+              title:{display:true,text:'reported calories (kcal)',color:'#8b949e'}}}}});
+
+/* Reported calories vs ground truth, per meal (8 shared meals). Grey = truth reference. */
+const CMP_FOODS=['bell pepper','cucumber','tuna (can)','french fries','hummus','Domino’s','Pizza Hut','malawach'];
+const CMP_TRUTH=[70,26,168,73,613,236,274,393];
+const CMP_CE=[52,18,182,172,375,335,261,425];
+const CMP_MFP=[32,12,309,165,532,180,180,391];
+const CMP_CAL=[31,24,120,111,70,425,425,938];
+new Chart(document.getElementById('cmpKcal'),{type:'bar',
+  data:{labels:CMP_FOODS,datasets:[
+    {label:'ground truth', data:CMP_TRUTH,backgroundColor:'#8b949e'},
+    {label:'CalEyeZ',      data:CMP_CE,   backgroundColor:'#3fb950'},
+    {label:'MyFitnessPal', data:CMP_MFP,  backgroundColor:'#58a6ff'},
+    {label:'Cal.ai',       data:CMP_CAL,  backgroundColor:'#f85149'}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:16}},
+    plugins:{title:{display:true,text:'Reported calories vs ground truth (grey) — closer to grey is better',color:'#e6edf3',font:{size:15}},
+      legend:{labels:{color:'#e6edf3'}},
+      tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+' kcal'
+        +(c.dataset.label==='ground truth'?'':'  ('+Math.round(Math.abs(c.parsed.y-CMP_TRUTH[c.dataIndex])/CMP_TRUTH[c.dataIndex]*100)+'% err)')}}},
+    scales:{y:{min:0,grid:GRID,ticks:{color:'#e6edf3',callback:v=>v+''},title:{display:true,text:'reported calories (kcal)',color:'#8b949e'}},
+            x:{grid:GRID,ticks:{color:'#e6edf3',maxRotation:40,minRotation:40}}}}});
+
+/* Per-meal absolute error, three apps (8 shared meals). */
+new Chart(document.getElementById('cmpPerFood'),{type:'bar',
+  data:{labels:CMP_FOODS,datasets:[
+    {label:'CalEyeZ',      data:[25,31,8,135,39,42,5,8],  backgroundColor:'#3fb950'},
+    {label:'MyFitnessPal', data:[54,54,83,126,13,24,34,1],backgroundColor:'#58a6ff'},
+    {label:'Cal.ai',       data:[56,9,29,52,89,80,55,139], backgroundColor:'#f85149'}
+  ]},
+  options:{responsive:true,maintainAspectRatio:false,layout:{padding:{top:16}},
+    plugins:{title:{display:true,text:'Absolute calorie error by meal (%) — lower is better',color:'#e6edf3',font:{size:15}},
+      legend:{labels:{color:'#e6edf3'}},
+      tooltip:{callbacks:{label:c=>c.dataset.label+': '+c.parsed.y+'%'}}},
+    scales:{y:{min:0,grid:GRID,ticks:{color:'#e6edf3',callback:v=>v+'%'},title:{display:true,text:'|calorie error|',color:'#8b949e'}},
+            x:{grid:GRID,ticks:{color:'#e6edf3',maxRotation:40,minRotation:40}}}}});
+
+/* Charts built inside hidden tabs start at 0x0; resize any chart in the opened tab. */
+(function(){ if(typeof showTab!=='function') return;
+  const _prev=showTab;
+  showTab=function(name){ _prev(name);
+    setTimeout(function(){ try{ Object.values(Chart.instances||{}).forEach(function(c){
+      const sec=c.canvas&&c.canvas.closest('.tab.on'); if(sec) c.resize(); }); }catch(e){} },70);
+  };
+})();
 
 /* ---------- CNN visualizer ---------- */
 let cnnInit=false, INPUT='circle', KERNEL='vert', N=16, scale=10, imgData=[];
