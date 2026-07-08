@@ -1,0 +1,24 @@
+# P2 — Portion monotonicity. SAME food at INCREASING known weights, one photo each, BOTH apps.
+#   Cal.ai  -> guesses portion from pixels -> expected to stay ~flat (ignores real grams)
+#   CalEyeZ -> measures grams -> expected to ride the truth diagonal (kcal grows with weight)
+# Weigh each portion on our BLE scale; keep the camera roughly constant so weight is the only change.
+# gt_kcal / error / slope are computed by repeatability_analysis.py.
+#
+# columns:
+#   food               food label
+#   true_weight_g      real grams on our BLE scale for THIS portion (this is what we vary)
+#   gt_per100_kcal     kcal per 100 g (constant within a food)
+#   calai_identified   1 or 0
+#   calai_kcal         Cal.ai reported total kcal for this portion
+#   caleyez_kcal       CalEyeZ reported total kcal for this portion
+#   screenshot         filename of the result screenshots
+food,true_weight_g,gt_per100_kcal,calai_identified,calai_kcal,caleyez_kcal,screenshot
+french_fries,20,138,,,,
+french_fries,50,138,,,,
+french_fries,100,138,,,,
+french_fries,150,138,,,,
+french_fries,200,138,,,,
+FOOD_2_fill_me,,,,,,
+FOOD_2_fill_me,,,,,,
+FOOD_2_fill_me,,,,,,
+FOOD_2_fill_me,,,,,,

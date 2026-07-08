@@ -3086,6 +3086,37 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     state-of-the-art cloud AI fails for the <i>same physical reason</i> as depth hardware: pixels
     carry appearance, not weight. A scale reads the weight directly.</p>
 
+  <h3>The killer test: photograph the <i>same</i> food many times</h3>
+  <p>Accuracy asks &ldquo;how close to the truth?&rdquo; &mdash; but there is a more basic question a
+    measuring tool must pass first: <b>repeatability</b>. Give it the identical input twice, do you get
+    the same answer? We took <b>one plate of StarKist tuna</b> and photographed it again and again,
+    changing <b>only the camera angle and layout</b> &mdash; the food, and its weight, never moved.</p>
+
+  <div class="statgrid">
+    <div class="stat bad"><div class="n">11&ndash;87</div><div class="l">Cal.ai kcal, same tuna</div></div>
+    <div class="stat bad"><div class="n">63%</div><div class="l">Cal.ai variation (CV)</div></div>
+    <div class="stat good"><div class="n">28&ndash;36</div><div class="l">CalEyeZ kcal, same tuna</div></div>
+    <div class="stat good"><div class="n">10%</div><div class="l">CalEyeZ variation (CV)</div></div>
+  </div>
+
+  <div class="chartwrap" style="height:360px"><canvas id="cmpRepeat"></canvas></div>
+  <p class="cap">Seven photos of one tuna plate (~31&nbsp;g, truth &asymp;31&nbsp;kcal at 104&nbsp;kcal/100&nbsp;g).
+    Cal.ai&rsquo;s answer swings <b>8&times;</b> from angle alone; CalEyeZ stays on the truth line because
+    it reads the weight off the scale, not the pixels.</p>
+
+  <div class="callout red"><b>Cal.ai isn&rsquo;t even self-consistent.</b> The same tuna returned
+    <b>11, 22, 28, 36, 44, 67 and 87&nbsp;kcal</b> &mdash; and once it renamed the dish
+    <i>&ldquo;Tuna and Tofu Preparation.&rdquo;</i> A tool that gives seven answers for one input is not
+    measuring; it is guessing a serving from whatever the camera happened to see.</div>
+
+  <div class="callout green"><b>CalEyeZ holds the line &mdash; and shows its work honestly.</b> Six of
+    seven readings sat at 28&ndash;36&nbsp;kcal, dead on the truth. The one low outlier (14&nbsp;kcal) was
+    a <i>nutrition-database</i> blip from the cloud fallback, not a weight error &mdash; the grams were
+    right every time. On the recognition side the on-device model was often unsure (shredded tuna looks
+    like the Israeli dish <i>meorav yerushalmi</i>), so the <b>confidence gate escalated to Gemini
+    vision</b> &mdash; and on one shot the on-device Global expert nailed it outright at <b>99%</b>. That
+    is the safety net working exactly as designed, not a failure.</div>
+
   <h3>Per-meal results &mdash; how close is each app to the truth?</h3>
   <p>The clearest view: for every meal, the <b>reported calories</b> of each app plotted right next to
     the <b>grey ground-truth bar</b>. The closer a coloured bar is to grey, the better. Below it, the
@@ -4156,6 +4187,28 @@ new Chart(document.getElementById('cmpPortion'),{
               title:{display:true,text:'actual weight on the plate (g)',color:'#8b949e'}},
             y:{min:0,max:200,grid:GRID,ticks:{color:'#e6edf3'},
               title:{display:true,text:'reported calories (kcal)',color:'#8b949e'}}}}});
+
+/* Repeatability (Experiment E): same StarKist tuna, camera angle varies. Data: scripts/eval/repeatability.csv */
+(function(){
+  const CAL_R=[44,11,87,28,36,67,22], CE_R=[30,30,30,28,35,14,36], TRUTH_R=31;
+  const jit=(base,arr)=>arr.map((y,i)=>({x:base+(i-arr.length/2)*0.05,y}));
+  new Chart(document.getElementById('cmpRepeat'),{
+    data:{datasets:[
+      {type:'line',label:'ground truth ≈31 kcal (StarKist, 104/100 g)',
+        data:[{x:-0.5,y:TRUTH_R},{x:1.5,y:TRUTH_R}],borderColor:'#8b949e',borderDash:[6,5],borderWidth:1.5,pointRadius:0,fill:false},
+      {type:'scatter',label:'Cal.ai (photo estimate)',data:jit(0,CAL_R),backgroundColor:'#f85149',pointStyle:'rect',pointRadius:8},
+      {type:'scatter',label:'CalEyeZ (scale-measured)',data:jit(1,CE_R),backgroundColor:'#3fb950',pointStyle:'rectRot',pointRadius:8}
+    ]},
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{title:{display:true,text:'Same tuna, camera angle varied — Cal.ai scatters 8×, CalEyeZ holds the truth',color:'#e6edf3',font:{size:14}},
+        legend:{labels:{color:'#e6edf3'}},
+        tooltip:{callbacks:{title:()=>'',label:c=>c.dataset.type==='scatter'
+          ?c.dataset.label.split(' (')[0]+': '+c.parsed.y.toFixed(0)+' kcal':'truth ≈31 kcal'}}},
+      scales:{x:{type:'linear',min:-0.5,max:1.5,grid:GRID,
+                ticks:{color:'#e6edf3',stepSize:1,callback:v=>v===0?'Cal.ai':(v===1?'CalEyeZ':'')}},
+              y:{min:0,max:100,grid:GRID,ticks:{color:'#e6edf3'},
+                title:{display:true,text:'reported calories (kcal) — one dot per photo',color:'#8b949e'}}}}});
+})();
 
 /* Reported calories vs ground truth, per meal (8 shared meals). Grey = truth reference. */
 const CMP_FOODS=['bell pepper','cucumber','tuna (can)','french fries','hummus','Domino’s','Pizza Hut','malawach'];

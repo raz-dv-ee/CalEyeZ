@@ -1,0 +1,18 @@
+# P1 — Viewpoint repeatability. SAME food (StarKist canned tuna in water, 104 kcal/100g,
+#   protein 24.8, carb 0, fat 0.6), camera/layout varies. Read from screenshots in
+#   scripts/eval/repeatability pic/{cal.ai,caleyez}/  (2026-07-08 session).
+# Tuna weight drifted 27-34 g between re-plating (logged per CalEyeZ card).
+# Cal.ai and CalEyeZ are NOT angle-paired row-by-row; what matters is each app's SPREAD:
+#   Cal.ai  CV 63% (11-87 kcal) ; CalEyeZ CV 25% -> 10% excluding the one Gemini per-100 blip (14).
+# CalEyeZ recognition: mostly Gemini fallback (on-device unsure: shredded tuna collides with
+#   'meorav yerushalmi'), but shot 7 the Global expert nailed it on-device at 99%.
+#
+# columns: food,true_weight_g,gt_per100_kcal,shot_id,angle_layout,calai_identified,calai_kcal,caleyez_identified,caleyez_kcal,caleyez_path,screenshot
+food,true_weight_g,gt_per100_kcal,shot_id,angle_layout,calai_identified,calai_kcal,caleyez_identified,caleyez_kcal,caleyez_path,screenshot
+canned_tuna,29,104,1,plate-spread,1,44,1,30,gemini,08.14.26 / 08.13.11(1)
+canned_tuna,29,104,2,plate-10g-guess,1,11,1,30,gemini,08.14.26(1) / 08.13.11(2)
+canned_tuna,29,104,3,tofu-misid,0,87,1,30,gemini,08.14.26(2) / 08.13.11(3)
+canned_tuna,27,104,4,plain-plate,1,28,1,28,gemini,08.14.26(3) / 08.13.11(4)
+canned_tuna,34,104,5,kitchen-scale,1,36,1,35,gemini,08.14.26(4) / 08.13.11(5)
+canned_tuna,31,104,6,bowl,1,67,1,14,gemini-per100-blip,08.14.27 / 08.13.10
+canned_tuna,31,104,7,basket-ondevice,1,22,1,36,ondevice-global-99,08.14.27(1) / 08.12.55
