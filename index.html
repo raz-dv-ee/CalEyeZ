@@ -2068,12 +2068,52 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
     desktop at <b>0% top-1 mismatch</b>. The model is only ever as good as the image processing feeding it.</div>
 
   <h3 id="w-arb">The XGBoost arbiter, re-implemented in JavaScript</h3>
-  <p>ORT-Web has no <code>TreeEnsemble</code> operator, so the router cannot run as ONNX in the browser. Instead
-    the trained trees are exported to a flat JSON (<code>arbiter_trees.json</code>) and walked directly in
-    JavaScript: each tree descends <code>[feature, threshold, yes, no]</code> nodes to a leaf, the leaves sum to a
-    log-odds, and a sigmoid gives P(israeli). This JS tree-walk was verified <b>equal to the Python XGBoost output
-    to 1e-7</b> and reproduces the routing decision on 300/300 checked images. The same gates as the desktop apply
-    (GATE_G&nbsp;0.55, GATE_I&nbsp;0.60, both-unsure&nbsp;0.50, arbiter-band&nbsp;0.15).</p>
+  <p>ORT-Web has no <code>TreeEnsemble</code> operator, so the router cannot run as ONNX in the browser. Instead we
+    export the trained booster to a flat JSON (<code>arbiter_trees.json</code>) and walk the trees directly in
+    JavaScript. The key point is that <b>this is not an approximation</b>: XGBoost is an <i>additive</i> model, so a
+    faithful tree walk reproduces its output exactly.</p>
+
+  <h4 style="margin:14px 0 4px;font-size:14px">The math it reproduces</h4>
+  <p>The booster is a sum of <b>K</b> regression trees. For a 20-feature vector <code>x</code>, each tree
+    <code>f<sub>k</sub></code> routes <code>x</code> to exactly one leaf and returns that leaf&rsquo;s stored weight.
+    The per-tree leaves are <b>added</b> to a base margin <code>b<sub>0</sub></code> to give the raw score in
+    <b>log-odds</b> space, and a logistic (sigmoid) squashes it to the routing probability:</p>
+  <div style="background:#0b0f15;border:1px solid var(--line);border-radius:8px;padding:16px 14px;margin:12px 0;text-align:center;color:#e6edf3;overflow-x:auto">
+    <div id="eq-arb"></div>
+  </div>
+  <p>So the only things the browser needs are (1) the tree structure and leaf weights, and (2) the exact same
+    20 features the desktop computes. Because each <code>f<sub>k</sub></code> is a lookup, not learned math, the JS
+    output equals the Python booster bit-for-bit up to floating-point noise.</p>
+
+  <h4 style="margin:14px 0 4px;font-size:14px">Walking one tree</h4>
+  <p>Every internal node is stored as <code>[feature, threshold, yes, no]</code> and every leaf as a single weight.
+    Starting at the root, at each node we compare one feature to its threshold and branch, repeating until a leaf.
+    The classic XGBoost split rule is <b>&ldquo;go left (yes) if <code>x[feature] &lt; threshold</code>&rdquo;</b>
+    (with a stored default direction for a missing value), so the walk is a dozen comparisons per tree:</p>
+  <pre style="background:#0b0f15;border:1px solid var(--line);border-radius:9px;padding:12px 14px;overflow:auto;font-size:12.5px;line-height:1.5;color:#e6edf3">function leaf(tree, x){                 // one tree -&gt; one leaf weight
+  let n = tree.root;
+  while (n.leaf === undefined){
+    const go = x[n.f] &lt; n.thr ? n.yes : n.no;   // XGBoost: &lt; goes to 'yes'
+    n = tree.nodes[go];
+  }
+  return n.leaf;                        // this tree's contribution (log-odds)
+}
+function pIsraeli(trees, x, b0){
+  let margin = b0;
+  for (const t of trees) margin += leaf(t, x);   // sum of K trees
+  return 1 / (1 + Math.exp(-margin));            // sigmoid -&gt; P(israeli)
+}</pre>
+  <p>This JS tree-walk was verified <b>equal to the Python XGBoost output to 1e-7</b> and reproduces the routing
+    decision on 300/300 checked images. The routing probability then feeds the identical confidence gates as the
+    desktop app (GATE_G&nbsp;0.55, GATE_I&nbsp;0.60, both-unsure&nbsp;0.50, arbiter-band&nbsp;0.15), so the browser and
+    desktop make the same call on the same inputs.</p>
+  <script>
+    (function renderArbMath(){
+      if(!window.katex){ return; }
+      katex.render(String.raw`\text{margin}(x)=b_0+\sum_{k=1}^{K} f_k(x)\qquad P(\text{israeli}\mid x)=\sigma\!\bigl(\text{margin}(x)\bigr)=\frac{1}{1+e^{-\text{margin}(x)}}`,
+        document.getElementById('eq-arb'), {displayMode:true, throwOnError:false});
+    })();
+  </script>
 
   <h3 id="w-lat">Latency, measured and shown</h3>
   <p>Inference is timed with <code>performance.now()</code> around the two <code>run()</code> calls and printed on
