@@ -362,14 +362,35 @@ PC, and only the nutritional lookup reaches out to the network. The design follo
 "What?" and a BLE scale for the "How much?" - that are merged when the user triggers an
 analysis.
 
-The data flow is:
+The data flow has two parallel sensing lanes - the camera lane answering *what* and the scale
+lane answering *how much* - that merge only at the nutrition step:
 
-#align(center)[
-  Camera frame #h(0.4em) ⟶ #h(0.4em) [Global model] + [Israeli model] #h(0.4em) ⟶ #h(0.4em)
-  feature row #h(0.4em) ⟶ #h(0.4em) XGBoost router #h(0.4em) ⟶ #h(0.4em) class label \
-  BLE scale #h(0.4em) ⟶ #h(0.4em) packet decode + median filter #h(0.4em) ⟶ #h(0.4em) weight (g) \
-  class label + weight (g) #h(0.4em) ⟶ #h(0.4em) USDA / local DB #h(0.4em) ⟶ #h(0.4em) nutrition report
-]
+#figure(
+  align(center)[
+    #stack(dir: ttb, spacing: 7pt,
+      // --- WHAT lane ---
+      [#tbox[*Camera* \ RGB webcam] #ar #dbox[white-balance + CLAHE \ + centre-ROI crop] #ar
+       #dbox[*Global* expert (132 cls, 320²) \ *Israeli* expert (13 + bg, 224²)]],
+      text(size: 13pt, fill: rgb("#6b7280"))[↓],
+      [#dbox[*20 features* \ top-5 conf · entropy · margin · p#sub[bg]] #ar
+       #dbox[*XGBoost arbiter* \ P(israeli) ⋛ 0.5] #ar #dbox[*confidence gate* \ (Gemini fallback if unsure)] #ar
+       #okbox[recognised \ *label*]],
+      v(4pt),
+      // --- HOW MUCH lane ---
+      [#tbox[*BLE scale* \ strain-gauge cell] #ar #dbox[8-byte packet decode \ + 5-sample median] #ar
+       #dbox[calibrate ×1.178 \ (through-origin)] #ar #okbox[measured \ *grams*]],
+      text(size: 13pt, fill: rgb("#6b7280"))[↓],
+      // --- MERGE ---
+      [#dbox[*label* + *grams*] #ar #dbox[nutrition lookup \ local DB → USDA → Gemini] #ar
+       #okbox[*calories + macros* \ (factor × grams / 100)]],
+    )
+  ],
+  caption: [The CalEyeZ pipeline. The *camera lane* (top) turns a frame into a label - two CNN experts run
+    in parallel, an XGBoost arbiter picks the right one from their confidence signals, and a gate escalates the
+    unsure cases. The *scale lane* (middle) turns a BLE packet into calibrated grams. They meet only at the
+    *fusion* step (bottom), where label + grams become calories. Blue = compute, teal = sensor, green = a
+    finished quantity. Nothing infers mass from pixels - the two lanes stay separate until the arithmetic.],
+)
 
 The central *Fusion Logic Controller* synchronises the asynchronous BLE thread with the
 UI event that captures the frame, runs the two models and the router, calls the nutrition
@@ -873,6 +894,15 @@ and the quantity $p_"bg"$ becomes a *learned, calibrated* estimate of $P("input 
 Empirically it separates almost linearly: $p_"bg" approx 0.50$ on global food versus
 $approx 0.03$ on genuine Israeli food.
 
+#figure(
+  image("figures/ood_separation.png", width: 95%),
+  caption: [The background class in action, over all 32,136 held-out rows
+    (`datasets/arbiter_dataset.csv`). Genuine Israeli food (green) piles up at $p_"bg" approx 0$ - the specialist
+    confidently claims it - while global food (red) sits high, with a heavy mass near 1 (median $0.49$). One number,
+    computed for free from the Israeli model's own softmax, tells the arbiter "this is / isn't mine," which is why
+    it is the top routing feature by gain and lifted the routing ROC-AUC from 0.933 to 0.973.],
+)
+
 *How the arbiter exploits it.* The feature $p_"bg"$ (`i_p_background`) is handed to the XGBoost
 arbiter, where it becomes the top feature by gain (0.289). It lets the arbiter *dynamically
 re-weight* the two experts per image rather than trusting a naive average or a single monolithic
@@ -891,6 +921,26 @@ $y = 1$ if the image is Israeli, $0$ if global. It never sees the domain label a
 it predicts it from 20 features (each model's top-5 confidences, entropy, margin, the
 background probability, and a handful of interaction terms such as the confidence gap and
 ratio between the two models).
+
+#figure(
+  align(center)[
+    #stack(dir: ttb, spacing: 7pt,
+      [#dbox[*Global* softmax \ → top-5, entropy, margin] #h(1.2em) #dbox[*Israeli* softmax \ → top-5, entropy, margin, p#sub[bg]]],
+      text(size: 13pt, fill: rgb("#6b7280"))[↓],
+      dbox[*20-feature row* \ (+ interactions: conf-gap, conf-ratio, entropy-gap, margin-gap, both-unsure)],
+      text(size: 13pt, fill: rgb("#6b7280"))[↓],
+      dbox[*XGBoost arbiter* → #box(fill: rgb("#eef3ff"), inset: 3pt, radius: 3pt)[P(israeli)]],
+      [#text(size: 11pt, fill: rgb("#6b7280"))[P < 0.5 ↙] #h(3em) #text(size: 11pt, fill: rgb("#6b7280"))[↘ P ≥ 0.5]],
+      [#okbox[take *Global* label] #h(2em) #okbox[take *Israeli* label]],
+      text(size: 13pt, fill: rgb("#6b7280"))[↓],
+      [#dbox[*confidence gate* \ chosen top-1 ≥ threshold?] #ar #okbox[emit label] #h(0.6em) #text(size: 11pt, fill: rgb("#6b7280"))[else] #h(0.3em) #tbox[Gemini \ fallback]],
+    )
+  ],
+  caption: [What the arbiter actually decides at inference. The two experts' softmax vectors become a 20-number
+    row (no pixels); XGBoost turns it into P(israeli); the $0.5$ split picks which expert's label to keep; and a
+    confidence gate emits it only if the chosen top-1 clears its threshold, otherwise escalating to the Gemini
+    fallback. This is the decision logic behind the single "arbiter" box in the pipeline figure.],
+)
 
 XGBoost#footnote[T. Chen and C. Guestrin, "XGBoost: A Scalable Tree Boosting System," _KDD_,
 2016, arXiv:1603.02754, building on the gradient-boosting framework of J. H. Friedman, "Greedy
@@ -1278,11 +1328,14 @@ browser.
 === D-18 · Publish fp16, default to the CPU/WASM path, WebGPU opt-in
 *Options.* fp32, fp16, or int8 weights; run on CPU (WASM) or GPU (WebGPU). \
 *Chosen.* fp16 files, WASM by default, WebGPU behind `?gpu=1`. \
-*Cost of alternatives.* fp32 doubles the download (~100 MB vs ~50 MB); int8 risks accuracy on
-subtle food textures. On compute, WASM *upcasts fp16 to fp32* so the answer matches the desktop
-*exactly*, whereas WebGPU computes in fp16 and its rounding flipped a few borderline classes on
-some mobile GPUs. Because correctness outranks speed for a nutrition tool, WASM is the default. \
-*Consequence.* A small download, exact accuracy on the default path, and an opt-in speed mode -
+*Cost of alternatives.* fp32 doubles the download (~100 MB vs ~50 MB) for no gain - the CPU path ends up
+computing in fp32 either way, so fp32 files would only cost bandwidth. int8 risks accuracy on subtle food
+textures. On compute, WASM *widens fp16 to fp32* so the arithmetic stays clean and the answer makes the
+*same top-1 decision* as the desktop (only a ~$10^(-3)$ probability drift from the one-time fp16 rounding of
+the weights - decision-identical, not bit-identical), whereas WebGPU computes in fp16 and its rounding
+flipped a few borderline classes on some mobile GPUs. Because correctness outranks speed for a nutrition
+tool, WASM is the default. \
+*Consequence.* A small download, desktop-identical decisions on the default path, and an opt-in speed mode -
 documented so the trade-off is explicit.
 
 === D-19 · The arbiter as a JavaScript tree walk, not an ONNX tree operator
@@ -1818,21 +1871,80 @@ The two backends resolve this differently, and that is the whole decision:
   table.header([], [*WASM (CPU) - default*], [*WebGPU (GPU) - `?gpu=1`*]),
   [Weights on disk], [fp16 (small download)], [fp16 (small download)],
   [Compute precision], [*upcast to fp32*], [native *fp16*],
-  [Accuracy], [matches desktop *exactly*], [can flip borderline classes on some mobile GPUs],
+  [Accuracy], [same *top-1 decision* as desktop ($tilde 10^(-3)$ prob drift)], [can flip borderline classes on some mobile GPUs],
   [Speed], [set by CPU, ~0.6 s on a flagship], [faster fp16 matrix maths on the GPU],
 )
 
-So the phone downloads the small fp16 files either way. On the default CPU/WASM path they are quietly
-restored to fp32 before any arithmetic, so recognition is *bit-for-bit the desktop result*; the cost
-is that the maths runs on the CPU, whose clock speed sets the latency directly (about 0.6 s on a
-recent flagship, proportionally slower on a budget chip). WebGPU keeps the weights in fp16 and
-computes on the GPU - faster, but the live rounding degraded a few classes on some mobile GPUs during
-testing. Because correctness outranks speed for a nutrition tool, *WASM/fp32-accurate is the default*
-and WebGPU is an explicit opt-in.
+So the phone downloads the small fp16 files either way. On the default CPU/WASM path each weight is
+widened back to fp32 before any arithmetic. It is worth being precise about what this does and does
+*not* do: widening *cannot recover the bits that fp16 rounding threw away* - a widened fp16 value is the
+*same* rounded number, just written with trailing zeros - so no information is invented. What it buys is
+clean *arithmetic*: the millions of multiply-adds run in fp32 and are not re-rounded to 16 bits at every
+step, which is exactly where fp16 *compute* loses accuracy. The consequence is recognition that makes the
+*identical top-1 decision* as the desktop model, with only a ~$10^(-3)$ probability drift left over from
+the one-time fp16 rounding of the stored weights at export (the same drift measured in the ONNX parity
+test, Section 7.5). It is decision-identical, not bit-identical. The cost is that the maths runs on the
+CPU, whose clock speed sets the latency directly (about 0.6 s on a recent flagship, proportionally slower
+on a budget chip). WebGPU keeps the weights in fp16 and computes on the GPU - faster, but the live
+rounding degraded a few classes on some mobile GPUs during testing. Because correctness outranks speed for
+a nutrition tool, *WASM/fp32-accurate is the default* and WebGPU is an explicit opt-in.
+
+To make concrete *why* widening helps when it adds no information, picture fp16 as a calculator that shows
+*4 digits* and fp32 as one that shows *8*. The weights are 4-digit-accurate either way, so padding zeros
+changes nothing about them - but it changes the *running total* a layer builds from thousands of
+multiply-adds. On the 4-digit calculator $1000 + 0.04 = 1000$: the small term is below its precision and is
+*swamped*, so a hundred such additions still read $1000$ when the truth is $1004$. The 8-digit calculator
+keeps $1000.0400 -> 1004.0000$. A convolution sums thousands of such terms, so fp16 *arithmetic* silently
+drops small activations that can tip a borderline class; widening to fp32 loads the same 4-digit weight into
+an 8-digit register so every subsequent product and sum has room. The desktop computes with the same 8-digit
+(fp32) arithmetic, which is why the browser reproduces its *decision* - the only residual difference is
+4-digit versus 8-digit *inputs* (the $tilde 10^(-3)$ export rounding), which does not accumulate. Computing
+directly in fp16 (WebGPU) instead runs every step on the 4-digit calculator, compounding the rounding
+thousands of times - the mechanism behind the flipped classes above.
+
+The same loss is visible in a *single multiply*, the atom of the computation, and it is really about the
+*mantissa* - the significant-digit part of a float (a number is stored as
+$"sign" times "mantissa" times 2^"exponent"$, and the mantissa's bit-count sets the precision: 10 bits in
+fp16, 23 in fp32). Multiplying two values each good to ~4 significant digits produces a product that needs
+~7 digits to write exactly - for example $1.234 times 5.678 = 7.006652$. fp16 must round that back to ~4
+digits ($7.007$), discarding the tail; fp32's 23-bit mantissa keeps all seven. In bit terms, two 10-bit
+mantissas multiply into an up-to-20-bit result: fp32 has room to hold it, fp16 does not and rounds at every
+one of the layer's multiply-accumulates. This is exactly the "room to grow" intuition - the product of two
+16-bit numbers wants roughly 32 bits, and only fp32 keeps them. Widening the stored fp16 weights to fp32
+before the arithmetic gives each intermediate product that room, which is the precise sense in which the
+model *computes at higher precision than it stores*.
+
+#figure(
+  image("figures/fp_bits.png", width: 95%),
+  caption: [The bit layout of both formats. A float is $"sign" times "mantissa" times 2^"exponent"$; the
+    *mantissa* holds the significant digits and its width sets the precision - 10 bits (~4 decimal digits) in
+    fp16 versus 23 bits (~7 digits) in fp32. The exponent handles magnitude, so fp16 is short on *digits*, not
+    range. Multiplying two 10-bit mantissas yields an up-to-20-bit result that fits in fp32's 23-bit mantissa but
+    not fp16's 10 - the "room to grow" that lets fp32 accumulate without shedding precision.],
+)
+
+*Why the residual gap is only about $10^(-3)$.* When the CNN path does match the desktop only "in decision,"
+it is worth quantifying how small the leftover disagreement is, because the number falls straight out of the
+mantissa width. The chain has three links. *First,* fp16 rounding perturbs each weight by at most half a
+mantissa step: near $1.0$ consecutive fp16 values are $2^(-10) approx 0.98 times 10^(-3)$ apart, so rounding to
+the nearest is off by at most $2^(-11) approx 4.9 times 10^(-4)$ in relative terms - every weight becomes
+$w(1 plus.minus 5 times 10^(-4))$. *Second,* a logit $z = sum_i w_i x_i$ inherits that relative error: in the
+worst case (all errors aligned) $|Delta z| \/ |z| lt.eq 5 times 10^(-4)$, and because the errors are really
+random in sign they partly cancel, so the typical drift is smaller; across depth it compounds to at most a few
+$times 10^(-3)$. *Third,* the softmax passes a logit change through almost one-for-one. A concrete instance:
+take a top logit $z_1 = 8.000$ and a runner-up $z_2 = 6.000$ (a modest margin of 2). The two-class softmax is
+$p_1 = 1 \/ (1 + e^(-(z_1 - z_2)))$, so $p_1 = 1 \/(1 + e^(-2.000)) = 0.88080$ in fp32; if fp16 rounding shifts
+the margin to $2.004$, $p_1 = 1\/(1 + e^(-2.004)) = 0.88121$ - a change of $Delta p approx 4 times 10^(-4)$. The
+*maximum* over every class and every held-out row, measured in the ONNX parity test (Section 7.5), is
+$approx 10^(-3)$. The decision only flips if the top two probabilities sit *within that $10^(-3)$* of each
+other; real top-1/top-2 margins are on the order of tenths (e.g. $0.88$ versus $0.12$), so a $10^(-3)$ wiggle
+never crosses them - which is exactly why the exhaustive parity check found *zero* top-1 mismatches. The drift
+is real, bounded by the mantissa width, and an order of magnitude below anything that could change an answer.
 
 #note[The design pattern is worth stating plainly: *quantise for transport, compute at full precision*.
-The 16-bit format is used to make the model small and cheap to move; the 32-bit upcast restores the
-numerical fidelity exactly where it matters, in the arithmetic.#footnote[The precision/efficiency
+The 16-bit format makes the model small and cheap to move; widening to 32 bits before the arithmetic adds
+*no* precision back to the weights themselves - it only stops the *computation* from shedding any more,
+which is where fp16 maths actually goes wrong.#footnote[The precision/efficiency
 trade-off is surveyed by A. Gholami, S. Kim, Z. Dong, Z. Yao, M. W. Mahoney, and K. Keutzer,
 "A Survey of Quantization Methods for Efficient Neural Network Inference," in _Low-Power Computer
 Vision_, Chapman & Hall/CRC, 2022, arXiv:2103.13630. We deliberately stop at fp16-for-storage and
@@ -1846,53 +1958,67 @@ build of ORT-Web does *not* ship the `ai.onnx.ml` operator domain, so a tree mod
 execute in the browser through ONNX Runtime. The arbiter had to be evaluated another way.
 
 The solution exploits the fact that a gradient-boosted ensemble is *arithmetically trivial to
-evaluate* - all the intelligence is in the training, not the inference. The model is a plain additive
-sum over $K$ trees:
+evaluate* - all the intelligence is in the training, not the inference.
 
-$ "logit"(x) = "base" + sum_(k=1)^K f_k (x), quad
+*The idea in plain terms.* The arbiter is *400 tiny yes/no flowcharts* (decision trees). For one meal,
+each flowchart asks a couple of questions about the two experts' confidence numbers (for example
+"is the Israeli model's not-mine score below $0.00005$?") and lands on a *leaf holding one small vote*.
+Add up all 400 votes plus a fixed *starting number* (the base) to get a single score in *log-odds*, then
+a *sigmoid* turns that score into a probability between 0 and 1 - the chance the meal is Israeli. Above
+$0.5$, route to the Israeli expert. Formally, the model is a plain additive sum over $K = 400$ trees:
+
+$ "score"(x) = "base" + sum_(k=1)^K f_k (x), quad
   f_k (x) = w_(q_k (x)), quad
-  P("israeli" | x) = sigma("logit"(x)) = 1 / (1 + e^(-"logit"(x))) $
+  P("israeli" | x) = sigma("score"(x)) = 1 / (1 + e^(-"score"(x))) $
 
 where each tree $f_k$ routes the feature vector $x$ from its root to a leaf $q_k(x)$ and contributes
-that leaf's scalar weight $w$. Every internal node is a single comparison "feature $j$ $<$ threshold?".
-Evaluating the whole model is therefore: walk each tree by comparisons, add up the leaf values and
-the base score, and squash with the logistic function - a few hundred comparisons, sub-microsecond.
+that leaf's scalar vote $w$. Every internal node is a single comparison "feature $j$ $<$ threshold?".
+Evaluating the whole model is therefore: walk each tree by comparisons, add up the leaf votes and the
+base, and squash with the logistic function - a few hundred comparisons, sub-microsecond.
 
-*The export.* The trained booster was dumped to a compact JSON file, `arbiter_trees.json`, holding
-exactly two keys: `base` (the model's base score, $-1.2795$ - the prior log-odds of "Israeli",
-negative because global images dominate the training rows) and `trees`, an array of all *400 trees*.
-Each tree is a flat map from node index to node, an internal node being
-`[feature_index, threshold, yes_child, no_child]` and a leaf being `[value]`. Nothing about XGBoost
-survives into the browser except these numbers - the file is the model. The entire inference engine
-is then eight lines of JavaScript:
+*The export - three mechanical steps* (script: `scripts/arbiter/export_arbiter_trees.py`). Converting the
+trained booster to the browser file is pure copying, not retraining:
+
++ *Dump the trees.* XGBoost's own `booster.get_dump("json")` writes all 400 trees as JSON (each node's
+  feature, threshold, children, and leaf values).
++ *Flatten each node* into a tiny array: an internal node becomes `[feature_index, threshold, yes, no]`
+  and a leaf becomes `[value]`.
++ *Compute the base.* The starting number is the log-odds of the overall Israeli rate,
+  $"base" = ln(p \/ (1 - p))$ with $p = 0.2176$ (Israeli images are the minority of training rows), giving
+  $-1.2795$ - negative because global images dominate.
+
+The result is `arbiter_trees.json` with two keys: `base` and `trees` (the 400 flat trees). Nothing about
+XGBoost survives into the browser except these numbers - *the file is the model*. The entire inference
+engine is then eight lines of JavaScript:
 
 ```js
-function arbiterP(f){
-  let m = ARB.base;                                  // base score
+function arbiterP(f){                                 // f = the 20 features
+  let m = ARB.base;                                   // start at base log-odds (-1.2795)
   for(const tree of ARB.trees){
-    let n = tree["0"];                               // start at the root
-    while(n.length > 1){                             // internal node -> descend
-      n = tree[ f[n[0]] < n[1] ? n[2] : n[3] ];      // [feat, thresh, yes, no]
+    let n = tree["0"];                                // start at the root
+    while(n.length > 1){                              // length 4 = internal, 1 = leaf
+      n = tree[ Math.fround(f[n[0]]) < n[1] ? n[2] : n[3] ];  // [feat, thresh, yes, no]
     }
-    m += n[0];                                        // add the leaf's weight
+    m += n[0];                                         // add this tree's vote (leaf value)
   }
-  return 1 / (1 + Math.exp(-m));                      // sigma(logit) = P(israeli)
+  return 1 / (1 + Math.exp(-m));                       // sigma(score) = P(israeli)
 }
 ```
 
-This is a *lossless* re-implementation, not an approximation: it reproduces XGBoost's own prediction
-path node for node, so the only possible discrepancy is floating-point rounding in the final sum.
+The one subtlety is `Math.fround`. XGBoost stores thresholds and compares feature values in *32-bit*
+floats, so the JavaScript casts each feature to fp32 before the `< threshold` test; without it, a handful
+of values sitting exactly on a threshold boundary would branch the wrong way in fp64 and flip $approx 0.08%$
+of routing decisions. With it, the walk reproduces XGBoost's prediction path node for node - a *lossless*
+re-implementation, not an approximation.
 
-*The validation - proving it acts the same.* A re-implementation of a decision model must be proven
-equivalent, not assumed. The test is exhaustive rather than anecdotal: the *entire* held-out feature
-table (every test row the Python arbiter was ever scored on) was pushed through both
-implementations - `booster.predict` in Python and `arbiterP(f)` in JavaScript - and the two
-probability vectors compared element-wise. The maximum absolute disagreement over all rows is below
-$10^(-7)$, i.e. pure double-precision rounding in the 400-term sum; every routing *decision*
-(the $P gt.eq 0.5$ comparison) is identical. This is the same parity discipline applied to the CNNs'
-ONNX export (Section 7.5): every model that crosses a language or runtime boundary carries a
-numerical equivalence proof with it, so the browser's routing decision is not "similar to" the
-desktop's - it is the same computation.
+*The validation - proving it acts the same.* Equivalence is proven, not assumed, and the export script
+performs the check on every run. The *entire* held-out feature table - all *32,136* rows the arbiter is
+scored on - is pushed through both `booster.predict_proba` in Python and the JavaScript walk, and the two
+probability vectors compared element-wise. The maximum absolute disagreement is $3.8 times 10^(-7)$ (pure
+32-bit rounding in the 400-term sum), and the number of differing routing *decisions* (the $P gt.eq 0.5$
+comparison) is *zero*. This is the same parity discipline applied to the CNNs' ONNX export (Section 7.5):
+every model that crosses a language or runtime boundary carries a numerical-equivalence proof with it, so
+the browser's routing decision is not "similar to" the desktop's - it is the same computation.
 
 The 20-element feature vector `f` is assembled in the identical training order - both
 experts' top-5 confidences, entropy $H(p) = -sum_i p_i log p_i$, margin $p_((1)) - p_((2))$, the

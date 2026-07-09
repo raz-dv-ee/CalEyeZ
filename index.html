@@ -1972,7 +1972,7 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
     <thead><tr><th>Backend</th><th>What it uses</th><th>When</th><th>Trade-off</th></tr></thead>
     <tbody>
       <tr><td><b>WASM</b> (default)</td><td>the device <b>CPU</b>, SIMD, single-threaded</td><td>always, unless opted out</td>
-        <td>Upcasts the fp16 weights to fp32 at run time, so it matches desktop accuracy <b>exactly</b>. Chosen as default.</td></tr>
+        <td>Widens the fp16 weights to fp32 at run time, so it makes the <b>same top-1 decision</b> as desktop (only ~10<sup>&minus;3</sup> probability drift). Chosen as default.</td></tr>
       <tr><td><b>WebGPU</b> (<code>?gpu=1</code>)</td><td>the device <b>GPU</b>, fp16 compute</td><td>opt-in via URL</td>
         <td>Faster steady-state, but a ~2.6&nbsp;s one-time shader compile (hidden behind the loading splash) and
           fp16 rounding degraded a few classes on some mobile GPUs - so it is <b>not</b> the default.</td></tr>
@@ -1995,14 +1995,85 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
       <tr><td>Bits per weight</td><td>32</td><td>16</td></tr>
       <tr><td>Size / memory</td><td>baseline</td><td>about half</td></tr>
       <tr><td>Numeric precision</td><td>full</td><td>lower (more rounding)</td></tr>
-      <tr><td>In CalEyeZ</td><td><b>WASM upcasts fp16 back to fp32</b> before computing, so the maths is full
-        precision and the answer matches the desktop exactly</td><td><b>WebGPU computes directly in fp16</b>:
+      <tr><td>In CalEyeZ</td><td><b>WASM widens fp16 to fp32</b> before computing, so the <i>arithmetic</i> stays
+        full precision and makes the <b>same top-1 decision</b> as desktop (~10<sup>&minus;3</sup> probability drift,
+        not bit-identical)</td><td><b>WebGPU computes directly in fp16</b>:
         faster, but the rounding can flip a borderline prediction</td></tr>
     </tbody>
   </table>
-  <p>So the phone downloads small fp16 files either way; on the default CPU path they are quietly restored to fp32
-    for the actual computation (accuracy first), while the opt-in GPU path trades a little accuracy for speed. That
-    single distinction is the whole reason CPU/WASM is the default and WebGPU is opt-in.</p>
+  <p>So the phone downloads small fp16 files either way; on the default CPU path each weight is widened to fp32 for the
+    computation. <b>Widening does not recover the bits fp16 dropped</b> &mdash; a widened fp16 value is the same rounded
+    number with trailing zeros, no new information &mdash; it just stops the <i>millions of multiply-adds</i> from
+    re-rounding at every step, which is where fp16 <i>compute</i> actually loses accuracy. The only difference left
+    from desktop is a ~10<sup>&minus;3</sup> probability drift from rounding the weights to fp16 once at export; the
+    <b>decision</b> is identical. That single distinction is why CPU/WASM is the default and WebGPU is opt-in.</p>
+
+  <div class="callout"><b>A concrete example &mdash; so why do the zeros help at all?</b> They don&rsquo;t, directly &mdash;
+    you&rsquo;re right. Picture <b>fp16 as a calculator that shows 4 digits</b> and <b>fp32 as one that shows 8</b>. The
+    weights are 4-digit either way, so padding zeros adds no accuracy to them. What changes is the <i>running total</i>
+    a layer builds from thousands of multiply-adds. On the 4-digit calculator, <code>1000&nbsp;+&nbsp;0.04&nbsp;=&nbsp;1000</code>
+    (the 0.04 is below its precision, so it <b>vanishes</b>); do that a hundred times and you still read <code>1000</code>
+    when the truth is <code>1004</code>. The 8-digit calculator keeps <code>1000.0400&nbsp;&rarr;&nbsp;1004.0000</code>.
+    So fp16 arithmetic quietly <b>drops small activations that can decide a borderline food</b>. Widening to fp32 loads
+    the same 4-digit weight into an 8-digit register so every step afterward has room &mdash; the zeros are just the
+    loading; the win is the arithmetic. The desktop uses the same 8-digit (fp32) arithmetic, which is why the browser
+    matches its <i>decision</i>; the only residual gap is 4-digit vs 8-digit <i>inputs</i> (~10<sup>&minus;3</sup>),
+    which never piles up. &ldquo;Just compute in fp16&rdquo; means doing every step on the 4-digit calculator, so the
+    rounding compounds thousands of times &mdash; and that is what flips pizza vs hamburger on the WebGPU path.</div>
+
+  <h4 style="margin:16px 0 4px;font-size:14px">What a &ldquo;mantissa&rdquo; is, and the multiply that overflows it</h4>
+  <p>A floating-point number is stored as <b>sign &times; mantissa &times; 2<sup>exponent</sup></b>. The <b>mantissa</b>
+    holds the significant digits, and the <i>number of mantissa bits</i> is what sets the precision. <b>fp16 has 10
+    mantissa bits</b> (~3&ndash;4 decimal digits); <b>fp32 has 23</b> (~7 digits). The exponent handles magnitude, so fp16
+    isn&rsquo;t short on <i>range</i> (it reaches 65,504) &mdash; it&rsquo;s short on <i>digits</i>. That is the &ldquo;room
+    to grow&rdquo; you need: not room for bigger numbers, room for <b>more significant digits</b>.</p>
+  <p>Watch it in one multiply-accumulate &mdash; the operation a CNN does millions of times. Multiply a weight by an
+    activation, each stored to ~4 digits (fp16):</p>
+  <pre style="background:#0b0f15;border:1px solid var(--line);border-radius:9px;padding:12px 14px;overflow:auto;font-size:12.5px;line-height:1.6;color:#e6edf3">weight 1.234  ×  activation 5.678  =  7.006652   ← the exact product needs 7 digits
+   fp16 (10-bit mantissa) → rounds back to 7.007     ← the tail .000652 is chopped
+   fp32 (23-bit mantissa) → keeps       7.006652     ← all 7 digits fit</pre>
+  <p>In bits: two 10-bit mantissas multiply into a result up to <b>~20 bits</b> wide &mdash; fp32&rsquo;s 23-bit mantissa
+    has room to hold it, fp16&rsquo;s 10-bit does not, so fp16 <b>rounds it away at every step</b>. That is exactly your
+    intuition &mdash; the product of two 16-bit numbers wants ~32 bits, and only fp32 keeps them. A layer sums thousands
+    of these products, so in fp16 the chopped tails compound; in fp32 they stay. Widening the fp16 weights to fp32
+    before computing gives each intermediate product that room &mdash; which is the whole point of <i>computing at higher
+    precision than you store</i>.</p>
+
+  <div class="callout"><b>So why is the leftover gap only ~10<sup>&minus;3</sup>?</b> It falls straight out of the
+    mantissa width. (1) fp16 rounds each weight by at most half a mantissa step &mdash; near 1.0 that&rsquo;s
+    2<sup>&minus;11</sup> &asymp; <b>5&times;10<sup>&minus;4</sup></b> relative. (2) A logit
+    <code>z&nbsp;=&nbsp;&Sigma;&nbsp;w&middot;x</code> inherits that: worst case ~5&times;10<sup>&minus;4</sup>, usually
+    less (random errors cancel). (3) Softmax passes it through ~1:1 &mdash; e.g. top logit 8.000 vs runner-up 6.000 gives
+    <code>p&nbsp;=&nbsp;1/(1+e<sup>&minus;2.000</sup>)&nbsp;=&nbsp;0.88080</code>; nudge the margin to 2.004 and
+    <code>p&nbsp;=&nbsp;0.88121</code> &mdash; a <b>4&times;10<sup>&minus;4</sup></b> shift. The measured max over all
+    rows/classes is ~10<sup>&minus;3</sup>. The top-1 only flips if the two best probabilities sit <i>within</i>
+    10<sup>&minus;3</sup> of each other; real margins are ~0.1+ (0.88 vs 0.12), so it never crosses &mdash; which is why
+    the parity test found <b>0 top-1 mismatches</b>.</div>
+
+  <h4 style="margin:16px 0 4px;font-size:14px">The options we actually weighed</h4>
+  <p>Two independent choices: what <b>format</b> to ship the file in, and what <b>precision</b> to do the math in.
+    Here is every end-to-end option and what it would cost:</p>
+  <table>
+    <thead><tr><th>Option (ship &rarr; compute)</th><th>Download</th><th>Accuracy</th><th>Speed</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td><b>fp32 file &rarr; fp32 math</b></td><td class="r">~100&nbsp;MB</td>
+        <td>the full-precision reference</td><td>CPU, ~0.6&nbsp;s</td>
+        <td><b>Rejected:</b> doubles the download for <i>no visible gain</i> &mdash; it ends up computing in fp32 anyway (same RAM), and the fp16 version already reaches the identical decision.</td></tr>
+      <tr><td><b>fp16 file &rarr; fp32 math</b> <span style="color:var(--green)">(chosen, default)</span></td><td class="r">~50&nbsp;MB</td>
+        <td>same top-1 decision (~10<sup>&minus;3</sup> drift)</td><td>CPU, ~0.6&nbsp;s</td>
+        <td><b>Chosen:</b> half the download, desktop-identical decisions. Widening to fp32 is free and keeps the arithmetic clean.</td></tr>
+      <tr><td><b>fp16 file &rarr; fp16 math</b> (WebGPU, opt-in)</td><td class="r">~50&nbsp;MB</td>
+        <td>can flip borderline foods</td><td>GPU, fastest</td>
+        <td><b>Opt-in only:</b> fp16 <i>compute</i> accumulates rounding; it flipped pizza/hamburger on some mobile GPUs. Behind <code>?gpu=1</code> for benchmarking.</td></tr>
+      <tr><td><b>int8 file</b> (quantized)</td><td class="r">~25&nbsp;MB</td>
+        <td>too coarse for food texture</td><td>fast</td>
+        <td><b>Rejected:</b> 8-bit steps are too coarse and flip the subtle textures that separate look-alike dishes.</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>Why not just ship fp32, then?</b> Because after widening, <b>fp16&rarr;fp32 gives the same RAM,
+    the same fp32 arithmetic, and the same decision</b> as shipping fp32 &mdash; only the download is halved. Shipping
+    fp32 would cost 50&nbsp;MB extra for a ~10<sup>&minus;3</sup> probability difference that never changes the answer.
+    The fp16-file / fp32-compute option isn&rsquo;t a compromise; it <b>strictly beats</b> shipping fp32 for a phone.</div>
 
   <h3 id="w-mem">Memory and CPU: what the phone actually does</h3>
   <p>Two fp16 ONNX models are downloaded once: <b>Global</b> &asymp;25&nbsp;MB (320&sup2;, 132 classes) and
@@ -2068,50 +2139,65 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
     desktop at <b>0% top-1 mismatch</b>. The model is only ever as good as the image processing feeding it.</div>
 
   <h3 id="w-arb">The XGBoost arbiter, re-implemented in JavaScript</h3>
-  <p>ORT-Web has no <code>TreeEnsemble</code> operator, so the router cannot run as ONNX in the browser. Instead we
-    export the trained booster to a flat JSON (<code>arbiter_trees.json</code>) and walk the trees directly in
-    JavaScript. The key point is that <b>this is not an approximation</b>: XGBoost is an <i>additive</i> model, so a
-    faithful tree walk reproduces its output exactly.</p>
+  <p>ORT-Web has no <code>TreeEnsemble</code> operator, so the router cannot run as ONNX in the browser. We instead
+    export the trained booster to a flat JSON (<code>arbiter_trees.json</code>) and walk the trees in JavaScript.
+    This is <b>copying, not retraining, and not an approximation</b> &mdash; and below is exactly how, in plain terms.</p>
 
-  <h4 style="margin:14px 0 4px;font-size:14px">The math it reproduces</h4>
-  <p>The booster is a sum of <b>K</b> regression trees. For a 20-feature vector <code>x</code>, each tree
-    <code>f<sub>k</sub></code> routes <code>x</code> to exactly one leaf and returns that leaf&rsquo;s stored weight.
-    The per-tree leaves are <b>added</b> to a base margin <code>b<sub>0</sub></code> to give the raw score in
-    <b>log-odds</b> space, and a logistic (sigmoid) squashes it to the routing probability:</p>
-  <div style="background:#0b0f15;border:1px solid var(--line);border-radius:8px;padding:16px 14px;margin:12px 0;text-align:center;color:#e6edf3;overflow-x:auto">
-    <div id="eq-arb"></div>
-  </div>
-  <p>So the only things the browser needs are (1) the tree structure and leaf weights, and (2) the exact same
-    20 features the desktop computes. Because each <code>f<sub>k</sub></code> is a lookup, not learned math, the JS
-    output equals the Python booster bit-for-bit up to floating-point noise.</p>
+  <div class="callout"><b>The whole idea in one picture.</b> The arbiter is <b>400 tiny yes/no flowcharts</b> (decision
+    trees). For one meal, each flowchart asks a couple of questions about the two experts&rsquo; confidence numbers
+    (e.g. <i>&ldquo;is the Israeli model&rsquo;s &lsquo;not-mine&rsquo; score below 0.00005?&rdquo;</i>) and ends on a
+    <b>leaf holding one small vote</b>. Add up all 400 votes plus a fixed <b>starting number</b> (the base) &rarr; a
+    single score in <b>log-odds</b>. A <b>sigmoid</b> turns that score into a probability 0&ndash;1 = P(this meal is
+    Israeli). Above 0.5 &rarr; route to the Israeli expert.</p></div>
 
-  <h4 style="margin:14px 0 4px;font-size:14px">Walking one tree</h4>
-  <p>Every internal node is stored as <code>[feature, threshold, yes, no]</code> and every leaf as a single weight.
-    Starting at the root, at each node we compare one feature to its threshold and branch, repeating until a leaf.
-    The classic XGBoost split rule is <b>&ldquo;go left (yes) if <code>x[feature] &lt; threshold</code>&rdquo;</b>
-    (with a stored default direction for a missing value), so the walk is a dozen comparisons per tree:</p>
-  <pre style="background:#0b0f15;border:1px solid var(--line);border-radius:9px;padding:12px 14px;overflow:auto;font-size:12.5px;line-height:1.5;color:#e6edf3">function leaf(tree, x){                 // one tree -&gt; one leaf weight
-  let n = tree.root;
-  while (n.leaf === undefined){
-    const go = x[n.f] &lt; n.thr ? n.yes : n.no;   // XGBoost: &lt; goes to 'yes'
-    n = tree.nodes[go];
+  <h4 style="margin:16px 0 4px;font-size:14px">The math (two lines)</h4>
+  <p><b>1. Add the votes.</b> Each tree <code>f<sub>k</sub></code> sends the 20-feature vector <code>x</code> to one
+    leaf and returns that leaf&rsquo;s vote. Sum the 400 votes plus the base margin <code>b<sub>0</sub></code>:</p>
+  <div style="background:#0b0f15;border:1px solid var(--line);border-radius:8px;padding:14px;margin:10px 0;text-align:center;color:#e6edf3;overflow-x:auto"><div id="eq-arb"></div></div>
+  <p><b>2. Squash to a probability.</b> The sigmoid turns the log-odds score into P(israeli):</p>
+  <div style="background:#0b0f15;border:1px solid var(--line);border-radius:8px;padding:14px;margin:10px 0;text-align:center;color:#e6edf3;overflow-x:auto"><div id="eq-arb-sig"></div></div>
+  <p>That is the entire model &mdash; a weighted show of hands, then a sigmoid. Nothing is learned in the browser; the
+    votes and questions were fixed at training time.</p>
+
+  <h4 style="margin:16px 0 4px;font-size:14px">Converting it to the browser &mdash; 3 mechanical steps</h4>
+  <p>The export script <code>scripts/arbiter/export_arbiter_trees.py</code> does exactly this and nothing more:</p>
+  <ol style="margin:0 0 12px;padding-left:22px">
+    <li><b>Dump the trees.</b> XGBoost&rsquo;s own <code>booster.get_dump("json")</code> writes all 400 trees as JSON
+      (feature, threshold, children, leaf values).</li>
+    <li><b>Flatten each node</b> into a tiny array the browser can read: an internal node becomes
+      <code>[feature#, threshold, go-if-yes, go-if-no]</code>; a leaf becomes <code>[vote]</code>.</li>
+    <li><b>Compute the base.</b> The starting number is the log-odds of the overall Israeli rate:
+      <code>base = ln(p/(1&minus;p))</code> with <code>p = 0.21763562</code> &rarr; <b>&minus;1.2795</b>.</li>
+  </ol>
+  <p>So one node in the file literally reads <code>"0":[14, 0.000047, 1, 2]</code> = <i>&ldquo;at the root, look at
+    feature&nbsp;14 (i_p_background): if it&rsquo;s below 0.000047 go to node&nbsp;1, else node&nbsp;2.&rdquo;</i>
+    Walking the file is then a dozen comparisons per tree:</p>
+  <pre style="background:#0b0f15;border:1px solid var(--line);border-radius:9px;padding:12px 14px;overflow:auto;font-size:12.5px;line-height:1.5;color:#e6edf3">function arbiterP(f){              // f = the 20 features
+  let m = ARB.base;                // start at the base log-odds (-1.2795)
+  for (const tree of ARB.trees){
+    let n = tree["0"];             // root node
+    while (n.length > 1)           // length 4 = internal, length 1 = leaf
+      n = tree[ Math.fround(f[n[0]]) &lt; n[1] ? n[2] : n[3] ];  // [feature,threshold,yes,no]
+    m += n[0];                     // add this tree's vote (the leaf value)
   }
-  return n.leaf;                        // this tree's contribution (log-odds)
-}
-function pIsraeli(trees, x, b0){
-  let margin = b0;
-  for (const t of trees) margin += leaf(t, x);   // sum of K trees
-  return 1 / (1 + Math.exp(-margin));            // sigmoid -&gt; P(israeli)
+  return 1 / (1 + Math.exp(-m));   // sigmoid -&gt; P(israeli)
 }</pre>
-  <p>This JS tree-walk was verified <b>equal to the Python XGBoost output to 1e-7</b> and reproduces the routing
-    decision on 300/300 checked images. The routing probability then feeds the identical confidence gates as the
-    desktop app (GATE_G&nbsp;0.55, GATE_I&nbsp;0.60, both-unsure&nbsp;0.50, arbiter-band&nbsp;0.15), so the browser and
-    desktop make the same call on the same inputs.</p>
+
+  <div class="callout"><b>Why <code>Math.fround</code> matters (and how we verified it).</b> XGBoost compares in
+    <b>32-bit</b> floats internally, so the JS casts each feature with <code>Math.fround</code> before the
+    <code>&lt; threshold</code> test. The export script re-derives <code>arbiter_trees.json</code> from the trained
+    <code>arbiter_xgb.json</code> and checks it against the Python model on all <b>32,136</b> held-out rows: max
+    probability gap <b>3.8&times;10<sup>&minus;7</sup></b> and <b>0 routing disagreements</b>. (Without
+    <code>Math.fround</code>, ~0.08% of borderline routes could differ from the desktop.) The routed probability then
+    feeds the same gates as desktop (GATE_G&nbsp;0.55, GATE_I&nbsp;0.60, both-unsure&nbsp;0.50, arbiter-band&nbsp;0.15),
+    so browser and desktop make the identical call.</div>
   <script>
     (function renderArbMath(){
       if(!window.katex){ return; }
-      katex.render(String.raw`\text{margin}(x)=b_0+\sum_{k=1}^{K} f_k(x)\qquad P(\text{israeli}\mid x)=\sigma\!\bigl(\text{margin}(x)\bigr)=\frac{1}{1+e^{-\text{margin}(x)}}`,
+      katex.render(String.raw`\text{score}(x)\;=\;\underbrace{b_0}_{-1.2795}\;+\;\sum_{k=1}^{400} f_k(x)\quad\text{(base + the 400 tree votes, in log-odds)}`,
         document.getElementById('eq-arb'), {displayMode:true, throwOnError:false});
+      katex.render(String.raw`P(\text{israeli})\;=\;\sigma\bigl(\text{score}\bigr)\;=\;\frac{1}{1+e^{-\text{score}}}\;\;\in(0,1)`,
+        document.getElementById('eq-arb-sig'), {displayMode:true, throwOnError:false});
     })();
   </script>
 
