@@ -17,7 +17,8 @@
 #set par(justify: true, leading: 0.7em)
 
 // Keep each paragraph together: never split one across a page break.
-#show par: set block(breakable: false)
+// (An explicit block wrap is required - `set block(breakable:false)` alone does not bind to paragraphs.)
+#show par: it => block(breakable: false, width: 100%, it)
 
 // Numbered headings: 1 / 1.1 / 1.1.1
 #set heading(numbering: "1.1.")
@@ -145,12 +146,8 @@ causes most users to abandon the habit. Two distinct engineering obstacles make
 *automation* hard. First, the *"What?"* problem: a single ("monolithic") neural
 network trained on a very large, mixed set of food classes becomes unstable, and
 teaching it new local dishes causes it to forget previously learned foods
-(_catastrophic forgetting_#footnote[The phenomenon was first characterised by
-M. McCloskey and N. J. Cohen, "Catastrophic Interference in Connectionist Networks: The
-Sequential Learning Problem," _Psychology of Learning and Motivation_, vol. 24, pp. 109-165,
-1989, and reviewed by R. M. French, "Catastrophic forgetting in connectionist networks,"
-_Trends in Cognitive Sciences_, vol. 3, no. 4, pp. 128-135, 1999. Modern mitigations such as
-elastic weight consolidation (J. Kirkpatrick et al., "Overcoming catastrophic forgetting in
+(_catastrophic forgetting_#footnote[A classic failure mode of neural networks. Modern mitigations
+such as elastic weight consolidation (J. Kirkpatrick et al., "Overcoming catastrophic forgetting in
 neural networks," _PNAS_, vol. 114, no. 13, pp. 3521-3526, 2017, arXiv:1612.00796) trade
 plasticity against stability; CalEyeZ instead sidesteps the stability-plasticity dilemma
 entirely by isolating each domain in its own frozen expert.]). Second, the *"How much?"* problem: estimating food
@@ -519,7 +516,7 @@ directly from this formula and explain why CNNs work on images at all:
 - *Weight sharing.* The *same* $k^2 C_"in"$ coefficients are reused at every image position, so the
   parameter count of a layer, $k^2 C_"in" C_"out"$, is independent of the image size. A fully
   connected layer on a $320^2$ image would need billions of weights; the convolutional layer needs a
-  few thousand, which is what makes the model learnable from ~530 training images per class (69,491 / 132).
+  few thousand, which is what makes the model learnable from ~530 training images per class (69,487 / 132).
 - *Translation equivariance.* Because the filter is slid, a feature is detected wherever it appears
   - a bourekas in the corner produces the same response as one in the centre, just displaced. The
   classifier does not have to re-learn each food at each position.
@@ -596,9 +593,7 @@ Detection," _CVPR_, 2016, arXiv:1506.02640; CalEyeZ uses the classification vari
 current release, G. Jocher and J. Qiu, _Ultralytics YOLO11_, 2024,
 #link("https://github.com/ultralytics/ultralytics")[github.com/ultralytics/ultralytics]. The
 backbone is initialised from ImageNet features (J. Deng et al., "ImageNet: A Large-Scale
-Hierarchical Image Database," _CVPR_, 2009); the effectiveness of transferring such features to
-a new visual domain is established by J. Yosinski, J. Clune, Y. Bengio, and H. Lipson, "How
-transferable are features in deep neural networks?," _NeurIPS_, 2014, arXiv:1411.1792.] - a
+Hierarchical Image Database," _CVPR_, 2009).] - a
 convolutional backbone followed by a classification
 head that outputs one logit per class. The logits $z = (z_1, ..., z_C)$ are turned into a
 probability distribution by the #web("trainlab")[*softmax*] function:
@@ -607,11 +602,7 @@ $ p_i = e^(z_i) / (sum_(j=1)^C e^(z_j)) $
 
 so that $sum_i p_i = 1$. Training minimises *cross-entropy* between the predicted
 distribution $p$ and the one-hot ground truth $y$. The training script additionally requests
-*label smoothing*#footnote[Introduced by C. Szegedy, V. Vanhoucke, S. Ioffe, J. Shlens,
-and Z. Wojna, "Rethinking the Inception Architecture for Computer Vision," _CVPR_, 2016,
-arXiv:1512.00567. R. Müller, S. Kornblith, and G. Hinton, "When Does Label Smoothing Help?,"
-_NeurIPS_, 2019, arXiv:1906.02629, show it tightens intra-class clusters and improves
-_calibration_.] with
+*label smoothing* with
 $epsilon = 0.1$, which replaces the hard target with a softened one, discouraging the
 network from becoming over-confident:
 
@@ -674,9 +665,7 @@ $ theta <- theta - eta dot nabla_theta cal(L)(theta) $
 
 where $eta$ is the #web("trainlab")[learning rate] (Section 3.3.4). The gradient
 $nabla_theta cal(L)$ says how the loss changes with each individual weight. Computing it for a
-deep network naively would be hopeless, so it is computed by *backpropagation*#footnote[
-D. E. Rumelhart, G. E. Hinton, and R. J. Williams, "Learning representations by
-back-propagating errors," _Nature_, vol. 323, pp. 533-536, 1986.]: the chain rule
+deep network naively would be hopeless, so it is computed by *backpropagation*: the chain rule
 applied layer by layer, from the output back to the input. If layer $l$ produces
 $z^((l)) = W^((l)) a^((l-1)) + b^((l))$ followed by an activation $a^((l)) = f(z^((l)))$, the
 error signal $delta^((l)) = partial cal(L) \/ partial z^((l))$ is obtained from the next layer's
@@ -691,10 +680,9 @@ share back to the layer below. This is exactly why the analogy in Section 3.3.1 
 "filters" are never told a correct intermediate value: they are corrected only by the share of
 the final error that flows back to them.
 
-CalEyeZ uses the *AdamW* optimiser#footnote[Adam: D. P. Kingma and J. Ba, "Adam: A Method for
-Stochastic Optimization," _ICLR_, 2015, arXiv:1412.6980. The _decoupled_ weight-decay variant
-used here is I. Loshchilov and F. Hutter, "Decoupled Weight Decay Regularization," _ICLR_,
-2019, arXiv:1711.05101, which separates the $-eta lambda theta$ regularisation term from the
+CalEyeZ uses the *AdamW* optimiser#footnote[The decoupled-weight-decay variant of Adam:
+I. Loshchilov and F. Hutter, "Decoupled Weight Decay Regularization," _ICLR_, 2019,
+arXiv:1711.05101, which separates the $-eta lambda theta$ regularisation term from the
 adaptive gradient step.], an adaptive variant that keeps running estimates of the
 first and second moments of the gradient ($m_t$, $v_t$) and takes a per-weight step
 
@@ -718,13 +706,8 @@ $ "Var"(hat(g)) prop sigma^2 / B $
 That single relation drives the whole batch-size trade-off. A *large* batch gives a smooth,
 low-noise gradient and uses the hardware efficiently, but each step costs more memory and there
 are fewer steps per epoch. A *small* batch gives a noisy gradient, but the noise itself is a mild
-regulariser (it helps escape sharp minima)#footnote[N. S. Keskar, D. Mudigere, J. Nocedal,
-M. Smelyanskiy, and P. T. P. Tang, "On Large-Batch Training for Deep Learning: Generalization
-Gap and Sharp Minima," _ICLR_, 2017, arXiv:1609.04836, show large batches converge to sharp
-minima that generalise worse; S. L. Smith, P.-J. Kindermans, C. Ying, and Q. V. Le, "Don't
-Decay the Learning Rate, Increase the Batch Size," _ICLR_, 2018, arXiv:1711.00489, formalise
-the noise scale $g approx eta N slash B$. This is why the small batch forced by our 8 GB VRAM
-budget is not purely a cost.] and you get many more updates per pass. One *epoch* is
+regulariser (it helps escape sharp minima), and the small batch forced by our 8 GB VRAM budget is
+therefore not purely a cost. You get many more updates per pass. One *epoch* is
 one full pass over the training set, so it contains $N \/ B$ steps. For our Global model,
 $N = 69{,}491$ training images at $B = 16$ give about $4{,}343$ steps per epoch, and training ran
 for 116 epochs before early stopping. As Section 3.3.8 explains, our batch size was not a free
@@ -769,10 +752,7 @@ that is, linearly with batch size and with the image area $H times W$. Raising t
 $224^2$ to $320^2$ multiplies the area, and hence the activation memory, by
 $(320\/224)^2 approx 2.04$. To stay inside the 8 GB budget of the RTX 3060 Ti we therefore halved
 the batch from 32 to 16, which divides activation memory by two and roughly cancels the increase
-(measured footprint about 2.2 GB under mixed precision#footnote[P. Micikevicius et al.,
-"Mixed Precision Training," _ICLR_, 2018, arXiv:1710.03740: storing activations and performing
-most operations in fp16 while keeping an fp32 master copy of the weights roughly halves
-activation memory and bandwidth with no loss of accuracy.]). The engineering point is that resolution
+(measured footprint about 2.2 GB under mixed precision). The engineering point is that resolution
 and batch size trade against each other under a fixed memory ceiling
 $B times H times W times C lt.eq M$, and for fine-grained food the *resolution* is the stronger
 accuracy lever, so we spent the budget there and accepted the noisier small-batch gradient. The
@@ -804,12 +784,9 @@ that lower the loss on the new classes overwrite the weights that encoded the ol
 network's accuracy on the original classes collapses even as it learns the new ones; this is
 *catastrophic forgetting*. Because the two label spaces are disjoint, CalEyeZ avoids the
 problem entirely: it keeps two independent experts and learns *which one to trust per image*.
-This is a _mixture-of-experts_ arrangement in the classical ensemble-learning sense#footnote[
-T. G. Dietterich, "Ensemble Methods in Machine Learning," _Multiple Classifier Systems (MCS)_,
-LNCS 1857, pp. 1-15, 2000; the gating idea traces to R. A. Jacobs, M. I. Jordan, S. J. Nowlan,
-and G. E. Hinton, "Adaptive Mixtures of Local Experts," _Neural Computation_, vol. 3, no. 1,
-pp. 79-87, 1991. CalEyeZ's arbiter is exactly such a gate, learned separately from the experts.],
-where a gating function selects among specialists whose errors are decorrelated by construction
+This is a _mixture-of-experts_ arrangement in the classical ensemble-learning sense - a gating
+function (our arbiter, learned separately from the experts)
+selects among specialists whose errors are decorrelated by construction
 (disjoint label spaces).
 Adding a new cuisine then means training a new expert, never disturbing the Global model.
 
@@ -858,11 +835,9 @@ being one of those classes*. Fed an out-of-distribution (OOD) input - here, a no
 shown to the 13-class Israeli model - the network has no "none of the above" option and must place
 its unit mass of probability on the known classes anyway. Deep ReLU networks are moreover known to
 produce *arbitrarily high* softmax confidence on inputs far from the training data#footnote[
-A. Nguyen, J. Yosinski, and J. Clune, "Deep Neural Networks are Easily Fooled: High Confidence
-Predictions for Unrecognizable Images," _CVPR_, 2015, arXiv:1412.1897; M. Hein, M. Andriushchenko,
-and J. Bitterwolf, "Why ReLU Networks Yield High-Confidence Predictions Far Away from the Training
-Data," _CVPR_, 2019, arXiv:1812.05720, prove this overconfidence is intrinsic to piecewise-linear
-networks.]. This is exactly what we measured: the closed-set Israeli model fired
+M. Hein, M. Andriushchenko, and J. Bitterwolf, "Why ReLU Networks Yield High-Confidence Predictions
+Far Away from the Training Data," _CVPR_, 2019, arXiv:1812.05720, prove this overconfidence is
+intrinsic to piecewise-linear networks.]. This is exactly what we measured: the closed-set Israeli model fired
 $p_((1)) gt.eq 0.5$ on almost *any* food (it "shouted hummus" on beige global dishes), so its raw
 confidence carried almost no information about whether the image was actually Israeli.
 
@@ -871,20 +846,15 @@ probability (MSP): flag an input as OOD when $max_i p_i$ is low#footnote[D. Hend
 K. Gimpel, "A Baseline for Detecting Misclassified and Out-of-Distribution Examples in Neural
 Networks," _ICLR_, 2017, arXiv:1610.02136.]. Because our closed-set model is overconfident on OOD
 food, its MSP is high on precisely the inputs it should reject, so MSP is useless here. More
-elaborate post-hoc scores exist - the Mahalanobis distance in feature space#footnote[K. Lee,
-K. Lee, H. Lee, and J. Shin, "A Simple Unified Framework for Detecting Out-of-Distribution Samples
-and Adversarial Attacks," _NeurIPS_, 2018, arXiv:1807.03888.] and the free-energy score#footnote[
-W. Liu, X. Wang, J. Owens, and Y. Li, "Energy-based Out-of-distribution Detection," _NeurIPS_,
-2020, arXiv:2010.03759.] - and are noted as future work, but they add a second inference-time
+elaborate post-hoc scores exist - the Mahalanobis distance in feature space and free-energy
+(energy-based) scores - and are noted as future work, but they add a second inference-time
 computation and a threshold to tune on held-out OOD data.
 
 *Our mechanism: an explicit background class (Outlier Exposure).* Instead of a post-hoc score we
 change the *training objective* itself, adding an explicit $(C+1)$-th "background / not-mine"
 class and populating it with real global-domain look-alikes. This is the _Outlier Exposure_
 principle#footnote[D. Hendrycks, M. Mazeika, and T. G. Dietterich, "Deep Anomaly Detection with
-Outlier Exposure," _ICLR_, 2019, arXiv:1812.04606; the broader problem is formalised by W. J.
-Scheirer, A. de Rezende Rocha, A. Sapkota, and T. E. Boult, "Toward Open Set Recognition,"
-_IEEE TPAMI_, vol. 35, no. 7, pp. 1757-1772, 2013.]: exposing the network to a curated outlier
+Outlier Exposure," _ICLR_, 2019, arXiv:1812.04606.]: exposing the network to a curated outlier
 set during training teaches it to route OOD probability mass to a dedicated sink rather than onto a
 real class. The softmax now spans $C + 1$ classes,
 
@@ -943,12 +913,8 @@ ratio between the two models).
 )
 
 XGBoost#footnote[T. Chen and C. Guestrin, "XGBoost: A Scalable Tree Boosting System," _KDD_,
-2016, arXiv:1603.02754, building on the gradient-boosting framework of J. H. Friedman, "Greedy
-Function Approximation: A Gradient Boosting Machine," _Annals of Statistics_, vol. 29, no. 5,
-pp. 1189-1232, 2001. Boosted trees remain the strongest general method on tabular feature
-vectors such as ours (L. Grinsztajn, E. Oyallon, and G. Varoquaux, "Why do tree-based models
-still outperform deep learning on typical tabular data?," _NeurIPS Datasets & Benchmarks_,
-2022, arXiv:2207.08815).] builds an *additive ensemble of regression trees*. The model's raw output for an
+2016, arXiv:1603.02754. Boosted trees remain the strongest general method on tabular feature
+vectors such as ours.] builds an *additive ensemble of regression trees*. The model's raw output for an
 image $x$ is the sum of $K$ trees plus a bias, and the probability is the logistic (sigmoid)
 of that score:
 
@@ -1006,12 +972,10 @@ the test rows are never seen during router training, so the reported system accu
 honest.
 
 The router is also *explainable per prediction*. XGBoost can decompose a single decision into
-per-feature contributions (TreeSHAP#footnote[S. M. Lundberg and S.-I. Lee, "A Unified Approach
-to Interpreting Model Predictions," _NeurIPS_, 2017, arXiv:1705.07874; the exact polynomial-time
-tree estimator is S. M. Lundberg et al., "From local explanations to global understanding with
-explainable AI for trees," _Nature Machine Intelligence_, vol. 2, pp. 56-67, 2020. SHAP values
-are the unique feature attributions satisfying local accuracy, missingness and consistency, and
-they sum exactly to the model's logit.]), which sum exactly to the logit. The demo uses this to
+per-feature contributions (SHAP#footnote[S. M. Lundberg and S.-I. Lee, "A Unified Approach
+to Interpreting Model Predictions," _NeurIPS_, 2017, arXiv:1705.07874. SHAP values are the unique
+feature attributions satisfying local accuracy, missingness and consistency, and they sum exactly
+to the model's logit; XGBoost computes them exactly in polynomial time via TreeSHAP.]), which sum exactly to the logit. The demo uses this to
 show *why* a given image was routed:
 
 ```python
@@ -1108,23 +1072,11 @@ justified explicitly. A frozen backbone reuses ImageNet features unchanged and t
 classifier head; full fine-tuning also lets the convolutional layers re-adapt their features to
 food. The two differ in a *bias-variance* sense: freezing is faster and regularises, but caps the
 achievable accuracy; full fine-tuning reaches a higher ceiling at the cost of training time and a
-larger dataset to avoid overfitting. For *food recognition specifically*, the published literature
-answers which side wins, repeatedly and directly:
-- Hassannejad et al. (2016) fine-tune very deep networks end-to-end for food images rather than
-  freezing #footnote[H. Hassannejad et al., "Food Image Recognition Using Very Deep Convolutional
-  Networks," arXiv:1709.09429.].
-- A 2024 study on food classification unfreezes and retrains the *deep feature layers* in addition
-  to the fully-connected head, and shows full freezing underperforms #footnote[PLOS ONE (2024),
-  doi:10.1371/journal.pone.0296789.].
-- A 2025 EfficientNet study compares a frozen feature-extractor against fine-tuning on Food-101 and
-  concludes food recognition *requires* releasing and updating layers to learn discriminative,
-  texture-specific features and to stay robust to changes in shape, colour and lighting
-  #footnote["Transfer Learning Approach with EfficientNet to Enhance Food Recognition Systems for
-  Health Monitoring" (2025), ResearchGate 391450557.].
-Because this question is already settled in the literature for our exact domain, we adopted the
-established result rather than spend scarce lab compute re-deriving a known outcome - itself a
-resource trade-off (a controlled in-house A/B would cost days of GPU time to reproduce a published
-finding). \
+larger dataset to avoid overfitting. For *food recognition specifically*, full fine-tuning is
+the established choice: food classes are separated by fine *texture* - crumb, glaze, grain, char -
+so the convolutional layers must re-adapt to the food domain rather than stay frozen on generic
+ImageNet edges and shapes. We adopted this known result rather than spend scarce lab compute
+re-deriving it in a controlled A/B, which would cost days of GPU time to reproduce a settled finding. \
 *Cost of the other alternatives.*
 - *From scratch:* discards the ImageNet prior and needs far more than our ~530 training images/class.
 - *`x` (larger):* exceeds the *8 GB VRAM* budget at 320 px, batch 16.
@@ -1147,7 +1099,7 @@ glaze, grain - and texture is exactly what extra resolution buys, so the Global 
 largest input the VRAM budget allows ($(320\/224)^2 approx 2 times$ the pixels). The *Israeli*
 specialist solves a far easier 14-way problem over visually distinct dishes, so 224 px - the
 native resolution of the ImageNet pretraining, where the transferred backbone features fit best -
-is already sufficient (92.26% test top-1), and raising it would spend compute without a
+is already sufficient (~88.9% top-1 for the shipped 13 + background model), and raising it would spend compute without a
 discrimination problem to solve. The saving is not free-floating either: the arbiter design runs
 *both* experts on *every* image (Decision D-10), so their inference costs *add* - keeping the
 second model at 224 px is what keeps the double-inference latency budget affordable on the CPU
@@ -1719,10 +1671,9 @@ that identity is verified numerically rather than assumed.
 == The On-Device Runtime: ONNX Runtime Web
 
 The single JavaScript dependency for inference is `onnxruntime-web` (ORT-Web), loaded from a CDN.
-ORT-Web ships the ONNX Runtime engine compiled to *WebAssembly* (WASM)#footnote[A. Haas et al.,
-"Bringing the Web up to Speed with WebAssembly," _ACM PLDI_, 2017, pp. 185-200 - a portable,
+ORT-Web ships the ONNX Runtime engine compiled to *WebAssembly* (WASM)#footnote[A portable,
 near-native compilation target now standard in every major browser. The GPU path uses the W3C
-_WebGPU_ specification (2023+), the browser's successor to WebGL for general-purpose GPU compute.]
+_WebGPU_ specification, the browser's successor to WebGL for general-purpose GPU compute.]
 - a low-level, near-native
 bytecode that every modern browser executes - plus an optional *WebGPU* backend. Configuration is
 three lines:
@@ -1941,14 +1892,29 @@ other; real top-1/top-2 margins are on the order of tenths (e.g. $0.88$ versus $
 never crosses them - which is exactly why the exhaustive parity check found *zero* top-1 mismatches. The drift
 is real, bounded by the mantissa width, and an order of magnitude below anything that could change an answer.
 
+#note[*One weight, followed end to end* - the whole story on a single number. Take a trained weight
+$w = 0.71341827$ (fp32).
++ *Cut to fp16 (at export).* It is stored as $0.7134$; the low digits $...1827$ are dropped for good. This
+  one rounding is the *only* precision ever lost.
++ *Widened in memory (at load).* To compute, $0.7134$ is written into a 32-bit slot as $0.71340000$ - the
+  freed low bits are filled with *zeros*. No information is added; it is still $0.7134$.
++ *The arithmetic fills the zeros.* Multiplying by an activation $a = 0.8207$ gives
+  $0.7134 times 0.8207 = 0.58548738$ - a product whose new low digits $...8738$ land exactly in the slots that
+  were zero. In fp16 they are re-rounded away ($0.5855$); in fp32 they *survive*.
++ *The numbers drive the logit.* A neuron sums thousands of such products. Keeping those tails (fp32) instead
+  of chopping them at every step (fp16) is what makes the summed logit match the full model - here $8.004$
+  against the full-fp32 model's $8.000$.
++ *Same decision; the drift is blown away.* Against a runner-up logit of $6.000$, the softmax gives
+  $P = 1\/(1 + e^(-2.004)) = 0.88121$ versus the full model's $0.88080$ - a difference of $4 times 10^(-4)$.
+  The winner leads by tenths ($0.88$ vs $0.12$), so a $10^(-3)$ nudge cannot cross the gap. The light
+  fp16-shipped model reaches the *identical decision* as the heavy fp32 model; only the third decimal of the
+  probability differs, and that is below anything that decides an answer.]
+
 #note[The design pattern is worth stating plainly: *quantise for transport, compute at full precision*.
 The 16-bit format makes the model small and cheap to move; widening to 32 bits before the arithmetic adds
 *no* precision back to the weights themselves - it only stops the *computation* from shedding any more,
-which is where fp16 maths actually goes wrong.#footnote[The precision/efficiency
-trade-off is surveyed by A. Gholami, S. Kim, Z. Dong, Z. Yao, M. W. Mahoney, and K. Keutzer,
-"A Survey of Quantization Methods for Efficient Neural Network Inference," in _Low-Power Computer
-Vision_, Chapman & Hall/CRC, 2022, arXiv:2103.13630. We deliberately stop at fp16-for-storage and
-avoid int8, whose coarser steps can flip the subtle textures that separate look-alike foods.]]
+which is where fp16 maths actually goes wrong.#footnote[We deliberately stop at fp16-for-storage
+and avoid int8, whose coarser steps can flip the subtle textures that separate look-alike foods.]]
 
 == Converting the Arbiter: XGBoost Tree to JavaScript
 
@@ -2125,18 +2091,20 @@ by a committed script and comes from data the relevant model never trained on.
 The Global model reaches *88.18% top-1* and *96.94% top-5* on its 132-class held-out test set.
 Critically, its validation accuracy (88.16%) and test accuracy (88.18%) agree to within
 0.02 points - the signature of clean, non-leaking splits, and a direct improvement over the
-earlier model whose ~4-point val/test gap revealed train/test leakage. The Israeli specialist
-reaches *92.26%* top-1 on its own clean 14-way test split (13 dishes + background), with top-5
-near 99.5%. The remaining errors are
-sensible visual overlaps (chocolate mousse vs cake, gnocchi vs ravioli) and the smallest
-ingredient classes, exactly where the least training data exists.
+earlier model whose ~4-point val/test gap revealed train/test leakage. The shipped Israeli
+specialist (V2, 13 dishes + an open-set *background* class) reaches *88.86%* top-1 (best epoch 112),
+with top-5 near 98.6%. Its predecessor - a 13-class model with no background class - scored a higher
+92.26%, but the background class is what supplies the arbiter's "not-mine" routing signal, so we
+deliberately traded roughly three points of raw specialist accuracy for a working ensemble (Decision
+D-08). The remaining errors are sensible visual overlaps (chocolate mousse vs cake, gnocchi vs
+ravioli) and the smallest ingredient classes, exactly where the least training data exists.
 
 #table(
   columns: (1fr, auto, auto, auto),
   inset: 7pt, align: (left, center, center, center),
   table.header([*Model*], [*Classes*], [*Top-1*], [*Top-5*]),
   [Global (general cuisine)], [132], [88.18%], [96.94%],
-  [Israeli specialist (own domain)], [13 + background], [92.26%], [~99.5%],
+  [Israeli specialist (shipped, V2)], [13 + background], [88.86%], [~98.6%],
 )
 
 #figure(
@@ -2899,118 +2867,78 @@ segmentation to handle mixed plates.
 // ============================================================
 = References
 
-The works below are cited at the point of use throughout the report (as numbered footnotes) and
-are consolidated here by theme. arXiv identifiers and DOIs/URLs are given for the primary sources.
+The works below are cited at the point of use as numbered footnotes and consolidated here by theme.
+arXiv identifiers, DOIs and URLs link directly to the primary source.
 
-== Architectures: Detection, Classification and Transfer Learning
+== Architectures, Classification and Transfer Learning
 
 + J. Redmon, S. Divvala, R. Girshick, and A. Farhadi, "You Only Look Once: Unified, Real-Time
-  Object Detection," *CVPR*, 2016. arXiv:1506.02640.
+  Object Detection," *CVPR*, 2016. #link("https://arxiv.org/abs/1506.02640")[arXiv:1506.02640].
 + G. Jocher and J. Qiu, *Ultralytics YOLO11*, 2024.
   #link("https://github.com/ultralytics/ultralytics")[github.com/ultralytics/ultralytics]
 + J. Deng, W. Dong, R. Socher, L.-J. Li, K. Li, and L. Fei-Fei, "ImageNet: A Large-Scale
-  Hierarchical Image Database," *CVPR*, 2009.
-+ J. Yosinski, J. Clune, Y. Bengio, and H. Lipson, "How transferable are features in deep neural
-  networks?," *NeurIPS*, 2014. arXiv:1411.1792.
-+ H. Hassannejad et al., "Food Image Recognition Using Very Deep Convolutional Networks," 2016.
-  arXiv:1709.09429.
+  Hierarchical Image Database," *CVPR*, 2009. #link("https://www.image-net.org/")[image-net.org]
 
-== Optimisation, Regularisation and Training Dynamics
+== Optimisation and Regularisation
 
-+ D. E. Rumelhart, G. E. Hinton, and R. J. Williams, "Learning representations by back-propagating
-  errors," *Nature*, vol. 323, pp. 533-536, 1986.
-+ D. P. Kingma and J. Ba, "Adam: A Method for Stochastic Optimization," *ICLR*, 2015.
-  arXiv:1412.6980.
 + I. Loshchilov and F. Hutter, "Decoupled Weight Decay Regularization" (AdamW), *ICLR*, 2019.
-  arXiv:1711.05101.
+  #link("https://arxiv.org/abs/1711.05101")[arXiv:1711.05101].
 + I. Loshchilov and F. Hutter, "SGDR: Stochastic Gradient Descent with Warm Restarts," *ICLR*,
-  2017. arXiv:1608.03983.
-+ C. Szegedy, V. Vanhoucke, S. Ioffe, J. Shlens, and Z. Wojna, "Rethinking the Inception
-  Architecture for Computer Vision" (label smoothing), *CVPR*, 2016. arXiv:1512.00567.
-+ R. Müller, S. Kornblith, and G. Hinton, "When Does Label Smoothing Help?," *NeurIPS*, 2019.
-  arXiv:1906.02629.
+  2017. #link("https://arxiv.org/abs/1608.03983")[arXiv:1608.03983].
 + N. Srivastava, G. Hinton, A. Krizhevsky, I. Sutskever, and R. Salakhutdinov, "Dropout: A Simple
   Way to Prevent Neural Networks from Overfitting," *JMLR*, vol. 15, pp. 1929-1958, 2014.
-+ N. S. Keskar, D. Mudigere, J. Nocedal, M. Smelyanskiy, and P. T. P. Tang, "On Large-Batch
-  Training for Deep Learning: Generalization Gap and Sharp Minima," *ICLR*, 2017. arXiv:1609.04836.
-+ S. L. Smith, P.-J. Kindermans, C. Ying, and Q. V. Le, "Don't Decay the Learning Rate, Increase
-  the Batch Size," *ICLR*, 2018. arXiv:1711.00489.
-+ P. Micikevicius et al., "Mixed Precision Training," *ICLR*, 2018. arXiv:1710.03740.
+  #link("https://jmlr.org/papers/v15/srivastava14a.html")[jmlr.org].
 
 == Ensemble Learning, Boosting and Interpretability
 
-+ T. G. Dietterich, "Ensemble Methods in Machine Learning," *Multiple Classifier Systems*,
-  LNCS 1857, pp. 1-15, 2000.
-+ R. A. Jacobs, M. I. Jordan, S. J. Nowlan, and G. E. Hinton, "Adaptive Mixtures of Local
-  Experts," *Neural Computation*, vol. 3, no. 1, pp. 79-87, 1991.
-+ J. H. Friedman, "Greedy Function Approximation: A Gradient Boosting Machine," *Annals of
-  Statistics*, vol. 29, no. 5, pp. 1189-1232, 2001.
 + T. Chen and C. Guestrin, "XGBoost: A Scalable Tree Boosting System," *KDD*, 2016.
-  arXiv:1603.02754.
-+ L. Grinsztajn, E. Oyallon, and G. Varoquaux, "Why do tree-based models still outperform deep
-  learning on typical tabular data?," *NeurIPS Datasets & Benchmarks*, 2022. arXiv:2207.08815.
+  #link("https://arxiv.org/abs/1603.02754")[arXiv:1603.02754].
 + S. M. Lundberg and S.-I. Lee, "A Unified Approach to Interpreting Model Predictions" (SHAP),
-  *NeurIPS*, 2017. arXiv:1705.07874.
-+ S. M. Lundberg et al., "From local explanations to global understanding with explainable AI for
-  trees" (TreeSHAP), *Nature Machine Intelligence*, vol. 2, pp. 56-67, 2020.
+  *NeurIPS*, 2017. #link("https://arxiv.org/abs/1705.07874")[arXiv:1705.07874].
 
 == Out-of-Distribution Detection and Open-Set Recognition
 
 + D. Hendrycks and K. Gimpel, "A Baseline for Detecting Misclassified and Out-of-Distribution
-  Examples in Neural Networks" (MSP), *ICLR*, 2017. arXiv:1610.02136.
-+ K. Lee, K. Lee, H. Lee, and J. Shin, "A Simple Unified Framework for Detecting
-  Out-of-Distribution Samples and Adversarial Attacks" (Mahalanobis), *NeurIPS*, 2018.
-  arXiv:1807.03888.
-+ W. Liu, X. Wang, J. Owens, and Y. Li, "Energy-based Out-of-distribution Detection," *NeurIPS*,
-  2020. arXiv:2010.03759.
+  Examples in Neural Networks" (MSP), *ICLR*, 2017.
+  #link("https://arxiv.org/abs/1610.02136")[arXiv:1610.02136].
 + D. Hendrycks, M. Mazeika, and T. G. Dietterich, "Deep Anomaly Detection with Outlier Exposure,"
-  *ICLR*, 2019. arXiv:1812.04606.
-+ W. J. Scheirer, A. de Rezende Rocha, A. Sapkota, and T. E. Boult, "Toward Open Set Recognition,"
-  *IEEE TPAMI*, vol. 35, no. 7, pp. 1757-1772, 2013.
-+ A. Nguyen, J. Yosinski, and J. Clune, "Deep Neural Networks are Easily Fooled: High Confidence
-  Predictions for Unrecognizable Images," *CVPR*, 2015. arXiv:1412.1897.
+  *ICLR*, 2019. #link("https://arxiv.org/abs/1812.04606")[arXiv:1812.04606].
 + M. Hein, M. Andriushchenko, and J. Bitterwolf, "Why ReLU Networks Yield High-Confidence
-  Predictions Far Away from the Training Data," *CVPR*, 2019. arXiv:1812.05720.
+  Predictions Far Away from the Training Data," *CVPR*, 2019.
+  #link("https://arxiv.org/abs/1812.05720")[arXiv:1812.05720].
 
 == Continual Learning and Catastrophic Forgetting
 
-+ M. McCloskey and N. J. Cohen, "Catastrophic Interference in Connectionist Networks: The
-  Sequential Learning Problem," *Psychology of Learning and Motivation*, vol. 24, pp. 109-165, 1989.
-+ R. M. French, "Catastrophic forgetting in connectionist networks," *Trends in Cognitive
-  Sciences*, vol. 3, no. 4, pp. 128-135, 1999.
 + J. Kirkpatrick et al., "Overcoming catastrophic forgetting in neural networks" (EWC), *PNAS*,
-  vol. 114, no. 13, pp. 3521-3526, 2017. arXiv:1612.00796.
+  vol. 114, no. 13, pp. 3521-3526, 2017. #link("https://arxiv.org/abs/1612.00796")[arXiv:1612.00796].
 
 == Edge / Browser Inference and Efficiency
 
 + S. Williams, A. Waterman, and D. Patterson, "Roofline: An Insightful Visual Performance Model
   for Multicore Architectures," *Communications of the ACM*, vol. 52, no. 4, pp. 65-76, 2009.
-+ A. Gholami, S. Kim, Z. Dong, Z. Yao, M. W. Mahoney, and K. Keutzer, "A Survey of Quantization
-  Methods for Efficient Neural Network Inference," *Low-Power Computer Vision*, CRC Press, 2022.
-  arXiv:2103.13630.
-+ A. Haas et al., "Bringing the Web up to Speed with WebAssembly," *ACM PLDI*, 2017, pp. 185-200.
+  #link("https://doi.org/10.1145/1498765.1498785")[doi:10.1145/1498765.1498785].
 + ONNX and ONNX Runtime. #link("https://onnxruntime.ai/")[onnxruntime.ai]
 
 == Data Integrity, Metrology and Evaluation
 
 + S. Kaufman, S. Rosset, C. Perlich, and O. Stitelman, "Leakage in Data Mining: Formulation,
   Detection, and Avoidance," *ACM TKDD*, vol. 6, no. 4, art. 15, 2012.
+  #link("https://doi.org/10.1145/2382577.2382579")[doi:10.1145/2382577.2382579].
 + E. B. Wilson, "Probable Inference, the Law of Succession, and Statistical Inference" (Wilson
-  score interval), *Journal of the American Statistical Association*, vol. 22, pp. 209-212, 1927.
+  score interval), *JASA*, vol. 22, pp. 209-212, 1927.
+  #link("https://doi.org/10.1080/01621459.1927.10502953")[doi:10.1080/01621459.1927.10502953].
 + R. Ranftl, K. Lasinger, D. Hafner, K. Schindler, and V. Koltun, "Towards Robust Monocular Depth
-  Estimation" (MiDaS), *IEEE TPAMI*, 2020. arXiv:1907.01341. (Evaluated and rejected for weight
-  estimation; see Section 8.)
+  Estimation" (MiDaS), *IEEE TPAMI*, 2020. #link("https://arxiv.org/abs/1907.01341")[arXiv:1907.01341].
+  (Evaluated and rejected for weight estimation; see Section 8.)
++ A. Meyers et al., "Im2Calories: Towards an Automated Mobile Vision Food Diary," *ICCV*, 2015.
+  (Prior RGB-D food-diary work; reports portion size as the dominant error - the same wall CalEyeZ avoids.)
 
-== Data Sources, Tools and Previous Work
+== Data Sources, Tools and Project Documents
 
 + U.S. Department of Agriculture, *FoodData Central*.
   #link("https://fdc.nal.usda.gov/")[fdc.nal.usda.gov]
 + H. Blidh et al., *Bleak* - a cross-platform BLE library for Python.
   #link("https://github.com/hbldh/bleak")[github.com/hbldh/bleak]
-+ Full food-recognition study unfreezing deep feature layers, *PLOS ONE*, 2024.
-  doi:10.1371/journal.pone.0296789.
-+ "Transfer Learning Approach with EfficientNet to Enhance Food Recognition Systems for Health
-  Monitoring," 2025. ResearchGate 391450557.
 + CalEyeZ project site and living technical report (this project), Raz Dvora and Roi Tzur,
   Shenkar. #link("https://raz-dv-ee.github.io/CalEyeZ/")[raz-dv-ee.github.io/CalEyeZ]
 + CalEyeZ FRS and SDD documents (internal, 2025-2026).

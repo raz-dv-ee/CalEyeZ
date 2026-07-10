@@ -2050,6 +2050,32 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
     10<sup>&minus;3</sup> of each other; real margins are ~0.1+ (0.88 vs 0.12), so it never crosses &mdash; which is why
     the parity test found <b>0 top-1 mismatches</b>.</div>
 
+  <h4 style="margin:16px 0 4px;font-size:14px">One weight, followed end to end</h4>
+  <p>The whole story on a single number &mdash; how an fp32 weight is cut to fp16, padded with zeros, and how the
+    calculation refills those zeros and still lands on the same answer as the full model:</p>
+  <div style="background:#0b0f15;border:1px solid var(--line);border-radius:9px;padding:12px 15px;overflow:auto;font-size:13px;line-height:1.65;color:#e6edf3">
+    <b>1 &middot; Cut to fp16 (at export).</b> trained weight <code>0.71341827</code> (fp32) &rarr; stored as
+    <code>0.7134</code> (fp16). The low digits <code>&hellip;1827</code> are dropped for good &mdash; the <i>only</i>
+    precision ever lost.<br>
+    <b>2 &middot; Widened in memory (at load).</b> to compute, <code>0.7134</code> goes into a 32-bit slot as
+    <code>0.7134<span style="color:#f85149">0000</span></code> &mdash; the freed low bits are filled with
+    <span style="color:#f85149">zeros</span>. No information added; still <code>0.7134</code>.<br>
+    <b>3 &middot; The arithmetic fills the zeros.</b> multiply by an activation <code>0.8207</code>:
+    <code>0.7134 &times; 0.8207 = 0.5854<span style="color:#3fb950">8738</span></code> &mdash; the new digits
+    <span style="color:#3fb950">8738</span> land exactly in the slots that were zero. fp16 re-rounds them away
+    (<code>0.5855</code>); <b>fp32 keeps them</b>.<br>
+    <b>4 &middot; The numbers drive the logit.</b> a neuron sums thousands of such products; keeping those tails
+    (fp32) instead of chopping them every step (fp16) makes the summed logit match the full model &mdash; here
+    <code>8.004</code> vs the full-fp32 model's <code>8.000</code>.<br>
+    <b>5 &middot; Same decision; drift blown away.</b> softmax vs a runner-up logit <code>6.000</code>:
+    <code>P = 1/(1+e<sup>&minus;2.004</sup>) = 0.88121</code> vs the full model's <code>0.88080</code> &mdash; a
+    <code>4&times;10<sup>&minus;4</sup></code> gap. The winner leads by tenths (0.88 vs 0.12), so a
+    10<sup>&minus;3</sup> nudge can't cross it.
+  </div>
+  <p>So the <b>light fp16-shipped model reaches the identical decision as the heavy fp32 model</b> &mdash; the only
+    thing that differs is the third decimal of the probability, which never decides an answer. That is why we can
+    ship the small file and still be desktop-exact where it counts.</p>
+
   <h4 style="margin:16px 0 4px;font-size:14px">The options we actually weighed</h4>
   <p>Two independent choices: what <b>format</b> to ship the file in, and what <b>precision</b> to do the math in.
     Here is every end-to-end option and what it would cost:</p>
