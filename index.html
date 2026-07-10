@@ -543,11 +543,11 @@
   <table>
     <thead><tr><th>Augmentation</th><th>Value</th><th>What real-world condition it defeats</th></tr></thead>
     <tbody>
-      <tr><td><code>hsv_v</code> (brightness)</td><td><b>0.50</b></td><td>Exposure / dim vs bright light. Each image is shown with brightness &times;<code>U(0.5, 1.5)</code> &mdash; from <b>50% darker to 50% brighter</b>. This is the "darker plate" case, seen thousands of times.</td></tr>
-      <tr><td><code>hsv_h</code> (hue)</td><td>0.02</td><td>Colour temperature &mdash; warm tungsten vs cool fluorescent/daylight white balance.</td></tr>
+      <tr><td><code>hsv_v</code> (brightness)</td><td><b>0.50</b></td><td>Exposure / dim vs bright light. Each image is shown with brightness &times;<code>U(0.5, 1.5)</code> - from <b>50% darker to 50% brighter</b>. This is the "darker plate" case, seen thousands of times.</td></tr>
+      <tr><td><code>hsv_h</code> (hue)</td><td>0.02</td><td>Colour temperature - warm tungsten vs cool fluorescent/daylight white balance.</td></tr>
       <tr><td><code>hsv_s</code> (saturation)</td><td>0.75</td><td>Washed-out vs vivid colour under different lights (&times;<code>U(0.25, 1.75)</code>).</td></tr>
       <tr><td>custom blur</td><td>p=0.35</td><td>Motion/defocus/Gaussian blur (Albumentations) on 35% of batches: a live webcam is rarely perfectly sharp. 65% stay sharp so clean food is still learned.</td></tr>
-      <tr><td><code>erasing</code></td><td>0.40</td><td>Random occlusion &mdash; glare spots, a hand, or clutter over part of the dish.</td></tr>
+      <tr><td><code>erasing</code></td><td>0.40</td><td>Random occlusion - glare spots, a hand, or clutter over part of the dish.</td></tr>
       <tr><td><code>degrees</code> / <code>scale</code> / <code>translate</code> / flips</td><td>20 / 0.60 / 0.15 / 0.5</td><td>Pose invariance: food has no canonical orientation and the demo camera is hand-held and angled.</td></tr>
     </tbody>
   </table>
@@ -562,7 +562,7 @@
     <b>88.18%</b> and holds up under real conditions. We chose the ~2-point clean-test cost on purpose,
     because the deployment environment is a kitchen, not a lab.</div>
   <div class="callout green"><b>The proof it worked, in our own numbers.</b> The near-zero
-    <b>validation-vs-test gap (88.16% vs 88.18%)</b> shows the model is <i>not overfitting</i> &mdash;
+    <b>validation-vs-test gap (88.16% vs 88.18%)</b> shows the model is <i>not overfitting</i> -
     exactly what heavy augmentation buys; an under-augmented model would show a large gap and collapse
     off-distribution. And it transfers: on unseen real phone photos the system scored <b>30/40 = 75%</b>
     (about 85% on the expanded set), and a pepper reads 99.97% across wood and dark backgrounds.</div>
@@ -932,7 +932,7 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
 
   <!-- Stage 0: the EXACT real architecture of our model -->
   <div class="cnn-stage" id="arch-stage">
-    <h4>The exact layers in our model &mdash; YOLO11l-cls, start to end</h4>
+    <h4>The exact layers in our model - YOLO11l-cls, start to end</h4>
     <p class="legend">This is not a generic diagram: the table is read <b>directly from our trained
       <code>best.pt</code></b> by pushing one 320&times;320&times;3 image through the network and recording the
       output tensor of every block. Our Global model is <b>11 top-level blocks</b> (which expand to
@@ -942,7 +942,7 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
     <table>
       <thead><tr><th>#</th><th>Block</th><th>Output (C×H×W)</th><th class="r">Params</th><th>What it does</th></tr></thead>
       <tbody>
-        <tr><td>0</td><td>Conv (stem)</td><td><code>64 × 160 × 160</code></td><td class="r">1,856</td><td>First convolution, stride 2 halves the image; learns 64 low-level filters (edges, colour blobs) &mdash; exactly the kernels in the panels below.</td></tr>
+        <tr><td>0</td><td>Conv (stem)</td><td><code>64 × 160 × 160</code></td><td class="r">1,856</td><td>First convolution, stride 2 halves the image; learns 64 low-level filters (edges, colour blobs) - exactly the kernels in the panels below.</td></tr>
         <tr><td>1</td><td>Conv</td><td><code>128 × 80 × 80</code></td><td class="r">73,984</td><td>Downsample again and widen to 128 channels (more filter types).</td></tr>
         <tr><td>2</td><td>C3k2</td><td><code>256 × 80 × 80</code></td><td class="r">173,824</td><td>CSP block: splits the features, runs a stack of small bottleneck convs, concatenates. Builds <b>textures</b> from edges.</td></tr>
         <tr><td>3</td><td>Conv</td><td><code>256 × 40 × 40</code></td><td class="r">590,336</td><td>Downsample to 40×40.</td></tr>
@@ -956,7 +956,7 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
       </tbody>
     </table>
     <p class="legend">The <b>Israeli expert</b> is the identical YOLO11l-cls backbone but fed 224×224 (so the grid
-      is 112&rarr;7 instead of 160&rarr;10) with a 14-class head &mdash; 11 blocks, 12.85M parameters. The four
+      is 112&rarr;7 instead of 160&rarr;10) with a 14-class head - 11 blocks, 12.85M parameters. The four
       stages below zoom into what happens <i>inside</i> these blocks, and the last stage runs the block-0 style
       filters on a real photo you upload.</p>
   </div>
@@ -1036,7 +1036,7 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
   <div class="cnn-stage" id="rp-stage">
     <h4>On a real photo · run the filters and see the outcome after each one</h4>
     <p class="legend">Everything above used a tiny synthetic image so the arithmetic was visible. Here it runs
-      for real: upload any food photo and the browser applies real 3&times;3 convolution kernels to it &mdash;
+      for real: upload any food photo and the browser applies real 3&times;3 convolution kernels to it -
       exactly the operation the first layer of the YOLO11 backbone performs. Each panel below is the feature map
       that one filter produces, i.e. the outcome after that filter. Nothing is uploaded to a server; the
       convolution runs entirely in your browser.</p>
@@ -1056,14 +1056,14 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
     <h4 style="margin-top:16px">Layer 2 · pool, then filter again (edges &rarr; corners &amp; parts)</h4>
     <p class="legend">The layer-1 edge magnitude is downsampled 2&times;2 (max-pool) and convolved again.
       Stacking this is how deeper layers build from edges to textures to parts to whole objects, at
-      lower and lower resolution &mdash; the same pattern as the synthetic depth boxes above.</p>
+      lower and lower resolution - the same pattern as the synthetic depth boxes above.</p>
     <div class="cnn-row" id="rpL2" style="align-items:flex-start"></div>
 
     <h4 style="margin-top:18px">Our real model · true activations from all 11 blocks</h4>
     <p class="legend">The panels above use illustrative textbook kernels. This runs your uploaded photo through
       <b>our actual trained network</b> (<code>global_features_fp16.onnx</code>, ~26&nbsp;MB, downloaded once)
       in the browser via ONNX&nbsp;Runtime&nbsp;Web, and shows the <b>mean activation of every one of the 11 blocks</b>
-      &mdash; the real feature maps, start to end, at their true resolutions (160&sup2; down to 10&sup2;). Bright =
+      - the real feature maps, start to end, at their true resolutions (160&sup2; down to 10&sup2;). Bright =
       strongly firing. The final block is the 132-class softmax, so it also prints what the model actually predicts.</p>
     <div class="ctrl">
       <button id="rpModelBtn">🧠 Run our real 11-layer model on this photo</button>
@@ -1137,7 +1137,7 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
         for(let i=0;i<W*H;i++)gray[i]=0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2];
         lastImg=img;
         document.getElementById('rpHint').textContent=f.name+' · convolved locally in your browser';
-        document.getElementById('rpModelHint').textContent='photo ready — click to run our real model';
+        document.getElementById('rpModelHint').textContent='photo ready - click to run our real model';
         run();
       }; img.src=URL.createObjectURL(f);
     });
@@ -1204,7 +1204,7 @@ clf.<span class="fn">save_model</span>(<span class="st">"scripts/arbiter/arbiter
         const pr=out['probs'].data; let bi=0,bv=-1; for(let i=0;i<pr.length;i++){ const v=h2f(pr[i]); if(v>bv){bv=v;bi=i;} }
         const nm=(NAMES&&(NAMES[bi]||NAMES[String(bi)]))||('class '+bi);
         document.getElementById('rpPred').innerHTML=`Model prediction on your photo: <b>${nm}</b> (${(bv*100).toFixed(1)}%) · ${ms} ms on-device (WASM). These are the real activations of every block in our network.`;
-        hint.textContent='done — real activations shown below';
+        hint.textContent='done - real activations shown below';
         [...out?Object.values(out):[]].forEach(t=>t.dispose&&t.dispose());
       }catch(e){ hint.textContent='error: '+e.message; }
     }
@@ -1769,7 +1769,7 @@ raw = deque(maxlen=<span class="st">5</span>)
       <tr><td>any</td><td>GATT disconnect</td><td>reset weight to 0</td><td>DISCONNECTED</td></tr>
     </tbody>
   </table>
-  <div class="callout green"><b>Why a state machine.</b> A live sensor link is never "connected or not" &mdash;
+  <div class="callout green"><b>Why a state machine.</b> A live sensor link is never "connected or not" -
     it drops, flickers, and goes silent. Modelling it as explicit states with a <b>staleness watchdog</b>
     (no packet for 4 s &rarr; automatic reconnect) and a <b>stability gate</b> (STABLE only when ten
     consecutive samples agree to 2 g) is what makes the reading trustworthy enough to multiply into a
@@ -2002,77 +2002,77 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
     </tbody>
   </table>
   <p>So the phone downloads small fp16 files either way; on the default CPU path each weight is widened to fp32 for the
-    computation. <b>Widening does not recover the bits fp16 dropped</b> &mdash; a widened fp16 value is the same rounded
-    number with trailing zeros, no new information &mdash; it just stops the <i>millions of multiply-adds</i> from
+    computation. <b>Widening does not recover the bits fp16 dropped</b> - a widened fp16 value is the same rounded
+    number with trailing zeros, no new information - it just stops the <i>millions of multiply-adds</i> from
     re-rounding at every step, which is where fp16 <i>compute</i> actually loses accuracy. The only difference left
     from desktop is a ~10<sup>&minus;3</sup> probability drift from rounding the weights to fp16 once at export; the
     <b>decision</b> is identical. That single distinction is why CPU/WASM is the default and WebGPU is opt-in.</p>
 
-  <div class="callout"><b>A concrete example &mdash; so why do the zeros help at all?</b> They don&rsquo;t, directly &mdash;
+  <div class="callout"><b>A concrete example - so why do the zeros help at all?</b> They don&rsquo;t, directly -
     you&rsquo;re right. Picture <b>fp16 as a calculator that shows 4 digits</b> and <b>fp32 as one that shows 8</b>. The
     weights are 4-digit either way, so padding zeros adds no accuracy to them. What changes is the <i>running total</i>
     a layer builds from thousands of multiply-adds. On the 4-digit calculator, <code>1000&nbsp;+&nbsp;0.04&nbsp;=&nbsp;1000</code>
     (the 0.04 is below its precision, so it <b>vanishes</b>); do that a hundred times and you still read <code>1000</code>
     when the truth is <code>1004</code>. The 8-digit calculator keeps <code>1000.0400&nbsp;&rarr;&nbsp;1004.0000</code>.
     So fp16 arithmetic quietly <b>drops small activations that can decide a borderline food</b>. Widening to fp32 loads
-    the same 4-digit weight into an 8-digit register so every step afterward has room &mdash; the zeros are just the
+    the same 4-digit weight into an 8-digit register so every step afterward has room - the zeros are just the
     loading; the win is the arithmetic. The desktop uses the same 8-digit (fp32) arithmetic, which is why the browser
     matches its <i>decision</i>; the only residual gap is 4-digit vs 8-digit <i>inputs</i> (~10<sup>&minus;3</sup>),
     which never piles up. &ldquo;Just compute in fp16&rdquo; means doing every step on the 4-digit calculator, so the
-    rounding compounds thousands of times &mdash; and that is what flips pizza vs hamburger on the WebGPU path.</div>
+    rounding compounds thousands of times - and that is what flips pizza vs hamburger on the WebGPU path.</div>
 
   <h4 style="margin:16px 0 4px;font-size:14px">What a &ldquo;mantissa&rdquo; is, and the multiply that overflows it</h4>
   <p>A floating-point number is stored as <b>sign &times; mantissa &times; 2<sup>exponent</sup></b>. The <b>mantissa</b>
     holds the significant digits, and the <i>number of mantissa bits</i> is what sets the precision. <b>fp16 has 10
-    mantissa bits</b> (~3&ndash;4 decimal digits); <b>fp32 has 23</b> (~7 digits). The exponent handles magnitude, so fp16
-    isn&rsquo;t short on <i>range</i> (it reaches 65,504) &mdash; it&rsquo;s short on <i>digits</i>. That is the &ldquo;room
+    mantissa bits</b> (~3-4 decimal digits); <b>fp32 has 23</b> (~7 digits). The exponent handles magnitude, so fp16
+    isn&rsquo;t short on <i>range</i> (it reaches 65,504) - it&rsquo;s short on <i>digits</i>. That is the &ldquo;room
     to grow&rdquo; you need: not room for bigger numbers, room for <b>more significant digits</b>.</p>
-  <p>Watch it in one multiply-accumulate &mdash; the operation a CNN does millions of times. Multiply a weight by an
+  <p>Watch it in one multiply-accumulate - the operation a CNN does millions of times. Multiply a weight by an
     activation, each stored to ~4 digits (fp16):</p>
   <pre style="background:#0b0f15;border:1px solid var(--line);border-radius:9px;padding:12px 14px;overflow:auto;font-size:12.5px;line-height:1.6;color:#e6edf3">weight 1.234  ×  activation 5.678  =  7.006652   ← the exact product needs 7 digits
    fp16 (10-bit mantissa) → rounds back to 7.007     ← the tail .000652 is chopped
    fp32 (23-bit mantissa) → keeps       7.006652     ← all 7 digits fit</pre>
-  <p>In bits: two 10-bit mantissas multiply into a result up to <b>~20 bits</b> wide &mdash; fp32&rsquo;s 23-bit mantissa
+  <p>In bits: two 10-bit mantissas multiply into a result up to <b>~20 bits</b> wide - fp32&rsquo;s 23-bit mantissa
     has room to hold it, fp16&rsquo;s 10-bit does not, so fp16 <b>rounds it away at every step</b>. That is exactly your
-    intuition &mdash; the product of two 16-bit numbers wants ~32 bits, and only fp32 keeps them. A layer sums thousands
+    intuition - the product of two 16-bit numbers wants ~32 bits, and only fp32 keeps them. A layer sums thousands
     of these products, so in fp16 the chopped tails compound; in fp32 they stay. Widening the fp16 weights to fp32
-    before computing gives each intermediate product that room &mdash; which is the whole point of <i>computing at higher
+    before computing gives each intermediate product that room - which is the whole point of <i>computing at higher
     precision than you store</i>.</p>
 
   <div class="callout"><b>So why is the leftover gap only ~10<sup>&minus;3</sup>?</b> It falls straight out of the
-    mantissa width. (1) fp16 rounds each weight by at most half a mantissa step &mdash; near 1.0 that&rsquo;s
+    mantissa width. (1) fp16 rounds each weight by at most half a mantissa step - near 1.0 that&rsquo;s
     2<sup>&minus;11</sup> &asymp; <b>5&times;10<sup>&minus;4</sup></b> relative. (2) A logit
     <code>z&nbsp;=&nbsp;&Sigma;&nbsp;w&middot;x</code> inherits that: worst case ~5&times;10<sup>&minus;4</sup>, usually
-    less (random errors cancel). (3) Softmax passes it through ~1:1 &mdash; e.g. top logit 8.000 vs runner-up 6.000 gives
+    less (random errors cancel). (3) Softmax passes it through ~1:1 - e.g. top logit 8.000 vs runner-up 6.000 gives
     <code>p&nbsp;=&nbsp;1/(1+e<sup>&minus;2.000</sup>)&nbsp;=&nbsp;0.88080</code>; nudge the margin to 2.004 and
-    <code>p&nbsp;=&nbsp;0.88121</code> &mdash; a <b>4&times;10<sup>&minus;4</sup></b> shift. The measured max over all
+    <code>p&nbsp;=&nbsp;0.88121</code> - a <b>4&times;10<sup>&minus;4</sup></b> shift. The measured max over all
     rows/classes is ~10<sup>&minus;3</sup>. The top-1 only flips if the two best probabilities sit <i>within</i>
-    10<sup>&minus;3</sup> of each other; real margins are ~0.1+ (0.88 vs 0.12), so it never crosses &mdash; which is why
+    10<sup>&minus;3</sup> of each other; real margins are ~0.1+ (0.88 vs 0.12), so it never crosses - which is why
     the parity test found <b>0 top-1 mismatches</b>.</div>
 
   <h4 style="margin:16px 0 4px;font-size:14px">One weight, followed end to end</h4>
-  <p>The whole story on a single number &mdash; how an fp32 weight is cut to fp16, padded with zeros, and how the
+  <p>The whole story on a single number - how an fp32 weight is cut to fp16, padded with zeros, and how the
     calculation refills those zeros and still lands on the same answer as the full model:</p>
   <div style="background:#0b0f15;border:1px solid var(--line);border-radius:9px;padding:12px 15px;overflow:auto;font-size:13px;line-height:1.65;color:#e6edf3">
     <b>1 &middot; Cut to fp16 (at export).</b> trained weight <code>0.71341827</code> (fp32) &rarr; stored as
-    <code>0.7134</code> (fp16). The low digits <code>&hellip;1827</code> are dropped for good &mdash; the <i>only</i>
+    <code>0.7134</code> (fp16). The low digits <code>&hellip;1827</code> are dropped for good - the <i>only</i>
     precision ever lost.<br>
     <b>2 &middot; Widened in memory (at load).</b> to compute, <code>0.7134</code> goes into a 32-bit slot as
-    <code>0.7134<span style="color:#f85149">0000</span></code> &mdash; the freed low bits are filled with
+    <code>0.7134<span style="color:#f85149">0000</span></code> - the freed low bits are filled with
     <span style="color:#f85149">zeros</span>. No information added; still <code>0.7134</code>.<br>
     <b>3 &middot; The arithmetic fills the zeros.</b> multiply by an activation <code>0.8207</code>:
-    <code>0.7134 &times; 0.8207 = 0.5854<span style="color:#3fb950">8738</span></code> &mdash; the new digits
+    <code>0.7134 &times; 0.8207 = 0.5854<span style="color:#3fb950">8738</span></code> - the new digits
     <span style="color:#3fb950">8738</span> land exactly in the slots that were zero. fp16 re-rounds them away
     (<code>0.5855</code>); <b>fp32 keeps them</b>.<br>
     <b>4 &middot; The numbers drive the logit.</b> a neuron sums thousands of such products; keeping those tails
-    (fp32) instead of chopping them every step (fp16) makes the summed logit match the full model &mdash; here
+    (fp32) instead of chopping them every step (fp16) makes the summed logit match the full model - here
     <code>8.004</code> vs the full-fp32 model's <code>8.000</code>.<br>
     <b>5 &middot; Same decision; drift blown away.</b> softmax vs a runner-up logit <code>6.000</code>:
-    <code>P = 1/(1+e<sup>&minus;2.004</sup>) = 0.88121</code> vs the full model's <code>0.88080</code> &mdash; a
+    <code>P = 1/(1+e<sup>&minus;2.004</sup>) = 0.88121</code> vs the full model's <code>0.88080</code> - a
     <code>4&times;10<sup>&minus;4</sup></code> gap. The winner leads by tenths (0.88 vs 0.12), so a
     10<sup>&minus;3</sup> nudge can't cross it.
   </div>
-  <p>So the <b>light fp16-shipped model reaches the identical decision as the heavy fp32 model</b> &mdash; the only
+  <p>So the <b>light fp16-shipped model reaches the identical decision as the heavy fp32 model</b> - the only
     thing that differs is the third decimal of the probability, which never decides an answer. That is why we can
     ship the small file and still be desktop-exact where it counts.</p>
 
@@ -2084,7 +2084,7 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
     <tbody>
       <tr><td><b>fp32 file &rarr; fp32 math</b></td><td class="r">~100&nbsp;MB</td>
         <td>the full-precision reference</td><td>CPU, ~0.6&nbsp;s</td>
-        <td><b>Rejected:</b> doubles the download for <i>no visible gain</i> &mdash; it ends up computing in fp32 anyway (same RAM), and the fp16 version already reaches the identical decision.</td></tr>
+        <td><b>Rejected:</b> doubles the download for <i>no visible gain</i> - it ends up computing in fp32 anyway (same RAM), and the fp16 version already reaches the identical decision.</td></tr>
       <tr><td><b>fp16 file &rarr; fp32 math</b> <span style="color:var(--green)">(chosen, default)</span></td><td class="r">~50&nbsp;MB</td>
         <td>same top-1 decision (~10<sup>&minus;3</sup> drift)</td><td>CPU, ~0.6&nbsp;s</td>
         <td><b>Chosen:</b> half the download, desktop-identical decisions. Widening to fp32 is free and keeps the arithmetic clean.</td></tr>
@@ -2097,7 +2097,7 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
     </tbody>
   </table>
   <div class="callout"><b>Why not just ship fp32, then?</b> Because after widening, <b>fp16&rarr;fp32 gives the same RAM,
-    the same fp32 arithmetic, and the same decision</b> as shipping fp32 &mdash; only the download is halved. Shipping
+    the same fp32 arithmetic, and the same decision</b> as shipping fp32 - only the download is halved. Shipping
     fp32 would cost 50&nbsp;MB extra for a ~10<sup>&minus;3</sup> probability difference that never changes the answer.
     The fp16-file / fp32-compute option isn&rsquo;t a compromise; it <b>strictly beats</b> shipping fp32 for a phone.</div>
 
@@ -2167,13 +2167,13 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
   <h3 id="w-arb">The XGBoost arbiter, re-implemented in JavaScript</h3>
   <p>ORT-Web has no <code>TreeEnsemble</code> operator, so the router cannot run as ONNX in the browser. We instead
     export the trained booster to a flat JSON (<code>arbiter_trees.json</code>) and walk the trees in JavaScript.
-    This is <b>copying, not retraining, and not an approximation</b> &mdash; and below is exactly how, in plain terms.</p>
+    This is <b>copying, not retraining, and not an approximation</b> - and below is exactly how, in plain terms.</p>
 
   <div class="callout"><b>The whole idea in one picture.</b> The arbiter is <b>400 tiny yes/no flowcharts</b> (decision
     trees). For one meal, each flowchart asks a couple of questions about the two experts&rsquo; confidence numbers
     (e.g. <i>&ldquo;is the Israeli model&rsquo;s &lsquo;not-mine&rsquo; score below 0.00005?&rdquo;</i>) and ends on a
     <b>leaf holding one small vote</b>. Add up all 400 votes plus a fixed <b>starting number</b> (the base) &rarr; a
-    single score in <b>log-odds</b>. A <b>sigmoid</b> turns that score into a probability 0&ndash;1 = P(this meal is
+    single score in <b>log-odds</b>. A <b>sigmoid</b> turns that score into a probability 0-1 = P(this meal is
     Israeli). Above 0.5 &rarr; route to the Israeli expert.</p></div>
 
   <h4 style="margin:16px 0 4px;font-size:14px">The math (two lines)</h4>
@@ -2182,10 +2182,10 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
   <div style="background:#0b0f15;border:1px solid var(--line);border-radius:8px;padding:14px;margin:10px 0;text-align:center;color:#e6edf3;overflow-x:auto"><div id="eq-arb"></div></div>
   <p><b>2. Squash to a probability.</b> The sigmoid turns the log-odds score into P(israeli):</p>
   <div style="background:#0b0f15;border:1px solid var(--line);border-radius:8px;padding:14px;margin:10px 0;text-align:center;color:#e6edf3;overflow-x:auto"><div id="eq-arb-sig"></div></div>
-  <p>That is the entire model &mdash; a weighted show of hands, then a sigmoid. Nothing is learned in the browser; the
+  <p>That is the entire model - a weighted show of hands, then a sigmoid. Nothing is learned in the browser; the
     votes and questions were fixed at training time.</p>
 
-  <h4 style="margin:16px 0 4px;font-size:14px">Converting it to the browser &mdash; 3 mechanical steps</h4>
+  <h4 style="margin:16px 0 4px;font-size:14px">Converting it to the browser - 3 mechanical steps</h4>
   <p>The export script <code>scripts/arbiter/export_arbiter_trees.py</code> does exactly this and nothing more:</p>
   <ol style="margin:0 0 12px;padding-left:22px">
     <li><b>Dump the trees.</b> XGBoost&rsquo;s own <code>booster.get_dump("json")</code> writes all 400 trees as JSON

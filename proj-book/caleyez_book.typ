@@ -1590,7 +1590,7 @@ environment variable (and automatically if PyTorch is absent).
 For deployment to a low-power machine the application is packaged with PyInstaller into a
 standalone executable that bundles ONNX Runtime and the two ONNX models but *excludes*
 PyTorch and Ultralytics, giving a small, torch-free build. On a CPU this runs an analysis in
-roughly 0.35 s, versus 1–3 s for the torch CPU path. The packaged executable ships with *no*
+roughly 0.35 s, versus 1-3 s for the torch CPU path. The packaged executable ships with *no*
 API keys; the user supplies a USDA key through an environment variable or a key file beside
 the executable, and an empty key simply yields a blank nutrition panel rather than an error.
 
@@ -2221,7 +2221,7 @@ The ONNX edge build was validated against the PyTorch models so the torch-free d
 be trusted. Over 200 test images per model the top-1 predictions matched with *0% mismatch*,
 and the full pipeline (two ONNX models plus the XGBoost router) agreed on routing for every
 tested image, with a maximum probability difference of about 0.013. On a CPU the build runs an
-analysis in roughly *0.35 s*, versus 1–3 s for the PyTorch CPU path, confirming the edge build
+analysis in roughly *0.35 s*, versus 1-3 s for the PyTorch CPU path, confirming the edge build
 is both faithful and fast enough for interactive use.
 
 == Real-World Field Validation
@@ -2450,7 +2450,7 @@ error - and it earned that while conceding every advantage to the competition.
   [*CalEyeZ*], [*37%*], [measures grams on a BLE scale],
   [MyFitnessPal], [49%], [user weighs and types the true grams (generous manual case)],
   [Cal.ai], [64%], [cloud model guesses a typical serving from a photo],
-  [FoodVisor], [--], [photo estimate; paywalled after one free image],
+  [FoodVisor], [n/a], [photo estimate; paywalled after one free image],
 )
 
 #figure(
