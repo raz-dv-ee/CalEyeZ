@@ -68,7 +68,7 @@ CalEyeZ is an integrated IoT solution designed to automate the process of nutrit
 | :--- | :--- |
 | **BLE** | Bluetooth Low Energy: A wireless personal area network technology used for transmitting weight data from the scale to the PC. |
 | **YOLO** | You Only Look Once: A real-time object detection algorithm used for the computer vision engine to identify food items. |
-| **GUI** | Graphical User Interface: The visual dashboard (built with CustomTkinter) allowing user interaction and data visualization. |
+| **GUI** | Graphical User Interface: The visual dashboard (built with Tkinter/ttk) allowing user interaction and data visualization. |
 | **GATT** | Generic Attribute Profile: The Bluetooth protocol layer used to decode the scale's raw data packets into readable weight values. |
 | **OCR** | Optical Character Recognition: A technology initially researched for reading the scale's 7-segment display (deprecated in favor of BLE due to instability). |
 | **USDA** | United States Department of Agriculture: The external source database used for retrieving caloric and nutritional values. |
@@ -186,14 +186,14 @@ This section details the functional specifications of the hardware and software 
     * **Key Activities:** Synchronizes the asynchronous threads (BLE stream vs. UI events), performs the mathematical calculation of calories/nutrients based on weight and type, and manages error handling (e.g., "Object not identified").
 6.  **GUI/Dashboard:**
     * **Role:** The Human-Machine Interface (HMI).
-    * **Technology:** Python Tkinter / CustomTkinter.
+    * **Technology:** Python Tkinter / ttk (standard library).
     * **Features:** Displays the live camera feed, real-time weight graph, nutritional breakdown cards, and control buttons.
 7.  **Nutritional Database Module:**
     * **Role:** Provides the raw data for calculation.
     * **Operation:** Acts as a lookup table (Local DB or cached API response) mapping food labels (e.g., "Banana") to their macronutrient profiles (Calories, Protein, Fat, Carbs per 100g).
 
 ### c. GUI
-The CalEyeZ user interface is designed with a focus on usability and real-time data visualization. Built using the CustomTkinter framework, it provides a modern, high-contrast dashboard that allows users to monitor the fusion process between the physical weight and the visual recognition.
+The CalEyeZ user interface is designed with a focus on usability and real-time data visualization. Built using Tkinter/ttk (the Python standard library) with a custom dark theme, it provides a modern, high-contrast dashboard that allows users to monitor the fusion process between the physical weight and the visual recognition.
 
 **Key Interface Elements:**
 1.  **Live Monitoring Panel:**
@@ -216,7 +216,7 @@ The CalEyeZ user interface is designed with a focus on usability and real-time d
 | 2 | Generic Web Camera | 1080p Resolution @30fps. Standard RGB Sensor via USB interface. | 1 | Existing Inventory |
 | 3 | Desktop Workstation | Stationary PC with NVIDIA GPU (CUDA Support) for YOLOv8 Training & Inference. | 1 | Existing Inventory |
 | 4 | Calibration Objects | Known mass reference objects (e.g., sealed consumer goods) for sensor verification. | Var | Ad-Hoc/Available |
-| 5 | Software Environment | Python 3.10, PyTorch, OpenCV, Bleak (BLE Library), CustomTkinter. | | Open Source |
+| 5 | Software Environment | Python 3.10, PyTorch, OpenCV, Bleak (BLE Library), Tkinter/ttk. | | Open Source |
 
 ## 6. Risk Management
 
@@ -253,7 +253,7 @@ The CalEyeZ user interface is designed with a focus on usability and real-time d
 * **System Logic:** Developed the core Python controller, BLE drivers, and the main decision logic (Fusion Engine).
 
 **Roi Tzur:**
-* **Frontend Lead (GUI):** Designed and implemented the user interface using CustomTkinter, focusing on real-time visualization of the camera feed and weight graphs.
+* **Frontend Lead (GUI):** Designed and implemented the user interface using Tkinter/ttk, focusing on real-time visualization of the camera feed and weight graphs.
 * **CV Research (OCR):** Conducted the feasibility study for Optical Character Recognition, analyzing Tesseract/EasyOCR performance on digital screens (Outcome: Pivot to BLE).
 * **Quality Assurance (QA):** Executed system integration tests (SIT) and validated the nutritional calculation accuracy against ground truth labels.
 * **Usability Testing:** Managed user acceptance testing (UAT) to optimize the dashboard workflow and responsiveness.

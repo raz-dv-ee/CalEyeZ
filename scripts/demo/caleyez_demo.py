@@ -7,7 +7,7 @@ Pipeline per capture:
       -> lighting normalisation (gray-world white balance + CLAHE)
       -> Global model (132 cls, imgsz 320) and Israeli model (13 cls, imgsz 224), both via
          Ultralytics predict() so letterboxing makes the result resolution independent
-      -> 19-feature vector -> XGBoost arbiter -> P(israeli) -> pick the expert
+      -> 20-feature vector -> XGBoost arbiter -> P(israeli) -> pick the expert
       -> confidence gate: if the chosen expert is weak OR both experts are unsure,
          fall back to the Gemini vision API (covers the "both models wrong" case)
       -> nutrition: local DB first, else USDA, scaled by the BLE weight in grams.
@@ -571,6 +571,10 @@ def nutrition(label: str, grams: int) -> dict:
 # ==========================================================================================
 weight_buffer = deque([0] * MAX_HISTORY, maxlen=MAX_HISTORY)
 raw_buffer = deque(maxlen=5)   # last few raw decodes, median-filtered to reject flicker/overshoot
+# Scale calibration (Experiment B): corrected_g = CAL_A + CAL_B * raw. Fit over 10 reference masses
+# (21-1062 g); the fault is a pure multiplicative span error, so the fit is through-origin (CAL_A=0),
+# which avoids over-reading light items. Residual ~5 g (raw 16% span -> ~1-3%).
+CAL_A, CAL_B = 0.0, 1.17804
 current_weight = 0
 manual_weight = 0          # used when the BLE scale is not connected
 ble_status = "no BLE" if not _BLE_OK else "scanning"
@@ -606,6 +610,10 @@ def on_notify(_sender, data):
     raw_buffer.append(raw)
     s = sorted(raw_buffer)
     w = s[len(s) // 2]                 # median of the last few raw decodes
+    # Calibration step (hex decode above is unchanged): the IDOdan reads a steady ~16% LOW (fixed span
+    # error), so its LCD is not the true mass. corrected = CAL_A + CAL_B*raw, fit from 6 reference
+    # masses vs two calibrated scales (R^2=0.9996; 16.2% -> ~1%). This is why we show a different g.
+    w = max(0, round(CAL_A + CAL_B * w))
     current_weight = w
     weight_buffer.append(w)
     last10 = list(weight_buffer)[-10:]
@@ -781,8 +789,8 @@ class CalEyeZDemo:
         self.reasons_canvas = tk.Canvas(dec, height=104, bg=PANEL, highlightthickness=0)
         self.reasons_canvas.pack(fill="x", padx=12, pady=(2, 6))
 
-        # live arbiter math: the actual 19 features and the logit -> sigmoid -> P(israeli) computation
-        tk.Label(dec, text="ARBITER MATH  (live 19-feature vector -> P)", bg=PANEL, fg=MUT,
+        # live arbiter math: the actual 20 features and the logit -> sigmoid -> P(israeli) computation
+        tk.Label(dec, text="ARBITER MATH  (live 20-feature vector -> P)", bg=PANEL, fg=MUT,
                  font=("Segoe UI", 8, "bold")).pack(anchor="w", padx=12)
         self.math_lbl = tk.Label(dec, text="(press Analyze)", bg=CARD, fg=INK, justify="left",
                                   anchor="w", font=("Consolas", 9), padx=8, pady=6)

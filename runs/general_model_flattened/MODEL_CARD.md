@@ -1,7 +1,7 @@
 # Model Card — Global Food Classifier (Flattened, 132-class)
 
 **Run:** `runs/general_model_flattened/`
-**Weights:** `weights/best.pt` (epoch 73) · 25.1 MB
+**Weights:** `weights/best.pt` (epoch 86, the top-1/top-5 fitness peak Ultralytics checkpoints; 86 + patience 30 = 116) · 25.1 MB
 **Date trained:** 2026-06-01
 **Status:** New Global baseline. Trained on the cleaned, leakage-free dataset. Not yet
 wired into the router/Israeli fusion (label space changed 142 → 132).
@@ -33,7 +33,7 @@ wired into the router/Israeli fusion (label space changed 142 → 132).
 | augmentation | heavy domain-shift (HSV, rotation/shear/perspective, erasing 0.4, mixup 0.1, mosaic 0) + Albumentations blur callback (p=0.35) |
 | AMP | on · peak VRAM ~2.2 GB (RTX 3060 Ti) |
 
-## Results (best.pt, epoch 73)
+## Results (best.pt, epoch 86)
 | Metric | Validation | **Test (clean)** |
 |---|---|---|
 | Top-1 | 88.16% | **88.18%** |

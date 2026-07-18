@@ -33,7 +33,7 @@
 - **Edge build:** both models exported to **ONNX** (torch-free CPU), parity 0% top-1 mismatch,
   ~352 ms/Analyze on CPU. PyInstaller standalone exe.
 - **Real-image field test:** 30/40 = **75%**, Wilson 95% CI [59.8, 85.8] (later updated set 85.1% on 47 photos).
-- **GUI:** Python + CustomTkinter, single-window dashboard.
+- **GUI:** Python + Tkinter/ttk, single-window dashboard.
 - **Authors:** Raz Dvora & Roi Tzur. Supervisors: Dr. Gabriela Dorfman Furman, Dr. Zeev Weissman. Shenkar.
 
 ---

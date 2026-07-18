@@ -181,7 +181,8 @@ device from a "guessing tool" into a precise nutritional instrument.
   uncertainty signals (confidence, entropy, margin) plus an *open-set "background" signal*,
   rather than a hand-tuned confidence threshold.
 - *Sensor fusion* of a visual classifier with a reverse-engineered BLE scale (GATT serial
-  profile), giving laboratory-grade weight with consumer-grade ease of use.
+  profile), giving a directly-measured mass (about 1-3% error after calibration) with consumer-grade
+  ease of use.
 - A *torch-free ONNX edge build* that runs the full pipeline on a CPU-only device.
 
 *Target Audience.* Health-conscious end users and dieters; dietitians/nutritionists who
@@ -195,7 +196,7 @@ deliver an end-to-end automated pipeline from a single image to a nutrition repo
 
 *Methodology.* Data collection and cleaning (leakage-free splits) → transfer-learning
 of two YOLO11 classifiers → feature extraction and training of the XGBoost router →
-reverse-engineering of the BLE scale protocol → integration into a CustomTkinter desktop
+reverse-engineering of the BLE scale protocol → integration into a Tkinter/ttk desktop
 application → field validation on real photographs → export to an ONNX edge build.
 
 == Problem Definition
@@ -218,7 +219,7 @@ type in a weight.
   searching for items and *typing in the weight*. High friction; accuracy is bounded by
   human estimation.
 - *FoodVisor (visual volume estimation).* Uses deep learning to segment food and estimate
-  3-D volume for calories. Innovative, but the *density problem* makes volume→mass
+  3-D volume for calories. Appealing, but the *density problem* makes volume→mass
   conversion inaccurate, so users must manually correct portions; its classifier is also
   trained on global data and struggles with local cuisines.
 
@@ -257,11 +258,13 @@ the 80% target - with the Global model at *88.18%* test top-1 and a router ROC-A
 *Project scope.* A *desktop / edge prototype* covering: (a) food classification via a
 dual-model YOLO11 ensemble and an XGBoost router; (b) weight acquisition via a BLE-enabled
 digital scale; (c) nutritional retrieval from the USDA API with a local fallback; and
-(d) a CustomTkinter GUI that fuses and displays the results.
+(d) a Tkinter/ttk GUI that fuses and displays the results.
 
 *Exclusions (non-goals).*
 - *Volumetric / depth-based weight estimation* - evaluated and rejected (density problem).
-- *Native mobile app* - out of scope; the prototype is desktop-based.
+- *Native mobile app* - out of scope; mobile is served through the browser web app (a PWA-style
+  static site that runs the full on-device pipeline, Decision D-20 and the Web Application chapter),
+  not a native iOS/Android build.
 - *Medical diagnosis or dietary prescription* - the output is informational only.
 - *Multi-food plate segmentation* - one dominant item per image.
 - *Real-time video* - static "snap-and-process" only.
@@ -309,14 +312,15 @@ written so it can be objectively verified in Section 5 and Section 8.
   decoding the scale's HEX notification packets.
 + Reject transient flicker/overshoot in the weight stream with a median filter and report
   a stable reading.
-+ Query the USDA FoodData Central API with the identified food label to retrieve
-  macronutrients per 100 g, with a local JSON database as offline fallback.
++ Resolve macronutrients per 100 g from a local curated JSON table first (for Israeli
+  dishes the USDA database covers poorly), then the USDA FoodData Central API keyed on the
+  identified food label, with a cloud (Gemini) estimate as a last resort.
 + Compute the final nutritional values from weight and the per-100 g factors.
 + Degrade gracefully (show "service unavailable" / fall back to cache) if the API is
   unreachable or times out.
 
 *User Interface*
-+ Provide a single-window CustomTkinter dashboard with a live camera feed, a live weight
++ Provide a single-window Tkinter/ttk dashboard with a live camera feed, a live weight
   reading, and an "Analyze" trigger.
 + Show the predicted class, its confidence, and the router decision (which expert won, and
   $P("israeli")$).
@@ -325,7 +329,7 @@ written so it can be objectively verified in Section 5 and Section 8.
 *Motivation.* The dual-model and routing requirements exist because a single monolithic
 classifier suffers catastrophic forgetting when local dishes are added (see Section 3.3). The
 $80%$ target is the project's contractual accuracy floor. The BLE requirement replaces the
-abandoned OCR path, which failed the lighting-robustness requirement. The USDA dependency
+abandoned OCR path, which failed the lighting-tolerance requirement. The USDA dependency
 follows from the goal of reporting standardised, sourced nutritional data rather than
 hard-coded estimates.
 
@@ -339,7 +343,7 @@ The primary scenario, "logging a meal", runs end to end as follows:
 + Both classifiers run on the frame. The XGBoost router reads their features and selects the
   expert - for an Israeli dish it routes to the Local model, otherwise to the Global model.
 + The chosen label and the weight are fused; the USDA lookup returns macros per 100 g.
-+ The dashboard shows, e.g., "Cheese Bourekas - 120 g - 350 kcal" with the macronutrient
++ The dashboard shows, e.g., "Cheese Bourekas - 120 g - 432 kcal" with the macronutrient
   breakdown, and appends the record to the local history log.
 
 // ============================================================
@@ -637,7 +641,7 @@ lets the head settle first, protecting the very features transfer learning is su
 The Global model is trained on the cleaned 132-class dataset at 320 px; the Israeli model on
 13 dishes plus an open-set *background* class at 224 px. The full training call (Global model)
 is reproduced here - note the cosine schedule, dropout and the deliberately
-heavy geometric/photometric augmentation that buys classroom robustness:
+heavy geometric/photometric augmentation that buys classroom resilience:
 
 ```python
 model = YOLO("yolo11l-cls.pt")
@@ -706,13 +710,14 @@ $ "Var"(hat(g)) prop sigma^2 / B $
 That single relation drives the whole batch-size trade-off. A *large* batch gives a smooth,
 low-noise gradient and uses the hardware efficiently, but each step costs more memory and there
 are fewer steps per epoch. A *small* batch gives a noisy gradient, but the noise itself is a mild
-regulariser (it helps escape sharp minima), and the small batch forced by our 8 GB VRAM budget is
+regulariser (it helps escape sharp minima), so the small batch we chose is
 therefore not purely a cost. You get many more updates per pass. One *epoch* is
 one full pass over the training set, so it contains $N \/ B$ steps. For our Global model,
-$N = 69{,}491$ training images at $B = 16$ give about $4{,}343$ steps per epoch, and training ran
-for 116 epochs before early stopping. As Section 3.3.8 explains, our batch size was not a free
-choice: it was capped by GPU memory, so we accepted a noisier gradient in exchange for a higher
-image resolution.
+$N = 69{,}487$ training images at $B = 16$ give about $4{,}343$ steps per epoch, and training ran
+for 116 epochs before early stopping. As Section 3.3.8 explains, batch size was a deliberate
+trade rather than a memory limit (the 320 px run measured only about 2.2 GB of the 8 GB card): we
+accepted a noisier gradient in exchange for a higher image resolution, where fine-grained food
+gains the most.
 
 === Training loss, validation loss, and why we need a validation set
 
@@ -732,7 +737,8 @@ precisely the behaviour our run shows (see Figure 3). The validation loss bottom
 epoch 50 (validation loss 0.558 against a training loss of 0.346, a gap of 0.21), after which the
 training loss kept dropping to 0.087 while the validation loss drifted back up to 0.667, widening
 the gap to 0.58. Because we keep the weights that were best on validation rather than the last
-ones, the *deployed* `best.pt` is frozen near that peak (epoch 73, validation top-1 88.16%) and is
+ones, the *deployed* `best.pt` is frozen at that peak (epoch 86, validation top-1 88.15%; Ultralytics
+checkpoints and early-stops on the mean of top-1 and top-5, whose peak is epoch 86) and is
 unaffected by the later overfitting. *Early stopping* with patience 30 then halts training once
 the validation metric has not improved for 30 epochs, which is why 150 planned epochs ended at
 116. This is also why our validation and test scores agreeing (88.16% vs 88.18%) is meaningful:
@@ -750,16 +756,17 @@ $ M_"act" prop B times H times W times C $
 
 that is, linearly with batch size and with the image area $H times W$. Raising the input from
 $224^2$ to $320^2$ multiplies the area, and hence the activation memory, by
-$(320\/224)^2 approx 2.04$. To stay inside the 8 GB budget of the RTX 3060 Ti we therefore halved
-the batch from 32 to 16, which divides activation memory by two and roughly cancels the increase
-(measured footprint about 2.2 GB under mixed precision). The engineering point is that resolution
-and batch size trade against each other under a fixed memory ceiling
-$B times H times W times C lt.eq M$, and for fine-grained food the *resolution* is the stronger
-accuracy lever, so we spent the budget there and accepted the noisier small-batch gradient. The
-same ceiling is why we used the YOLO11l backbone rather than the larger YOLO11x: a bigger model
-plus 320 px plus a usable batch would not co-exist in 8 GB. In short, the hardware did not corrupt
-the results, but it bounded them: a larger memory budget would permit a larger backbone or batch
-and is one of the few remaining levers (Section 8) now that the system is model-limited.
+$(320\/224)^2 approx 2.04$. Resolution and batch size trade against each other under a fixed
+memory ceiling $B times H times W times C lt.eq M$, but on this card the ceiling was slack: at
+320 px with batch 16 the measured footprint was only about 2.2 GB under mixed precision, well
+inside the 8 GB of the RTX 3060 Ti, so batch 16 was a choice rather than a memory limit (batch 32,
+roughly 4.4 GB, would still have fit). We ran batch 16 because for fine-grained food the
+*resolution* is the stronger accuracy lever than batch size, so we spent the budget there, and the
+small-batch gradient noise is a mild regulariser rather than a pure cost. The 8 GB did bound the
+extremes rather than the shipped run: a much larger batch, or the heavier YOLO11x backbone at
+320 px, would eventually exhaust it, so more memory remains one of the few levers (Section 8) now
+that the system is model-limited. In short, the hardware did not corrupt the results, and on the
+shipped configuration it did not bind them either.
 
 *CPU (edge inference).* On the CPU-only edge build there is no such training cost, but inference
 latency is set by throughput: roughly
@@ -865,8 +872,8 @@ Empirically it separates almost linearly: $p_"bg" approx 0.50$ on global food ve
 $approx 0.03$ on genuine Israeli food.
 
 #figure(
-  image("figures/ood_separation.png", width: 95%),
-  caption: [The background class in action, over all 32,136 held-out rows
+  image("figures/ood_separation.png", width: 82%),
+  caption: [The background class in action, over all 32,136 rows
     (`datasets/arbiter_dataset.csv`). Genuine Israeli food (green) piles up at $p_"bg" approx 0$ - the specialist
     confidently claims it - while global food (red) sits high, with a heavy mass near 1 (median $0.49$). One number,
     computed for free from the Israeli model's own softmax, tells the arbiter "this is / isn't mine," which is why
@@ -958,7 +965,9 @@ learning rate (0.05) with *many* trees (400) is the classic shrinkage recipe: ea
 only 5% of the remaining error, so no single tree can overfit a quirk, and the ensemble averages
 over hundreds of weak corrections. `subsample=0.8` and `colsample_bytree=0.8` train each tree on a
 random 80% of rows and features (stochastic boosting), decorrelating the trees;
-`min_child_weight=3` refuses leaves supported by fewer than ~3 rows; and `reg_lambda=1.0` is the
+`min_child_weight=3` requires a minimum summed instance weight (sum of Hessians) of 3 in each leaf,
+which under the logistic objective ($p(1-p) lt.eq 0.25$ per row) means at least roughly a dozen rows
+near an even split, refusing leaves built on a tiny handful of samples; and `reg_lambda=1.0` is the
 $lambda$ term of the objective above, shrinking leaf weights toward zero. None of these were
 exotically tuned - they are conservative defaults, and the router's headroom analysis (Section 8)
 shows the system is limited by the experts, not by router capacity.
@@ -1009,7 +1018,7 @@ overshoot before it is latched at the moment of analysis.
 
 == User Interface Design
 
-The GUI is a single CustomTkinter window so a first-time user can learn it in minutes. It has
+The GUI is a single Tkinter/ttk window so a first-time user can learn it in minutes. It has
 a live camera panel (to frame the food), a live weight readout and a small weight-vs-time
 graph (to confirm the reading is stable before analysing), one prominent *Analyze* button,
 and BLE/camera status indicators. After an analysis it shows the recognised label with its
@@ -1024,7 +1033,7 @@ environment: *Python 3.10* as the language; *Ultralytics YOLO11* (PyTorch) for t
 inference of the two classifiers; *Albumentations* for the custom blur augmentation;
 *XGBoost* and *scikit-learn* for the router and its metrics; *ONNX Runtime* for the
 torch-free edge build; *OpenCV* and *Pillow* for image handling; *Bleak* for BLE
-communication; and *CustomTkinter* for the GUI.
+communication; and *Tkinter/ttk* (Python standard library, custom dark theme) for the GUI.
 
 // ============================================================
 //  3b. DESIGN DECISIONS AND TRADE-OFFS  (engineering justification)
@@ -1048,7 +1057,7 @@ which our data (single-dish photos) does not have and which are expensive to ann
 classes; they also solve a harder problem (localisation) we do not need, because the user frames
 one food and the scale already isolates the item. We even tested implicit segmentation at demo
 time (GrabCut, border-colour cropping) and it made recognition *worse* - a clean 96% hummus fell
-to 92% malawach - because the classifier is already background-robust (99.97% on a pepper against
+to 92% malawach - because the classifier is already background-invariant (99.97% on a pepper against
 wood/dark backgrounds). \
 *Consequence.* A simpler labelling task, a smaller model, and a center-ROI pipeline that matches
 how the product is actually used.
@@ -1079,7 +1088,9 @@ ImageNet edges and shapes. We adopted this known result rather than spend scarce
 re-deriving it in a controlled A/B, which would cost days of GPU time to reproduce a settled finding. \
 *Cost of the other alternatives.*
 - *From scratch:* discards the ImageNet prior and needs far more than our ~530 training images/class.
-- *`x` (larger):* exceeds the *8 GB VRAM* budget at 320 px, batch 16.
+- *`x` (larger):* a heavier backbone whose training and, above all, edge / phone-CPU inference
+  cost we judged not worth a marginal accuracy gain, since the arbiter runs both experts on every
+  image (Decision D-10).
 - *ConvNeXt-T / ViT:* a plausibly higher ceiling (we keep this in Future Work) but heavier to train
   and to run on a phone CPU at the edge. \
 *Consequence.* 88.18% top-1 on the held-out test set, consistent with the literature's finding
@@ -1090,21 +1101,22 @@ that full fine-tuning maximises food-recognition accuracy.
 *Chosen.* 320 px for the Global model, 224 px for the Israeli model. \
 *Cost of alternatives.* Convolution cost grows with the *square* of the input edge (Section 7.6),
 so a larger input multiplies both training time and edge latency; a smaller input loses the fine
-texture that separates look-alike dishes. 320/224 were the largest sizes that fit the 8 GB VRAM
-budget at a usable batch. \
+texture that separates look-alike dishes. We picked 320/224 as the point where added resolution
+stopped paying for its training-time and edge-latency cost, not because memory forced it (the
+320 px run used only about 2.2 GB of 8 GB). \
 *Why the two models get different sizes.* The asymmetry follows the difficulty of each model's
 task. The *Global* model must separate *132* classes riddled with fine-grained look-alike pairs
 (mousse vs cake, gnocchi vs ravioli) whose only distinguishing evidence is *texture* - crumb,
 glaze, grain - and texture is exactly what extra resolution buys, so the Global model gets the
-largest input the VRAM budget allows ($(320\/224)^2 approx 2 times$ the pixels). The *Israeli*
+larger input ($(320\/224)^2 approx 2 times$ the pixels). The *Israeli*
 specialist solves a far easier 14-way problem over visually distinct dishes, so 224 px - the
 native resolution of the ImageNet pretraining, where the transferred backbone features fit best -
 is already sufficient (~88.9% top-1 for the shipped 13 + background model), and raising it would spend compute without a
 discrimination problem to solve. The saving is not free-floating either: the arbiter design runs
 *both* experts on *every* image (Decision D-10), so their inference costs *add* - keeping the
 second model at 224 px is what keeps the double-inference latency budget affordable on the CPU
-edge build. The smaller input also halves the Israeli model's activation memory, which is what
-allowed its larger batch (32 vs 16) on the same GPU. \
+edge build. The smaller input also halves the Israeli model's activation memory, which makes
+its larger batch (32 vs 16) cheap on the same GPU. \
 *Consequence.* Resolution spent where the discrimination problem actually is; affordable training;
 sub-second double-inference on the edge; and no train/inference resolution mismatch (the demo and
 arbiter feed each model exactly its training size).
@@ -1135,18 +1147,19 @@ brighter - the "dark plate" case), colour temperature $H arrow.l (H dot U(0.98, 
 ($"hsv_h"=0.02$), and saturation $S arrow.l S dot U(0.25, 1.75)$ ($"hsv_s"=0.75$); on top
 of that the custom blur ($p=0.35$) and random erasing ($0.40$). Over ~116 epochs each photo is seen
 ~116 times, each under a different random lighting, so the network learns *lighting-invariant*
-features by construction. This is a deliberate *robustness-over-peak-accuracy* trade-off: a
-moderate-augmentation retrain scores about *90%* on the clean test split but is measurably more
-brittle in the field, whereas the heavy-augmentation model scores *88.18%* and holds up under real
-conditions. We accepted the ~2-point clean-test cost because the deployment target is a kitchen, not
-a lab. \
-*Consequence.* A model robust to lighting, blur and pose, with calibrated confidences for the
+features by construction. This is a deliberate *resilience-over-peak-accuracy* trade-off: lighter
+augmentation would be expected to score a point or two higher on the clean test split, but at the
+cost of robustness to the harsh, variable lighting and blur of a real kitchen; the shipped
+heavy-augmentation model scores *88.18%* and is built to hold up under those field conditions rather
+than to maximise a clean-set number. We accepted that modest clean-test cost because the deployment
+target is a kitchen, not a lab. \
+*Consequence.* A model resilient to lighting, blur and pose, with calibrated confidences for the
 arbiter. The choice is validated by our own numbers: the near-zero validation-test gap (88.16% vs
 88.18%) shows no overfitting - exactly what heavy augmentation buys - and the field validation
 (30/40 = 75%, ~85% expanded) confirms it transfers to unseen real photos.
 
 #figure(
-  image("figures/global_train_batch.jpg", width: 92%),
+  image("figures/global_train_batch.jpg", width: 76%),
   caption: [One real training batch fed to the Global model, exactly as the network sees it. The
     augmentation described above is visible on the actual data: images are re-lit at random (note the
     dark and the over-bright plates), colour-shifted, rotated and letter-boxed onto black, and each
@@ -1156,13 +1169,15 @@ arbiter. The choice is validated by our own numbers: the near-zero validation-te
     the same way.],
 )
 
-=== D-07 · Batch size 16 (Global) / 32 (Israeli): a VRAM decision
+=== D-07 · Batch size 16 (Global) / 32 (Israeli): a regularisation and training-time decision
 *Options.* Larger batches for a smoother gradient. \
 *Chosen.* 16 at 320 px, 32 at 224 px. \
-*Cost of alternatives.* Batch size is bounded by the *8 GB VRAM* of the RTX 3060 Ti; a larger batch
-at 320 px overflows. The gradient noise from a small batch is partly a *feature* (mild
-regularisation), and the cosine schedule absorbs the rest. \
-*Consequence.* Training fits the hardware and still converges cleanly.
+*Cost of alternatives.* A larger batch gives a smoother gradient but costs step time and, only at
+the limit, memory; on this card memory was not the active constraint (the 320 px run measured about
+2.2 GB of 8 GB, and batch 32 would still fit). We kept 16 because the gradient noise from a small
+batch is partly a *feature* (mild regularisation) that the cosine schedule complements, and it
+converged cleanly. \
+*Consequence.* Stable convergence, with the resolution budget spent where fine-grained food needs it.
 
 === D-08 · Open-set "background" class in the Israeli model (V2)
 *Options.* Leave the 13-class Israeli model as a closed set, or add a 14th "not-Israeli" class. \
@@ -1216,7 +1231,7 @@ confidence statistics (top-5 conf, entropy, margin, $P("background")$, interacti
 inequality) and are noted as a Future-Work upgrade, but they need PCA/an MLP and far more data to
 use without overfitting; the softmax statistics are tiny, interpretable, and already separable
 (the background feature alone is near-linearly separating). \
-*Consequence.* A robust arbiter trainable on 32k rows, with a clear upgrade path documented rather
+*Consequence.* A stable arbiter trainable on 32k rows, with a clear upgrade path documented rather
 than prematurely taken.
 
 === D-13 · Cost-sensitive weighting $alpha = 0.5$, threshold left at 0.5
@@ -1256,7 +1271,7 @@ masses $>= 162$ g produced a spurious $+9.7$ g intercept that *over-read light i
 portion read 64 g). Adding sub-160 g reference points showed the fault is a pure multiplicative
 *span error*, so the honest model passes through zero. \
 *Consequence.* Weight error fell from 16% to ~1-3%, and the light-item bias vanished (verified in
-the calorie trials, where the weight channel averages 2.5%).
+the calorie trials, where the weight channel averages 4.2%, a lone 98 g pizza outlier aside within 1-4%).
 
 === D-16 · Median filter over the raw decodes, not a sticky-high latch
 *Options.* Latch the last non-zero high byte, or median-filter the last few decodes. \
@@ -1341,7 +1356,7 @@ per-100 g-cooked is the correct basis. \
 kcal alongside percentages. \
 *Cost of alternatives.* A single percentage hides *where* the error lives and is dominated by noise
 on near-zero-calorie foods (a 3-kcal miss on cucumber reads as 27%). \
-*Consequence.* We can state precisely that recognition is 100%, the weight channel is ~2%, and the
+*Consequence.* We can state precisely that recognition is 100%, the weight channel is ~4%, and the
 residual is the *food-database* entry choice (the irreducible term) - a diagnosis, not just a score.
 
 === D-25 · Ship the best-validation checkpoint, guarded by a regression gate for any fine-tune
@@ -1396,7 +1411,7 @@ are the router's fault or the models' fault.
 *Edge-parity test.* The ONNX export must reproduce the PyTorch models exactly, so the edge
 build is trusted. The test runs both backends over the same images and records the fraction
 of top-1 disagreements and the maximum absolute probability difference; the pass condition is
-0% top-1 mismatch.
+0% top-1 mismatch *and* a maximum absolute probability difference below 0.02.
 
 *Hardware and service tests.* The BLE link is tested for correct weight decoding across the
 working range (including the carry-byte edge cases that earlier corrupted readings), for
@@ -1455,9 +1470,12 @@ carries spread across `packet[5]` and `packet[3]`. Crossing 255 g is what expose
 The same side-by-side packet log also revealed the frame's *integrity fields*: every frame starts
 with the constant header `0xAC`, and the last byte always equals the low 8 bits of the sum of bytes
 2 through 6 - a simple additive *checksum*, confirmed by predicting byte 7 from the payload on
-dozens of captured frames. The driver validates both on every notification
-(`len >= 8`, `pkt[0] == 0xAC`, `sum(pkt[2:7]) & 0xFF == pkt[7]`) and silently drops any frame that
-fails, so a corrupted radio packet can never become a weight.
+dozens of captured frames. The desktop demo driver keeps its per-frame guard deliberately minimal:
+it drops any notification shorter than 8 bytes (`len >= 8`) and decodes the rest, relying on the
+downstream *median filter* to outvote a corrupted single frame. The browser build additionally drops
+any frame whose header is not `0xAC` (the scale's status and keep-alive frames), and surfaces the
+additive checksum over bytes 2 to 6 as a PASS/FAIL integrity indicator in the engineering console
+(Section 7) rather than using it to silently reject frames.
 An early version masked
 the low bit of the high byte, which silently dropped 256 g on every odd multiple of 256 (so
 272 g read as 16 g); removing that mask fixed it. The decode and a small median filter that
@@ -1475,10 +1493,11 @@ def notification_handler(sender, data):
     stability_buffer.append(weight) # STABLE once last 10 samples vary <= 2 g
 ```
 
-The choice of a *median* rather than a mean is the classical robust-statistics argument: the mean
+The choice of a *median* rather than a mean is the classical outlier-resistance argument: the mean
 of the last five samples is dragged by a single outlier (one flicker frame of 0 g under a 500 g
 load pulls a 5-sample mean down by 100 g), whereas the median is unchanged by up to two arbitrary
-outliers out of five - its *breakdown point* is 50%. Since the BLE stream's failure mode is exactly
+outliers out of five - a 40% finite-sample *breakdown point* for this five-value window, approaching
+the median's asymptotic 50% as the window grows. Since the BLE stream's failure mode is exactly
 occasional single-frame flicker and overshoot, not Gaussian noise, the median is the right filter;
 a mean would smooth genuine noise better but is defenceless against the spikes that actually occur.
 
@@ -1489,7 +1508,7 @@ shown, so the value that is multiplied into a calorie figure is never a single r
   columns: (auto, 1.6fr, auto),
   inset: 6pt, align: (left, left, left),
   table.header([*Stage*], [*Computation*], [*Output*]),
-  [Validate], [`len >= 8`, header `== 0xAC`, `sum(b[2..6]) & 0xFF == b[7]`], [pass / *drop*],
+  [Validate], [`len >= 8` (short frames dropped)], [pass / *drop*],
   [Decode], [`low = b[4]`; `high = b[5] | b[3]`; `raw = low + high*256`], [raw grams],
   [Median], [median of the last 5 `raw` values], [flicker-free],
   [Calibrate], [`g = round(1.178 * median)` (through-origin span fix)], [true grams],
@@ -1516,7 +1535,7 @@ reading trustworthy enough to multiply into a calorie figure; when the machine c
   [CONNECTING], [GATT connected], [enable notify on `ffb2`], [SUBSCRIBING],
   [SUBSCRIBING], [notify enabled], [start packet loop], [STREAMING (MOVING)],
   [STREAMING], [valid packet], [decode, push to median], [MOVING / STABLE],
-  [STREAMING], [bad header/len/checksum], [drop the frame], [STREAMING],
+  [STREAMING], [frame shorter than 8 bytes], [drop the frame], [STREAMING],
   [MOVING], [last 10 vary $<= 2$ g], [latch settled reading], [STABLE],
   [STABLE], [a sample varies $> 2$ g], [reading moving again], [MOVING],
   [STREAMING], [no packet $> 4$ s], [tear down, re-scan], [STALE $arrow.r$ CONNECTING],
@@ -1537,7 +1556,8 @@ model's test score; after the rebuild the validation and test accuracies agree (
 *Model training.* Both classifiers are YOLO11l-cls trained by transfer learning, configured
 exactly as in Section 3.3 - AdamW, cosine learning-rate decay, dropout, and heavy
 augmentation including a custom Albumentations blur callback to mimic classroom motion blur.
-The 320 px input at batch 16 was chosen to fill the 8 GB VRAM budget without overflowing it.
+The 320 px input at batch 16 mirrors the training configuration (Section 3.3); memory was not the
+binding constraint (the run measured about 2.2 GB of the 8 GB card).
 
 *Router.* Both trained models are run over the val and test images to build a feature table
 (one row per image), and XGBoost is trained on the val rows and scored on the test rows. The
@@ -1556,7 +1576,8 @@ def preprocess(bgr, size):                 # torch-free replica of ultralytics t
     rgb = cv2.cvtColor(bgr, cv2.COLOR_BGR2RGB)
     h, w = rgb.shape[:2]
     nh, nw = (size, round(w*size/h)) if h <= w else (round(h*size/w), size)
-    r = cv2.resize(rgb, (nw, nh))
+    interp = cv2.INTER_AREA if (nh < h or nw < w) else cv2.INTER_LINEAR  # match ultralytics on downscale
+    r = cv2.resize(rgb, (nw, nh), interpolation=interp)
     y0, x0 = (nh - size)//2, (nw - size)//2
     c = r[y0:y0+size, x0:x0+size]
     x = c.astype(np.float32) / 255.0       # NO imagenet mean/std
@@ -1614,7 +1635,7 @@ place the food and read the corrected weight.
   [USB webcam], [1080p RGB, USB 2.0/3.0, UVC], [Existing],
   [Desktop workstation], [NVIDIA RTX 3060 Ti (8 GB) for training/inference], [Existing],
   [Edge device (optional)], [CPU-only PC, ~8 GB RAM, for the ONNX build], [Existing],
-  [Software stack], [Python 3.10, PyTorch/Ultralytics, XGBoost, ONNX Runtime, OpenCV, Bleak, CustomTkinter], [Open source],
+  [Software stack], [Python 3.10, PyTorch/Ultralytics, XGBoost, ONNX Runtime, OpenCV, Bleak, Tkinter/ttk], [Open source],
 )
 
 // ============================================================
@@ -1774,10 +1795,13 @@ This is where the port earns its performance. The models are published in *fp16*
 and understanding why requires three numbers: memory, bandwidth, and rounding error.
 
 *Memory.* A single-precision weight (fp32) occupies 4 bytes; a half-precision weight (fp16) occupies
-2 bytes. A model with $P$ parameters is therefore $4P$ bytes as fp32 and $2P$ as fp16. For the
-Global model this is the difference between roughly 50 MB and *25 MB* on disk and over the network;
-across both models the download halves from about 100 MB to about 50 MB. On a phone on conference
-wifi, that halving is the difference between a usable first load and an abandoned one.
+2 bytes. A model with $P$ parameters is therefore $4P$ bytes as fp32 and $2P$ as fp16. The exported
+artifacts on disk bear this out exactly: the fp32 ONNX graphs are 49.6 MB (`global.onnx`) and 49.1 MB
+(`israeli.onnx`), and the shipped fp16 versions are 24.9 MB (`global_fp16.onnx`) and 24.6 MB
+(`israeli_fp16.onnx`) - a 2:1 cut that drops the two-model download from about 99 MB to about 50 MB.
+On a phone on conference wifi, that halving is the difference between a usable first load and an
+abandoned one. (An int8 export exists at 12.6 / 12.5 MB but is not shipped: it risks accuracy on
+subtle food textures for a saving the fp16 build already largely captures.)
 
 *Bandwidth - why the phone works less hard.* Convolutional inference on a CPU is frequently
 *memory-bound*, not compute-bound: the processor spends more time waiting for weights and activations
@@ -1790,10 +1814,14 @@ with arithmetic intensity.] the attainable throughput is
 
 $ "throughput" = min("peak compute", "memory bandwidth" times "arithmetic intensity"). $
 
-Halving the bytes per weight *doubles* the arithmetic intensity, which lifts the bandwidth-bound
-ceiling and lets the same CPU finish sooner for the identical arithmetic. This is the precise sense
-in which fp16 lowers hardware usage: not fewer multiplications, but half the data traffic feeding
-them.
+Halving the bytes per weight *doubles* the arithmetic intensity and lifts the bandwidth-bound
+ceiling - but only where the arithmetic itself runs in fp16. That is the opt-in *WebGPU* path, whose
+native fp16 matrix maths both moves half the bytes and computes on them directly, so the GPU
+finishes sooner. On the *default WASM/CPU* path each weight is upcast to fp32 before any multiply-add
+(see the backend table below), so the working set the CPU streams during convolution is fp32 and
+this compute-bandwidth saving does not apply; there the fp16 payoff is purely the smaller ~50 MB
+*download*. So fp16 lowers hardware usage in two different places - inference bandwidth on the GPU,
+download size on the CPU - never by removing multiplications.
 
 Separately, the *input resolution* controls the multiplication count itself. A convolution producing
 an $H times W$ output map with $C_"out"$ channels from $C_"in"$ input channels through a
@@ -1807,12 +1835,13 @@ camera resolution - is what keeps the MAC count low enough to finish on a phone 
 a second. fp16 and small inputs attack the two different bottlenecks (bytes moved and operations
 performed) at once.
 
-*Rounding - why fp16 is not the default.* fp16 has a 10-bit mantissa, giving roughly $2^(-11) approx
-5 times 10^(-4)$ relative spacing between representable values - about three to four significant
-decimal digits. Rounding every weight and activation to fp16 injects a small relative error at each
-layer; accumulated through a deep network it can flip a *borderline* prediction whose top-1/top-2
-margin $p_((1)) - p_((2))$ is tiny. fp32 has a 23-bit mantissa ($approx 6 times 10^(-8)$ spacing), so
-its arithmetic is effectively exact for our purposes.
+*Rounding - why fp16 is not the default.* fp16 has a 10-bit mantissa, so rounding any value to fp16
+is off by at most $2^(-11) approx 5 times 10^(-4)$ in relative terms (the *unit roundoff*, i.e. half
+the gap between consecutive fp16 values) - about three to four significant decimal digits. Rounding
+every weight and activation to fp16 injects a small relative error at each layer; accumulated through
+a deep network it can flip a *borderline* prediction whose top-1/top-2 margin $p_((1)) - p_((2))$ is
+tiny. fp32 has a 23-bit mantissa (unit roundoff $approx 6 times 10^(-8)$), so its arithmetic is
+effectively exact for our purposes.
 
 The two backends resolve this differently, and that is the whole decision:
 
@@ -1866,7 +1895,7 @@ before the arithmetic gives each intermediate product that room, which is the pr
 model *computes at higher precision than it stores*.
 
 #figure(
-  image("figures/fp_bits.png", width: 95%),
+  image("figures/fp_bits.png", width: 82%),
   caption: [The bit layout of both formats. A float is $"sign" times "mantissa" times 2^"exponent"$; the
     *mantissa* holds the significant digits and its width sets the precision - 10 bits (~4 decimal digits) in
     fp16 versus 23 bits (~7 digits) in fp32. The exponent handles magnitude, so fp16 is short on *digits*, not
@@ -1882,7 +1911,7 @@ the nearest is off by at most $2^(-11) approx 4.9 times 10^(-4)$ in relative ter
 $w(1 plus.minus 5 times 10^(-4))$. *Second,* a logit $z = sum_i w_i x_i$ inherits that relative error: in the
 worst case (all errors aligned) $|Delta z| \/ |z| lt.eq 5 times 10^(-4)$, and because the errors are really
 random in sign they partly cancel, so the typical drift is smaller; across depth it compounds to at most a few
-$times 10^(-3)$. *Third,* the softmax passes a logit change through almost one-for-one. A concrete instance:
+$times 10^(-3)$. *Third,* the softmax passes only a fraction of a logit change through: the two-class gain $p(1-p)$ is at most $0.25$, and about $0.1$ at this operating point. A concrete instance:
 take a top logit $z_1 = 8.000$ and a runner-up $z_2 = 6.000$ (a modest margin of 2). The two-class softmax is
 $p_1 = 1 \/ (1 + e^(-(z_1 - z_2)))$, so $p_1 = 1 \/(1 + e^(-2.000)) = 0.88080$ in fp32; if fp16 rounding shifts
 the margin to $2.004$, $p_1 = 1\/(1 + e^(-2.004)) = 0.88121$ - a change of $Delta p approx 4 times 10^(-4)$. The
@@ -1978,9 +2007,9 @@ of routing decisions. With it, the walk reproduces XGBoost's prediction path nod
 re-implementation, not an approximation.
 
 *The validation - proving it acts the same.* Equivalence is proven, not assumed, and the export script
-performs the check on every run. The *entire* held-out feature table - all *32,136* rows the arbiter is
-scored on - is pushed through both `booster.predict_proba` in Python and the JavaScript walk, and the two
-probability vectors compared element-wise. The maximum absolute disagreement is $3.8 times 10^(-7)$ (pure
+performs the check on every run. The *entire* feature table - all *32,136* rows used to build and score
+the arbiter - is pushed through both `booster.predict_proba` in Python and the JavaScript walk, and the two
+probability vectors compared element-wise. The maximum absolute disagreement is $6.0 times 10^(-7)$ (pure
 32-bit rounding in the 400-term sum), and the number of differing routing *decisions* (the $P gt.eq 0.5$
 comparison) is *zero*. This is the same parity discipline applied to the CNNs' ONNX export (Section 7.5):
 every model that crosses a language or runtime boundary carries a numerical-equivalence proof with it, so
@@ -1988,7 +2017,7 @@ the browser's routing decision is not "similar to" the desktop's - it is the sam
 
 The 20-element feature vector `f` is assembled in the identical training order - both
 experts' top-5 confidences, entropy $H(p) = -sum_i p_i log p_i$, margin $p_((1)) - p_((2))$, the
-Israeli `background` probability, and the four interaction features - directly from the two ONNX
+Israeli `background` probability, and the five interaction features - directly from the two ONNX
 outputs, so the arbiter in the browser sees exactly what the arbiter in training saw.
 
 #note[Why not run the whole arbiter as a tiny neural network, or in ONNX at all? Because the honest
@@ -2064,6 +2093,45 @@ characteristic, and decodes each 8-byte packet with the identical
 and Firefox it is blocked, so those devices fall back to a manual grams entry. This is a browser
 policy limit, not a protocol one.
 
+== The Application Layer: An On-Device Nutrition Diary
+
+Recognition produces one number per photo; a food diary has to *keep* those numbers and make them
+add up. Six user-facing features close that loop, all front-end only and on-device: a *history
+dashboard* (Today / Week / Month, with a per-day stacked macro chart and a most-eaten list),
+*user-defined recipes*, *vitamins and minerals*, a *profile* with BMI and a Mifflin-St Jeor energy
+budget, a *searchable list* of the 145 recognisable foods, and *CSV export/import* for backup, all
+behind a first-run onboarding screen. There is no server and no database: the diary is three
+`localStorage` keys.
+
+The point of interest is not the features but how they are built to be *correct* and *testable* in a
+codebase that has no build step. All non-trivial logic - period aggregation, the BMI and TDEE
+formulas, CSV serialise/parse, recipe merging, and per-100 g nutrient scaling - lives in one pure
+module, `lib/tracking.js`, written so that a browser loads it with a plain `<script>` tag while
+Node's `require()` imports the identical file. Because that module touches neither the DOM nor
+`localStorage` nor the network, it runs unchanged under Node's built-in test runner: `node --test`
+exercises 27 unit tests over the pure functions, with `index.html` left as thin wiring. Separation
+of concerns bought testability with no bundler and no framework.
+
+*Energy budget.* BMI is $"weight" / "height"^2$; resting rate uses Mifflin-St Jeor (1990) and total
+daily expenditure is that rate times an activity factor, so the dashboard can report *eaten versus
+burned*. *Vitamins for free:* the USDA Worker was already receiving the full FoodData Central nutrient
+record and discarding everything but the four macros, so extending its nutrient-ID map by nineteen
+vitamin and mineral IDs (and bumping the edge-cache version) surfaced them at no extra request cost.
+Twenty-seven of the forty local foods resolved in USDA and were back-filled by a one-off harvester;
+the remaining thirteen, most of the Israeli dishes among them, carry ingredient-based estimates the
+interface labels as such.
+
+*Treating the user as an adversary.* Recipe names, the profile name, and imported CSV rows are
+user-controlled yet flow straight into the DOM and into `localStorage`, so the layer is written
+defensively and each guard is pinned by a test. Names are HTML-escaped before rendering, which closes
+a stored cross-site-scripting path. The grouping maps use null-prototype objects, because a food
+named literally `__proto__` becomes a real own-key once a JSON string round-trips through
+`localStorage` (`JSON.parse` does not special-case it the way an object literal does), and a plain
+`{}` would either drop the row or corrupt `Object.prototype`. Imported CSV cells that fail to parse
+are nulled, so one corrupt field cannot poison a whole period's totals. Numeric profile inputs are
+clamped non-negative, so a stray minus sign cannot produce a negative BMI. None of this shows in the
+interface; it is the difference between a demo and something that survives contact with real input.
+
 == Limitations of the Web Build
 
 The browser port is honest about its edges. *Web Bluetooth* is Android-only, so iPhone weight is
@@ -2094,9 +2162,9 @@ Critically, its validation accuracy (88.16%) and test accuracy (88.18%) agree to
 earlier model whose ~4-point val/test gap revealed train/test leakage. The shipped Israeli
 specialist (V2, 13 dishes + an open-set *background* class) reaches *88.86%* top-1 (best epoch 112),
 with top-5 near 98.6%. Its predecessor - a 13-class model with no background class - scored a higher
-92.26%, but the background class is what supplies the arbiter's "not-mine" routing signal, so we
-deliberately traded roughly three points of raw specialist accuracy for a working ensemble (Decision
-D-08). The remaining errors are sensible visual overlaps (chocolate mousse vs cake, gnocchi vs
+*92.26%* on the clean test split, but the background class is what supplies the arbiter's "not-mine"
+routing signal, so we deliberately traded roughly three points of raw specialist accuracy for a
+working ensemble (Decision D-08). The remaining errors are sensible visual overlaps (chocolate mousse vs cake, gnocchi vs
 ravioli) and the smallest ingredient classes, exactly where the least training data exists.
 
 #table(
@@ -2108,20 +2176,20 @@ ravioli) and the smallest ingredient classes, exactly where the least training d
 )
 
 #figure(
-  image("figures/global_curves.png", width: 95%),
+  image("figures/global_curves.png", width: 80%),
   caption: [Global model training. Top-1 and top-5 accuracy rise and plateau while training and
-    validation loss fall together; best weights are frozen at the validation peak (epoch 73).],
+    validation loss fall together; best weights are frozen at the validation peak (epoch 86).],
 )
 
 #figure(
-  image("figures/global_confusion.png", width: 88%),
+  image("figures/global_confusion.png", width: 78%),
   caption: [Normalised confusion matrix for the 132-class Global model (test split). The strong
     diagonal shows correct classification dominates; off-diagonal mass sits on sensible visual
     overlaps. Full-resolution version is in the repository.],
 )
 
 #figure(
-  image("figures/global_val_preds.jpg", width: 95%),
+  image("figures/global_val_preds.jpg", width: 78%),
   caption: [Example validation predictions from the Global model (a single batch).],
 )
 
@@ -2129,22 +2197,21 @@ The Israeli specialist behaves cleanly on its own 14-way problem (13 dishes plus
 background class), with a strong diagonal and well-controlled training curves.
 
 #figure(
-  image("figures/israeli_curves.png", width: 95%),
+  image("figures/israeli_curves.png", width: 80%),
   caption: [Israeli specialist (V2) training curves.],
 )
 
 #figure(
-  image("figures/israeli_confusion.png", width: 85%),
+  image("figures/israeli_confusion.png", width: 76%),
   caption: [Normalised confusion matrix for the Israeli specialist (V2), including the open-set
     background class used by the router.],
 )
 
 #figure(
-  image("figures/israeli_val_preds.jpg", width: 95%),
-  caption: [Example validation predictions from the Israeli specialist (a single batch) - the local
-    dishes the Global model was never trained on (hummus, sabich, malawach, shakshuka, bourekas),
-    dishes (hummus, falafel, shakshuka, bourekas, sufganiyah, meorav yerushalmi, samosa), named on
-    held-out photos.],
+  image("figures/israeli_val_preds.jpg", width: 78%),
+  caption: [Example validation predictions from the Israeli specialist (a single batch) - local
+    dishes the Global model was never trained on (hummus, sabich, falafel, malawach, shakshuka,
+    bourekas, sufganiyah, meorav yerushalmi, samosa), named on held-out photos.],
 )
 
 The two mosaics above tell the ensemble story in one glance: the Global model covers 132 world foods,
@@ -2193,7 +2260,7 @@ Global model does not know those classes at all), and the routed system delivers
 the other - is the entire value proposition of the ensemble, and it is visible at a glance:
 
 #figure(
-  image("figures/system_ladder.png", width: 92%),
+  image("figures/system_ladder.png", width: 80%),
   caption: [Baseline vs routed system vs oracle, per domain, computed from the committed 11,352-row
     evaluation table. The Israeli baseline is exactly 0% (disjoint label spaces); routing buys that
     domain back for a 0.9-point cost on the global domain.],
@@ -2201,7 +2268,7 @@ the other - is the entire value proposition of the ensemble, and it is visible a
 
 The gap between the baseline and the oracle is the total accuracy the routing problem can
 recover; CalEyeZ closes most of it. The remaining gap to the oracle is small, and the error
-decomposition explains why: of the 13.8 points of system error, only *2.7 points* (about one
+decomposition explains why: of the 13.8 points of system error, only *2.6 points* (about one
 *fifth* of all errors) are *routing* mistakes - the router chose the wrong expert while a correct
 one existed - and *11.2 points* (about four fifths) are cases where *both models are wrong*, which
 no router, however perfect, can fix. In other words, the system is limited by the *models*, not
@@ -2209,8 +2276,8 @@ the router - to go beyond ~88.8% one must improve the classifiers (more or clean
 backbone), not tune the arbiter further.
 
 #figure(
-  image("figures/error_decomposition.png", width: 92%),
-  caption: [Where the error lives: of 11,352 test images, 86.2% are correct, 2.7% are routing
+  image("figures/error_decomposition.png", width: 80%),
+  caption: [Where the error lives: of 11,352 test images, 86.2% are correct, 2.6% are routing
     errors (recoverable by a better router), and 11.2% are both-experts-wrong (recoverable only by
     better models). The router has already closed 77% of the baseline-to-oracle gap.],
 )
@@ -2224,12 +2291,62 @@ tested image, with a maximum probability difference of about 0.013. On a CPU the
 analysis in roughly *0.35 s*, versus 1-3 s for the PyTorch CPU path, confirming the edge build
 is both faithful and fast enough for interactive use.
 
+== System Latency Breakdown
+
+One analysis is not a single model call: it runs the Global expert, the Israeli expert and the
+arbiter in series, so end-to-end latency is the sum of a few stages. To get per-stage numbers the
+pipeline was instrumented in the sandbox using the demo's own functions (`center_roi`,
+`expert_features`, `build_feature_row`, `arbiter.predict_proba` in `scripts/demo/caleyez_demo.py`)
+and timed over the 47-image real-world test set on the torch-free *ONNX edge backend* - the deployed
+desktop build, fp32 `global.onnx` and `israeli.onnx`. Timings are wall-clock on a desktop CPU;
+absolute values scale with the host, so the *proportions* are the load-bearing result, not the
+milliseconds.
+
+#table(
+  columns: (2fr, auto, auto, auto),
+  inset: 7pt, align: (left, center, center, center),
+  table.header([*Stage*], [*p50 (ms)*], [*p95 (ms)*], [*Share*]),
+  [Image preprocess (centre ROI crop)], [7.7], [11.5], [5%],
+  [Global expert (YOLO11l-cls, 320 px)], [76], [101], [52%],
+  [Israeli expert (YOLO11l-cls, 224 px)], [61], [78], [41%],
+  [Feature assembly + XGBoost arbiter], [2.6], [< 3], [2%],
+  [*End-to-end (image in $arrow.r$ route decided)*], [*150*], [*191*], [100%],
+)
+
+The two classifiers are *92% of wall time*, split 52/41 between them because the Global model runs at
+the larger 320 px input. Both experts run on *every* image: the arbiter adjudicates after both have
+produced confidences (Decision D-10), so neither call can be skipped for a latency saving. Preprocess
+is a plain centre crop - the gray-world white balance and CLAHE in the original design were removed
+after they hurt accuracy - so it costs only a few milliseconds. The arbiter is negligible: XGBoost
+inference itself is sub-millisecond, and the few milliseconds shown are Python-side assembly of the
+20-feature `pandas` row; the occasional $approx 35$ ms tail (excluded from the p95 above as it is not
+model work) is a garbage-collection pause, not the router.
+
+Backend and machine both matter, so the absolute number is only meaningful with its context. On the
+*same* 47 images the PyTorch backend runs at 222 ms p50 / 251 ms p95, so the ONNX export is roughly
+1.5 times faster end-to-end for a bit-for-bit equal decision. `build_edge_onnx/README.md` records
+$approx 0.35$ s per analysis on the development machine and $approx 0.7$-$1.4$ s on a basic AMD CPU;
+the field harness `scripts/eval/photo_tester.py` (lines 258-260) logs this same end-to-end
+`latency_ms` per photo and prints its median and p95 (lines 456-461). Every figure here is the vision
+path; the shipped code carries no sub-stage timers, so the per-stage split above is the sandbox
+measurement, not a production log.
+
+The weight channel is deliberately *off* this critical path. Web Bluetooth and the desktop BLE reader
+run on their own event loop concurrently with the camera, so the scale's latency never adds to the
+analysis time - the weight is already on screen when the photo is taken. Inside that loop each
+notification is decoded, median-filtered over five samples and calibrated (the $1.178 times$ span
+correction) in well under a millisecond, and the link is guarded by a staleness watchdog
+(`STALE_SEC = 4.0` s, polled every 0.4 s in `caleyez_demo.py`). The one latency the code cannot
+measure is the initial BLE handshake, which is governed by the host operating system's Bluetooth
+stack rather than by the app.
+// TODO-VERIFY(BLE connect-to-first-weight handshake time: no instrumentation in scripts/ble/scale_reader.py or the demo's connect path)
+
 == Real-World Field Validation
 
 The strongest test is genuinely unseen data. We ran phone photographs of real plates - outside
 the dataset, in ordinary lighting - through the deployed pipeline, using the containing folder
 as ground truth. On an initial set of 40 photos the system scored *30/40 = 75%*, with a 95%
-Wilson confidence interval of *[59.8%, 85.8%]*; the expanded 47-photo set scored *40/47 = 85.1%*
+Wilson confidence interval of *[59.8%, 85.8%]*; a later, separately-composed 47-photo set scored *40/47 = 85.1%*
 (95% Wilson CI *[72.3%, 92.6%]*), and this is a floor: in the live system the confidence gate
 routes the low-confidence misses to a fallback instead of reporting them. The
 per-class breakdown is informative: everyday foods did very well (french fries 3/3, hamburger
@@ -2340,7 +2457,7 @@ the entire range. The raw error grows *linearly with load* - the signature of a 
 
 *Held-out validation - the constant generalises.* The constant was fit on *water and food only*.
 Applying the *unchanged* $k = 1.178$ to the ten never-seen objects predicts their true mass to a
-*mean absolute error of just 1.9 g* (mostly within $plus.minus 1$-$3%$), across metals, glass,
+*mean absolute error of just 2.0 g* (mostly within $plus.minus 1$-$3%$), across metals, glass,
 plastic and card. Refitting the slope on all 20 objects barely moves it ($1.17804 arrow 1.17825$),
 so the shipped constant is left unchanged - a genuine generalisation test, not a curve fit.
 
@@ -2370,7 +2487,7 @@ of spice, a single sweet) and is surfaced as a limitation rather than hidden.]
 *Final calibration and error budget.* The shipped formula $"corrected"_g = 1.178 times "raw"$ is
 *identical* in the desktop demo, the ONNX edge executable, and the browser app. Validated on all 20
 objects it gives a mean absolute error of *3.6 g* (down from 34.0 g / 16-20% raw); on the *held-out*
-objects alone the error is *1.9 g*. Max error is $approx plus.minus 13$ g over the full 5-1062 g
+objects alone the error is *2.0 g*. Max error is $approx plus.minus 13$ g over the full 5-1062 g
 range - best mid-range ($approx 1$-$3%$), with only the smallest masses showing a larger
 *percentage* (a few grams on a 20 g item). The residual is now dominated by the scale's own
 *repeatability* (mean spread $approx 10$ g, up to 31 g at 1 kg), not by the fit: the correction has
@@ -2404,7 +2521,7 @@ clearly:
 )
 
 #figure(
-  image("figures/calorie_decomposition.png", width: 92%),
+  image("figures/calorie_decomposition.png", width: 80%),
   caption: [Per-meal error decomposition (from `scripts/eval/calorie_validation_results.csv`).
     The green weight-channel bars are uniformly small (1-4%); the total calorie error tracks the
     amber *database* bars almost exactly - the residual error is the per-100 g entry choice, not
@@ -2449,12 +2566,12 @@ error - and it earned that while conceding every advantage to the competition.
   table.header([*Tool*], [*Mean kcal err*], [*How it gets its portion*]),
   [*CalEyeZ*], [*37%*], [measures grams on a BLE scale],
   [MyFitnessPal], [49%], [user weighs and types the true grams (generous manual case)],
-  [Cal.ai], [64%], [cloud model guesses a typical serving from a photo],
+  [Cal.ai], [63%], [cloud model guesses a typical serving from a photo],
   [FoodVisor], [n/a], [photo estimate; paywalled after one free image],
 )
 
 #figure(
-  image("figures/compare_permeal.png", width: 100%),
+  image("figures/compare_permeal.png", width: 86%),
   caption: [Per-meal absolute calorie error for the three apps on the eight shared meals
     (`scripts/eval/calorie_comparison.xlsx`). CalEyeZ wins or ties most rows; the one row where it
     looks worst - french fries - is a *database* miss (generic deep-fried entry vs a home-fried
@@ -2486,7 +2603,7 @@ isolated this with a single food at two portions - a full can of tuna (162 g) an
 This generalises past tuna. A photo shows a food's *top surface*, not its mass: a thin minute-steak
 and a thick ribeye can cover the same plate area yet differ two-to-threefold in grams - invisible
 from above. That is the identical *self-occlusion / unknown-density* wall that made us reject stereo
-and LiDAR depth (Section 8.7). A state-of-the-art cloud model fails here for the *same physical
+and LiDAR depth (Section 8.7). A leading cloud model fails here for the *same physical
 reason* as depth hardware: pixels carry appearance, not weight. A scale reads the weight directly.
 The same failure surfaced as Cal.ai returning an *identical 425 kcal for both a Domino's and a Pizza
 Hut slice* - excellent recognition, but a fixed quantity, because it has no way to weigh the food.
@@ -2607,7 +2724,7 @@ consumer nutrition tool the added bill-of-materials, calibration and power simpl
 expensive path to the same density dead-end.
 
 #figure(
-  image("figures/depth_rejection.png", width: 100%),
+  image("figures/depth_rejection.png", width: 88%),
   caption: [Why depth hardware was rejected without building it. *Left:* stereo recovers depth by
     triangulating the disparity $d$ of the same point across a baseline $b$ ($Z = f b\/d$) - but the
     match fails exactly on glossy, textureless food surfaces. *Right:* any single-viewpoint sensor
@@ -2627,14 +2744,14 @@ wrong weight. The methods also required a coin in frame, a single clean object, 
 background, and (for shadows) a hard directional light - none of which survive a real plate.
 
 #figure(
-  image("figures/fail_apple_midas.jpg", width: 100%),
+  image("figures/fail_apple_midas.jpg", width: 82%),
   caption: [Volume from monocular depth (MiDaS). The coin fiducial sets pixel size; the depth map
     over the apple mask integrates to a volume of 139.3 cm³, within ~7% of the true volume - yet
     still useless without a density value to convert it to grams.],
 )
 
 #figure(
-  image("figures/fail_can_shadow.jpg", width: 100%),
+  image("figures/fail_can_shadow.jpg", width: 82%),
   caption: [Volume from shadow geometry. With a 45° light an object's height equals its shadow
     length; the perspective-corrected top area times that height gives 519.67 cm³, again without
     any depth network - and again stuck at the density step.],
@@ -2667,7 +2784,7 @@ time.
   [MiDaS depth volume], [apple 139.3 cm³ (~7% vs Archimedes)], [volume needs unknown density to become grams; controlled conditions only],
   [Shadow-geometry volume], [can 519.67 cm³], [same density problem; needs a coin and a hard shadow],
   [7-segment OCR of scale], [worked on clean frames], [glare, angle, flicker; segmented-font OCR unreliable],
-  [*BLE gravimetric (chosen)*], [*exact grams at source*], [*robust; no inference, no assumptions*],
+  [*BLE gravimetric (chosen)*], [*exact grams at source*], [*reliable; no inference, no assumptions*],
 )
 
 #note[*The principle, in one line.* Use the camera for identity, never for mass. When a physical
@@ -2681,14 +2798,22 @@ requirement is met (86.2%). The dual-model + router architecture is validated: i
 cuisine without degrading the Global model, which is the concrete defeat of catastrophic
 forgetting. The latency requirement is met on both GPU and the CPU edge build. The one
 *specification change* from the FRS is deliberate and documented: weight acquisition moved from
-OCR to BLE after OCR failed its robustness requirement - a change that *improved* the system
+OCR to BLE after OCR failed its reliability requirement - a change that *improved* the system
 rather than compromising it.
 
 == Performance Limitations
 
 + *Closed vocabulary.* Only trained classes are recognised; an unseen food is mapped to the
   nearest visual match. The live confidence gate mitigates this but cannot eliminate it.
-+ *Model ceiling ~88%.* About two-thirds of system errors are both-models-wrong, so accuracy is
++ *No not-food class, and the confidence gate is not an error detector.* The Global model has 132
+  food classes and no explicit not-food output (the "background" label on its confusion matrix is an
+  Ultralytics plotting artefact, not a class the head can predict), so a non-food photo is forced
+  onto some food label. The gate rejects *low-confidence* predictions, not *wrong* ones: on the
+  held-out food test 9.0% of gate-passing Global predictions are still wrong (860 of 9,521), and in a
+  37-photo non-food probe about 73% fell below the gate while roughly a quarter passed confidently (a
+  room read as `cheese_plate` at 93%, a scene as `churros` at 96%) and would be reported as food.
+  Both share one cause, a food-only model has no concept of not-food. Mitigations are in Future Work.
++ *Model ceiling ~88%.* About four-fifths of system errors are both-models-wrong, so accuracy is
   bounded by the classifiers, not the router.
 + *Under-represented classes.* Visually featureless or low-data classes (e.g. hummus) are the
   weakest, as the field test showed.
@@ -2742,26 +2867,16 @@ physical quantity, read it, do not re-derive it.
 
 == Challenges and Lessons Learned
 
-The hardest problems were not the ones we expected. Three stand out.
-
-*Catastrophic forgetting* forced the whole architecture. Naively extending the Global model to
-Israeli dishes destroyed its accuracy on the original classes, which is what pushed us toward the
-two-experts-plus-router design rather than one ever-growing network.
-
-*Data leakage* taught us to distrust a good test score. The earlier model looked strong until we
-noticed its validation and test accuracies disagreed by about four points. Exact and perceptual
-de-duplication followed by a fresh split closed that gap (88.16% vs 88.18%), and only then was
-the accuracy trustworthy.
-
-*The weight subsystem* was a sequence of honest dead ends. Volume-from-vision was accurate at
-estimating volume (within ~7% of Archimedes) yet useless without density; OCR of the scale's
-display was defeated by glare, angle and flicker. Reverse-engineering the BLE protocol was the
-unglamorous but correct answer, and even that hid a subtle carry-byte bug that silently dropped
-256 g until a range-sweep test exposed it.
-
-The overarching lesson is that *measurement honesty matters as much as model design*: leakage-free
-splits, a held-out router test, edge-parity verification, and field results with confidence
-intervals are what turn a demo into evidence.
+The hardest problems were not the ones we expected, and the register that follows documents them in
+full. Three shaped the architecture: *catastrophic forgetting* (extending the Global model to Israeli
+dishes destroyed its original accuracy, forcing the two-experts-plus-router design), *data leakage*
+(an earlier model's validation and test scores disagreed by about four points until exact and
+perceptual de-duplication with a fresh split made 88.18% trustworthy), and *the weight subsystem's
+honest dead ends* (volume-from-vision useless without density, OCR defeated by glare and flicker,
+before a reverse-engineered BLE read, itself hiding a 256 g carry-byte bug, proved correct). The
+overarching lesson is that *measurement honesty matters as much as model design*: leakage-free splits,
+a held-out router test, edge-parity verification, and field results with confidence intervals are what
+turn a demo into evidence.
 
 == The Documented Hurdles: a Register of Failures and Recoveries
 
@@ -2786,7 +2901,7 @@ produced the architecture the book describes.
       [range-sweep test exposed it; decode fixed and re-verified over the working range],
   [4], [A transient overshoot latched a permanent +256 g offset],
       [a "sticky high byte" latch turned one bad frame into a lasting error],
-      [replaced with a 5-sample *median filter* (robust to spikes by construction)],
+      [replaced with a 5-sample *median filter* (resistant to spikes by construction)],
   [5], [The scale itself read a steady ~16% low],
       [systematic multiplicative *span error* in the load cell],
       [calibration experiment (20 objects, held-out validation) → $k = 1.178$ correction; ~5 g dead-zone floor documented as a limitation],
@@ -2815,7 +2930,7 @@ produced the architecture the book describes.
       [averaging raw+CLAHE softmax shifted confidences away from what the arbiter was trained on - it broke *routing*, not classification],
       [reverted; lesson recorded: any change to the experts' outputs invalidates the arbiter's training distribution],
   [12], [Demo-time segmentation (GrabCut, border cropping) hurt accuracy],
-      [the classifier is already background-robust; cropping removed useful context (96% hummus fell to 92% malawach)],
+      [the classifier is already background-invariant; cropping removed useful context (96% hummus fell to 92% malawach)],
       [rejected; centre-ROI kept],
   [13], [Edge executable failed on a clean machine],
       [PyInstaller build was missing a hidden dependency (scikit-learn)],
@@ -2858,16 +2973,31 @@ The error analysis points the way. Because the ceiling is the models, the highes
 clear field-test failures), and optionally a larger backbone now that the 8 GB VRAM budget has
 headroom. The architecture also invites *more experts*: the router design adds a new cuisine as a
 new specialist without touching the others, so an Asian or Indian expert is a natural extension.
-On the product side, the desktop prototype could move to a mobile or fully embedded target using
-the existing ONNX build, and the single-item assumption could be relaxed with detection and
-segmentation to handle mixed plates.
+On the product side, the browser web app already delivers on-device mobile use; the remaining
+targets are a native app or a fully embedded device (reusing the same ONNX build), and the
+single-item assumption could be relaxed with detection and segmentation to handle mixed plates.
+
+*Out-of-distribution and non-food inputs* are the other open front, and two detectors were
+prototyped on the Global model's 512-dimensional embedding to close the gate leak noted under
+Performance Limitations. An *unsupervised* distance score (Mahalanobis or cosine to the class means)
+reached about 0.83 AUC but proved redundant with the confidence gate: it flags the low-confidence
+non-food the gate already rejects and misses the *confident* non-food inside the food manifold. A
+*supervised* is-food head, a small linear classifier on the same embedding, separated food from
+non-food at about 0.99 AUC within one photographic domain, but a naive version trained on the curated
+dataset against phone snapshots learned the *domain* rather than food and wrongly rejected 30-45% of
+real phone food; the matched-domain training set, not the model, is the requirement. The head is a
+roughly 2 KB add-on over features the Global model already computes, touching neither the experts,
+the router, nor the reported accuracy. The definitive fix remains a real non-food negative class in
+training, so the model can natively output not-food and strengthen the router's $P("background")$
+feature, at the cost
+of a retrain.
 
 // ============================================================
 //  8. REFERENCES  (5%)
 // ============================================================
 = References
 
-The works below are cited at the point of use as numbered footnotes and consolidated here by theme.
+Most works below are cited at the point of use as numbered footnotes; all are consolidated here by theme.
 arXiv identifiers, DOIs and URLs link directly to the primary source.
 
 == Architectures, Classification and Transfer Learning
@@ -2928,7 +3058,8 @@ arXiv identifiers, DOIs and URLs link directly to the primary source.
   score interval), *JASA*, vol. 22, pp. 209-212, 1927.
   #link("https://doi.org/10.1080/01621459.1927.10502953")[doi:10.1080/01621459.1927.10502953].
 + R. Ranftl, K. Lasinger, D. Hafner, K. Schindler, and V. Koltun, "Towards Robust Monocular Depth
-  Estimation" (MiDaS), *IEEE TPAMI*, 2020. #link("https://arxiv.org/abs/1907.01341")[arXiv:1907.01341].
+  Estimation: Mixing Datasets for Zero-Shot Cross-Dataset Transfer" (MiDaS), *IEEE TPAMI*, vol. 44,
+  no. 3, pp. 1623-1637, 2022. #link("https://arxiv.org/abs/1907.01341")[arXiv:1907.01341].
   (Evaluated and rejected for weight estimation; see Section 8.)
 + A. Meyers et al., "Im2Calories: Towards an Automated Mobile Vision Food Diary," *ICCV*, 2015.
   (Prior RGB-D food-diary work; reports portion size as the dominant error - the same wall CalEyeZ avoids.)
@@ -2975,7 +3106,7 @@ arXiv identifiers, DOIs and URLs link directly to the primary source.
 
 The complete, runnable source lives in the project repository
 (#link("https://github.com/raz-dv-ee/CalEyeZ")[github.com/raz-dv-ee/CalEyeZ]); the key
-algorithms are reproduced in Sections 3 and 5. The principal scripts are:
+algorithms are reproduced in Sections 3 and 6. The principal scripts are:
 
 #table(
   columns: (auto, 1fr),

@@ -120,7 +120,7 @@ def main() -> None:
     df["margin_gap"]  = df["g_margin"] - df["i_margin"]
     df["both_unsure"] = ((df["g_conf1"] < 0.5) & (df["i_conf1"] < 0.5)).astype(int)
     X = df[FEATS].to_numpy(dtype=np.float64)
-    sample = X[:2000]
+    sample = X                       # score the entire feature table, not a subsample
     p_xgb = clf.predict_proba(sample)[:, 1]
     p_js  = np.array([walk(flat, row) for row in sample])
     maxerr = float(np.abs(p_xgb - p_js).max())

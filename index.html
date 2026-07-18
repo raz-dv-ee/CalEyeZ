@@ -333,7 +333,7 @@
     <span class="box">USDA API</span><span class="arr">→</span>
     <span class="box">kcal + macros</span>
   </div>
-  <p>Edge desktop application in Python with a CustomTkinter GUI. Inference runs locally on an NVIDIA
+  <p>Edge desktop application in Python with a Tkinter/ttk GUI. Inference runs locally on an NVIDIA
     GPU; only the nutrient lookup uses the network.</p>
 
   <h3>Key project risks (tracked)</h3>
@@ -513,7 +513,7 @@
     <tbody>
       <tr><td>YOLO11l-cls backbone</td><td>YOLOv8-cls (previous), ResNet-50, EfficientNet</td><td>Newer C3k2 backbone gave a higher clean top-1 at the same VRAM budget; classification head is simple to fine-tune and export</td></tr>
       <tr><td>imgsz 320 (was 224)</td><td>224, 416, 640</td><td>320 lifted top-1 over 224 while still fitting batch 16 in about 2.2 GB; 640 gave no measurable gain for far more compute</td></tr>
-      <tr><td>Heavy augmentation</td><td>light / default aug</td><td>Deliberate trade: a moderate-aug retrain scores about 90% on this clean test but is more brittle in the classroom. Robustness was chosen on purpose</td></tr>
+      <tr><td>Heavy augmentation</td><td>light / default aug</td><td>Deliberate trade: lighter augmentation would score a point or two higher on this clean test but is more brittle in the classroom. Robustness was chosen on purpose</td></tr>
       <tr><td>Two experts, not one</td><td>single 145-class model</td><td>The single combined model lost accuracy on both old and new classes (catastrophic forgetting). Two experts plus an arbiter avoid it</td></tr>
     </tbody>
   </table>
@@ -557,9 +557,9 @@
     ~116 times, each time under a different random lighting, white balance and exposure.</p>
   <div class="callout amber"><b>The deliberate trade-off (robustness over peak accuracy).</b> Aggressive
     augmentation is a regulariser: it spends model capacity on <i>invariance</i> instead of memorising the
-    exact look of the training set. A <b>moderate-augmentation retrain scores about 90%</b> on this clean
-    test split, but is measurably more brittle in the classroom; our heavy-augmentation model scores
-    <b>88.18%</b> and holds up under real conditions. We chose the ~2-point clean-test cost on purpose,
+    exact look of the training set. <b>Lighter augmentation would be expected to score a point or two higher</b> on this clean
+    test split, but more brittle in the classroom; our heavy-augmentation model scores
+    <b>88.18%</b> and holds up under real conditions. We chose that modest clean-test cost on purpose,
     because the deployment environment is a kitchen, not a lab.</div>
   <div class="callout green"><b>The proof it worked, in our own numbers.</b> The near-zero
     <b>validation-vs-test gap (88.16% vs 88.18%)</b> shows the model is <i>not overfitting</i> -
@@ -1375,7 +1375,7 @@ Oracle ceiling         : 9,988 / 11,265 = 88.7%   (= 8,784 global + 1,204 Israel
       <tr><td><b>BLE (final)</b></td><td>Read the weight packet at the source</td><td><b>Selected: deterministic, robust, no vision error</b></td></tr>
     </tbody>
   </table>
-  <p class="legend">BLE packet format: <code>weight = low_byte + high_byte × 256</code>, verified by a
+  <p class="legend">BLE packet format: <code>weight = low_byte + high_byte × 256</code>, carrying an additive
     checksum over bytes 2 to 6. Example: <code>AC 05 00 02 14 00 CE E4</code> decodes to 532 g.
     The full reverse-engineering story is in the <a href="#" class="goto" data-tab="ble">BLE Scale</a> tab.</p>
 </section>
@@ -1482,7 +1482,7 @@ raw = deque(maxlen=<span class="st">5</span>)
     <text x="280" y="54" text-anchor="middle" fill="#8b949e" font-size="10.5">AC 05 00 02 14 00 CE E4</text>
     <rect x="150" y="98" width="260" height="52" rx="10" fill="#12161d" stroke="#6e7681"/>
     <text x="280" y="120" text-anchor="middle" fill="#e6edf3" font-weight="600">VALIDATE</text>
-    <text x="280" y="137" text-anchor="middle" fill="#8b949e" font-size="10.5">len &ge; 8 · header AC · checksum(2..6)</text>
+    <text x="280" y="137" text-anchor="middle" fill="#8b949e" font-size="10.5">len &ge; 8 · header AC</text>
     <rect x="436" y="103" width="108" height="42" rx="10" fill="#1d1113" stroke="#f85149"/>
     <text x="490" y="128" text-anchor="middle" fill="#e6edf3">DROP frame</text>
     <rect x="130" y="186" width="300" height="66" rx="10" fill="#12161d" stroke="#58a6ff"/>
@@ -1522,7 +1522,7 @@ raw = deque(maxlen=<span class="st">5</span>)
   <table>
     <thead><tr><th>Stage</th><th>Computation</th><th>Output</th></tr></thead>
     <tbody>
-      <tr><td>Validate</td><td><code>len&ge;8</code>, header <code>==0xAC</code>, <code>sum(b[2..6])&amp;0xFF==b[7]</code></td><td>pass, or <b>drop</b></td></tr>
+      <tr><td>Validate</td><td><code>len&ge;8</code>, header <code>==0xAC</code> (checksum <code>sum(b[2..6])&amp;0xFF</code> computed, shown PASS/FAIL)</td><td>pass, or <b>drop</b></td></tr>
       <tr><td>Decode</td><td><code>low=b[4]</code>; <code>high=b[5]|b[3]</code>; <code>raw=low+high*256</code></td><td>raw grams</td></tr>
       <tr><td>Median</td><td>median of the last 5 <code>raw</code> values</td><td>flicker-free grams</td></tr>
       <tr><td>Calibrate</td><td><code>g = round(1.178 &times; median)</code> (through-origin span fix)</td><td>true grams</td></tr>
@@ -1701,8 +1701,9 @@ raw = deque(maxlen=<span class="st">5</span>)
   <h3 id="ble-fsm">Step 5 · The connection state machine</h3>
   <p>The BLE driver is a <b>finite state machine</b>: it discovers the scale, subscribes, streams and
     decodes packets, judges stability, and <b>self-heals</b> if the stream goes silent. Every packet is
-    validated (length &ge; 8, <code>AC</code> header, and the additive checksum over bytes 2..6) before it
-    is decoded, so a corrupt frame is dropped rather than shown.</p>
+    checked for length &ge; 8 and the <code>AC</code> weight-frame header before it is decoded (status and
+    keep-alive frames are dropped); the additive checksum over bytes 2..6 is computed and surfaced as a
+    PASS/FAIL integrity indicator, while the 5-sample median outvotes any corrupt decode.</p>
   <svg viewBox="0 0 880 360" style="width:100%;max-width:880px;background:#0b0f15;border:1px solid var(--line);border-radius:12px" font-family="ui-sans-serif,system-ui" font-size="12">
     <defs><marker id="ah" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto"><path d="M0,0 L7,3 L0,6 Z" fill="#8b949e"/></marker></defs>
     <!-- nodes -->
@@ -1751,7 +1752,7 @@ raw = deque(maxlen=<span class="st">5</span>)
       <text x="430" y="190" fill="#3fb950">reconnect</text>
       <rect x="374" y="13" width="92" height="13" fill="#0b0f15"/>
       <text x="420" y="23">gatt disconnect</text>
-      <text x="892" y="107" transform="rotate(90 892 107)">bad checksum → drop</text>
+      <text x="892" y="107" transform="rotate(90 892 107)">bad header/len → drop</text>
     </g>
   </svg>
   <table>
@@ -1762,7 +1763,7 @@ raw = deque(maxlen=<span class="st">5</span>)
       <tr><td>CONNECTING</td><td>GATT connected</td><td>enable notifications on <code>ffb2</code></td><td>SUBSCRIBING</td></tr>
       <tr><td>SUBSCRIBING</td><td>notify enabled</td><td>start the packet loop</td><td>STREAMING (MOVING)</td></tr>
       <tr><td>STREAMING</td><td>valid packet</td><td>decode, push to 5-sample median</td><td>MOVING or STABLE</td></tr>
-      <tr><td>STREAMING</td><td>bad header / length / checksum</td><td>drop the frame</td><td>STREAMING (no change)</td></tr>
+      <tr><td>STREAMING</td><td>bad header or length</td><td>drop the frame</td><td>STREAMING (no change)</td></tr>
       <tr><td>MOVING</td><td>last 10 samples vary &le; 2 g</td><td>latch a reading as settled</td><td>STABLE</td></tr>
       <tr><td>STABLE</td><td>a later sample varies &gt; 2 g</td><td>reading is moving again</td><td>MOVING</td></tr>
       <tr><td>STREAMING</td><td>no packet for &gt; 4 s (watchdog)</td><td>tear down and re-scan</td><td>STALE &rarr; CONNECTING</td></tr>
@@ -1951,7 +1952,7 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
     &middot; engineering console: <code>/engineering.html</code> &middot; latency bench: <code>/bench.html</code>.</p>
 
   <div class="sub-nav">
-    <a href="#w-why">Why a browser</a><a href="#w-run">On-device runtime</a><a href="#w-fp">fp16 vs fp32</a><a href="#w-mem">Memory &amp; CPU</a>
+    <a href="#w-why">Why a browser</a><a href="#w-onnx">What ONNX is</a><a href="#w-run">On-device runtime</a><a href="#w-fp">fp16 vs fp32</a><a href="#w-mem">Memory &amp; CPU</a>
     <a href="#w-parity">Pipeline parity</a><a href="#w-arb">Arbiter in JS</a><a href="#w-lat">Latency</a>
     <a href="#w-cloud">Where the cloud is</a><a href="#w-prep">Prep &amp; portions</a><a href="#w-ble">BLE scale</a>
     <a href="#w-eng">Engineering console</a><a href="#w-limits">Limitations</a><a href="#w-arch">Hosting</a>
@@ -1962,6 +1963,45 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
     answer to the panel's "make it a real edge product / no cloud" note - the model literally runs on the
     consumer device, and the app proves it by displaying the measured inference time (<code>⚡&nbsp;N&nbsp;ms
     &middot; on-device edge</code>) next to every result, so there is no hidden HTTP round-trip to explain.</div>
+
+  <h3 id="w-onnx">What ONNX is, and why it is lighter than "YOLO" yet just as accurate</h3>
+  <p><b>ONNX</b> (Open Neural Network Exchange) is not a model or a library - it is a <b>portable file format</b>
+    that stores a trained network as a <i>static computation graph</i>: the frozen list of mathematical
+    operations plus the trained weights, with the framework that produced them stripped away. We train in
+    PyTorch/Ultralytics ("YOLO"), then <b>export</b> that exact network to a <code>.onnx</code> graph that any
+    ONNX runtime can execute - on the desktop, or as WASM inside the browser.</p>
+
+  <div class="flow">
+    <span class="box hl">Train (PyTorch + Ultralytics)</span><span class="arr">&rarr;</span>
+    <span class="box">export</span><span class="arr">&rarr;</span>
+    <span class="box teal">model.onnx (static graph + weights)</span><span class="arr">&rarr;</span>
+    <span class="box amber">ONNX Runtime Web (WASM)</span>
+  </div>
+
+  <p>The crux: <b>the network does not get smaller or approximated</b>. Same layers, same weights, same math. What
+    changes is the <b>runtime</b> that executes it, and that is where the cost collapses.</p>
+  <table>
+    <thead><tr><th>Dimension</th><th>PyTorch + Ultralytics ("YOLO")</th><th>Exported ONNX + ORT-Web</th></tr></thead>
+    <tbody>
+      <tr><td>Purpose</td><td>train <i>and</i> run: carries autograd, the optimizer, dynamic graph building</td><td><b>inference only</b>: a frozen forward graph, nothing else</td></tr>
+      <tr><td>Install footprint</td><td>hundreds of MB (Python, CUDA, torch, torchvision, numpy)</td><td>a few-MB WASM binary; <b>no install, no Python, no CUDA</b></td></tr>
+      <tr><td>Graph optimisation</td><td>rebuilt in Python on every call</td><td>fused <b>once</b> at export: conv+batchnorm+activation folded, constants pre-computed, dead nodes removed</td></tr>
+      <tr><td>Where it runs</td><td>a machine with the full stack (typically a GPU box)</td><td>any device with a browser, <b>phone CPU included</b></td></tr>
+      <tr><td>Measured latency (this project, same CPU)</td><td>~222 ms p50 end-to-end</td><td><b>~150 ms p50</b>, about 1.5&times; faster</td></tr>
+    </tbody>
+  </table>
+  <div class="callout"><b>Why lighter, precisely.</b> The forward-pass arithmetic (the convolutions) is essentially
+    the <i>same</i> count of operations either way - ONNX does not make the model compute less. It removes the
+    <i>framework</i> around the model: no Python interpreter per layer, no training machinery, no gigabytes of
+    dependencies, and kernels fused ahead of time instead of dispatched one Python op at a step. That is what turns
+    "needs a GPU workstation" into "runs in a phone tab", and it is where the ~1.5&times; speed-up comes from, not
+    from doing less of the model's own math.</div>
+  <div class="callout green"><b>Same weights, therefore same accuracy - and we verified it.</b> Because the ONNX
+    graph is a faithful re-encoding of the identical trained weights and operators, it makes the same predictions.
+    Checked directly against the PyTorch models over 200+ images per model: <b>0% top-1 mismatch</b> and a maximum
+    probability difference of only <b>~0.013</b>. The one remaining source of difference is the fp16 export (a
+    ~10<sup>&minus;3</sup>, decision-identical drift, explained next), not the ONNX conversion itself. The browser
+    build is the <i>same model</i>, carried by a far lighter engine.</div>
 
   <h3 id="w-run">How a browser runs a neural network on the edge</h3>
   <p>The two YOLO11l-cls experts are exported to <b>ONNX</b> (the same models the desktop ONNX build uses) and
@@ -2212,8 +2252,8 @@ route_to_israeli = p_israeli &gt;= <span class="st">0.5</span></pre>
   <div class="callout"><b>Why <code>Math.fround</code> matters (and how we verified it).</b> XGBoost compares in
     <b>32-bit</b> floats internally, so the JS casts each feature with <code>Math.fround</code> before the
     <code>&lt; threshold</code> test. The export script re-derives <code>arbiter_trees.json</code> from the trained
-    <code>arbiter_xgb.json</code> and checks it against the Python model on all <b>32,136</b> held-out rows: max
-    probability gap <b>3.8&times;10<sup>&minus;7</sup></b> and <b>0 routing disagreements</b>. (Without
+    <code>arbiter_xgb.json</code> and checks it against the Python model on all <b>32,136</b> rows: max
+    probability gap <b>6.0&times;10<sup>&minus;7</sup></b> and <b>0 routing disagreements</b>. (Without
     <code>Math.fround</code>, ~0.08% of borderline routes could differ from the desktop.) The routed probability then
     feeds the same gates as desktop (GATE_G&nbsp;0.55, GATE_I&nbsp;0.60, both-unsure&nbsp;0.50, arbiter-band&nbsp;0.15),
     so browser and desktop make the identical call.</div>
@@ -2696,6 +2736,41 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     Exposure, and report an OOD detection curve (AUROC, FPR at 95% TPR) as a first-class metric.
     <b>Scope:</b> this raises Israeli recall and shrinks routing error, but, like the embeddings arbiter,
     it operates inside the oracle and does not by itself lift the 88.4% ceiling.</div>
+
+  <!-- OOD / is-food prototype (empirical) -->
+  <h3 id="v2-ood">A real attempt: OOD and "is-this-food" detection on the embeddings</h3>
+  <p>Limitation 3 is not just theory here; we measured it and prototyped the fix. Two facts frame it. The
+    Global model has <b>132 food classes and no not-food output</b> (the "background" label on its confusion
+    matrix is an Ultralytics plotting artefact, not a class the head can predict), so any non-food photo is
+    forced onto a food label. And the confidence gate rejects <i>low-confidence</i> predictions, not
+    <i>wrong</i> ones.</p>
+  <div class="grid g3">
+    <div class="stat"><div class="n">9.0%</div><div class="l">confident-yet-wrong Global predictions clear the gate (860/9,521, held-out food test)</div></div>
+    <div class="stat"><div class="n">~27%</div><div class="l">of non-food photos pass the gate confidently (37-photo probe)</div></div>
+    <div class="stat"><div class="n">churros@96%</div><div class="l">a real scene; a bedroom scored cheese_plate@93%</div></div>
+  </div>
+  <p>We prototyped two detectors on the Global model's 512-D embedding, entirely off the critical path (a
+    gate-only add-on that touches neither expert, the router, nor the 86.2% system number):</p>
+  <table>
+    <thead><tr><th>Detector</th><th>What it is</th><th class="r">AUC food vs non-food</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td>Unsupervised distance</td><td>Mahalanobis / cosine to the 132 class means (needs no non-food data)</td><td class="r">~0.83</td><td>Redundant with the gate: flags the low-confidence non-food it already catches, misses the <i>confident</i> non-food, which sit inside the food manifold</td></tr>
+      <tr><td>Supervised is-food head</td><td>~2 KB linear classifier on the same embedding, trained with non-food examples</td><td class="r">~0.99*</td><td>Real separation (matched-domain), corroborated by a low-capacity nearest-centroid at 0.99, so not overfitting</td></tr>
+    </tbody>
+  </table>
+  <div class="callout amber"><b>The confound we caught (*).</b> A naive supervised head trained on the
+    <i>curated</i> food dataset against <i>phone</i> non-food scored 0.999, but it had learned the
+    <b>photographic domain</b>, not food: scored on real phone photos of actual food it rejected
+    <b>30-45% of them</b> as non-food. Only when both classes were the same domain (phone food vs phone
+    non-food, leave-one-out) did the ~0.99 hold up as a genuine food boundary. The training set, not the
+    model, is the binding requirement.</div>
+  <div class="callout green"><b>Decision.</b> An is-food guard <i>is</i> buildable: a roughly 2 KB linear head
+    reusing features the Global model already computes (no second model to load, runs as a front-door gate).
+    It is scoped as future work rather than shipped, because it needs (1) a larger matched-domain dataset with
+    mixed composition, to rule out a close-up-versus-scene confound, and (2) the 512-D embedding exposed in the
+    ONNX export. The <b>definitive</b> fix is the same as Limitation 3's: a real non-food class in training, so
+    the model natively outputs not-food and strengthens the arbiter's existing P(background) feature, at the
+    cost of a retrain.</div>
 
   <!-- Fine-tune experiment -->
   <h3 id="v2-ft">A real attempt: fine-tuning on tagged demo images (and why it failed)</h3>
