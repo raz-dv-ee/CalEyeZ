@@ -2834,6 +2834,37 @@ a "sticky high" byte. *Open / accepted limitations:* hummus misclassification is
 attributed to insufficient training data (the fix is more data, not code); and seven-segment
 OCR was abandoned rather than fixed, because the BLE path made it unnecessary.
 
+=== Web-application self-audit
+
+Before the demo, the browser application was put through a deliberate self-audit: a line-by-line
+review of the recognition, tracking and nutrition code, cross-checked against the desktop reference
+and the unit-test suite (30 tests, all passing). It surfaced *no* crashing or recognition-affecting
+defects, but did find three low-severity robustness and security gaps, each of which was fixed and
+re-verified against the tests.
+
+#table(
+  columns: (1.25fr, 1.6fr, 1.5fr, auto),
+  inset: 6pt, align: (left, left, left, left),
+  table.header([*Defect*], [*Root cause*], [*Fix*], [*Severity*]),
+  [Self-XSS in the calorie-ring subtitle],
+      [a user-supplied recipe name reached `innerHTML` unescaped, while every other user string in the app was already HTML-encoded],
+      [routed the subtitle through the same `esc()` encoder used everywhere else],
+      [low],
+  [Nutrition cache poisoned by a transient network error],
+      [a failed USDA lookup cached `null`, so that food showed no calories for the rest of the session even after the connection recovered],
+      [cache only a definitive answer (a hit, or a genuine "USDA has nothing"); leave transient failures uncached so a retake retries],
+      [low-med],
+  [Open cloud-fallback proxy],
+      [the public Gemini vision Worker accepted unbounded image uploads, so its URL could be abused to burn the project's API quota],
+      [reject oversized bodies by `content-length` and cap the base64 payload well above a real region-of-interest; per-IP rate limiting noted as future work],
+      [low-med],
+)
+
+The audit is itself part of the engineering story: the same discipline applied to the models
+(leakage-free splits, parity checks) was applied to the application, and every fix was confirmed
+against the passing test suite rather than asserted. A small amount of dead animation code was
+removed in the same pass.
+
 == Conclusion
 
 CalEyeZ meets its objectives. It classifies a large, mixed food vocabulary at 86.2% system
