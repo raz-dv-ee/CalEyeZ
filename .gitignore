@@ -33,6 +33,12 @@ runs/*/
 !runs/israeli_food_yolo11l/
 !runs/israeli_food_yolo11l/**
 
+# The SHIPPED Israeli specialist is V2 (13 dishes + open-set background). The V1 run above is
+# kept for the before/after comparison, but V2 is what the demo, the edge build and the web app
+# actually load, so its curves and confusion matrix must be in the repository too.
+!runs/israeli_food_yolo11l_v2/
+!runs/israeli_food_yolo11l_v2/**
+
 # New Global baseline on the cleaned, leakage-free 132-class dataset.
 !runs/general_model_flattened/
 !runs/general_model_flattened/**
@@ -43,6 +49,10 @@ runs/general_model_yolo11l5/weights/epoch*.pt
 runs/general_model_yolo11l5/weights/last.pt
 runs/israeli_food_yolo11l/weights/epoch*.pt
 runs/israeli_food_yolo11l/weights/last.pt
+runs/israeli_food_yolo11l_v2/weights/*.pt
+# NOTE: V2's best.pt (25 MB) is intentionally NOT committed. The metrics, curves and confusion
+# matrix that the report cites are here; the weights themselves ship via webmodels/*.onnx.
+# To include it, replace the line above with the epoch*/last pattern used by the other runs.
 runs/general_model_flattened/weights/epoch*.pt
 runs/general_model_flattened/weights/last.pt
 

@@ -8,7 +8,9 @@ for the design rationale.
 ## What it does
 
 1. Captures a webcam frame at any resolution and crops a fixed center ROI ("place food here").
-2. Normalizes lighting (gray-world white balance + CLAHE) so the result is stable under any bulb.
+2. Resizes and scales the crop to /255. There is deliberately NO lighting normalisation: gray-world
+   white balance and CLAHE were tried and removed after they measurably hurt accuracy. Lighting
+   robustness comes from the heavy photometric augmentation used at training time instead.
 3. Runs the Global model (132 classes, imgsz 320) and Israeli model (13 classes, imgsz 224)
    through Ultralytics `predict()` (letterboxed, so it is resolution independent).
 4. Builds the 19-feature vector and asks the arbiter `predict_proba` which expert to trust.
@@ -139,7 +141,8 @@ returns values; the laptop also needs internet for the lookups.
 ## Notes
 
 - Inference runs on a worker thread, so the preview and weight never freeze.
-- Lighting handling is CLAHE (contrast only) plus test-time averaging of the raw and CLAHE views.
-  We deliberately do NOT use gray-world white balance, which distorts the hue of dominant-colour foods.
+- No test-time lighting handling. CLAHE, gray-world white balance and test-time averaging of the
+  raw + CLAHE views were all tried and reverted: TTA shifted the confidences away from what the
+  arbiter was trained on, so it broke ROUTING rather than classification.
 - `nutrition_log.csv` and `temp.jpg` are written at the repo root and are gitignored.
 - First run downloads nothing extra if the weights are present; model load takes a few seconds.

@@ -4,7 +4,8 @@ CalEyeZ live demo  ·  Global model + Israeli model + XGBoost arbiter + BLE scal
 Pipeline per capture:
     webcam frame (any resolution)
       -> fixed center ROI crop (user-guided, scale-consistent)
-      -> lighting normalisation (gray-world white balance + CLAHE)
+      -> resize + /255 (no lighting normalisation: gray-world white balance and CLAHE were
+         tried and REMOVED after they hurt accuracy - see center_roi() below)
       -> Global model (132 cls, imgsz 320) and Israeli model (13 cls, imgsz 224), both via
          Ultralytics predict() so letterboxing makes the result resolution independent
       -> 20-feature vector -> XGBoost arbiter -> P(israeli) -> pick the expert

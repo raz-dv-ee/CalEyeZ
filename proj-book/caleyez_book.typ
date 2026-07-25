@@ -370,7 +370,7 @@ lane answering *how much* - that merge only at the nutrition step:
   align(center)[
     #stack(dir: ttb, spacing: 7pt,
       // --- WHAT lane ---
-      [#tbox[*Camera* \ RGB webcam] #ar #dbox[white-balance + CLAHE \ + centre-ROI crop] #ar
+      [#tbox[*Camera* \ RGB webcam] #ar #dbox[centre-ROI crop \ + resize + $div 255$] #ar
        #dbox[*Global* expert (132 cls, 320²) \ *Israeli* expert (13 + bg, 224²)]],
       text(size: 13pt, fill: rgb("#6b7280"))[↓],
       [#dbox[*20 features* \ top-5 conf · entropy · margin · p#sub[bg]] #ar
@@ -738,7 +738,8 @@ epoch 50 (validation loss 0.558 against a training loss of 0.346, a gap of 0.21)
 training loss kept dropping to 0.087 while the validation loss drifted back up to 0.667, widening
 the gap to 0.58. Because we keep the weights that were best on validation rather than the last
 ones, the *deployed* `best.pt` is frozen at that peak (epoch 86, validation top-1 88.15%; Ultralytics
-checkpoints and early-stops on the mean of top-1 and top-5, whose peak is epoch 86) and is
+checkpoints and early-stops on the mean of top-1 and top-5, whose peak is epoch 86 - the
+validation curve's own top-1 maximum, 88.16%, falls at epoch 73 and is not what ships) and is
 unaffected by the later overfitting. *Early stopping* with patience 30 then halts training once
 the validation metric has not improved for 30 epochs, which is why 150 planned epochs ended at
 116. This is also why our validation and test scores agreeing (88.16% vs 88.18%) is meaningful:
@@ -1111,7 +1112,7 @@ glaze, grain - and texture is exactly what extra resolution buys, so the Global 
 larger input ($(320\/224)^2 approx 2 times$ the pixels). The *Israeli*
 specialist solves a far easier 14-way problem over visually distinct dishes, so 224 px - the
 native resolution of the ImageNet pretraining, where the transferred backbone features fit best -
-is already sufficient (~88.9% top-1 for the shipped 13 + background model), and raising it would spend compute without a
+is already sufficient (93.25% top-1 on Israeli food for the shipped model), and raising it would spend compute without a
 discrimination problem to solve. The saving is not free-floating either: the arbiter design runs
 *both* experts on *every* image (Decision D-10), so their inference costs *add* - keeping the
 second model at 224 px is what keeps the double-inference latency budget affordable on the CPU
@@ -2152,7 +2153,9 @@ This chapter reports what the system actually achieves. It covers each model's a
 unseen data, the router's quality, the full routed system against its baseline and ceiling,
 the edge-build parity, a real-world field test, the alternatives that were measured and
 rejected, and finally the system's limitations and known bugs. Every figure here is produced
-by a committed script and comes from data the relevant model never trained on.
+by a script in the repository and comes from data the relevant model never trained on. The large
+generated tables these scripts consume and emit (`datasets/`) are gitignored for size and are
+regenerated rather than stored.
 
 == Model Results
 
@@ -2160,20 +2163,31 @@ The Global model reaches *88.18% top-1* and *96.94% top-5* on its 132-class held
 Critically, its validation accuracy (88.16%) and test accuracy (88.18%) agree to within
 0.02 points - the signature of clean, non-leaking splits, and a direct improvement over the
 earlier model whose ~4-point val/test gap revealed train/test leakage. The shipped Israeli
-specialist (V2, 13 dishes + an open-set *background* class) reaches *88.86%* top-1 (best epoch 112),
-with top-5 near 98.6%. Its predecessor - a 13-class model with no background class - scored a higher
-*92.26%* on the clean test split, but the background class is what supplies the arbiter's "not-mine"
-routing signal, so we deliberately traded roughly three points of raw specialist accuracy for a
-working ensemble (Decision D-08). The remaining errors are sensible visual overlaps (chocolate mousse vs cake, gnocchi vs
+specialist (V2, 13 dishes + an open-set *background* class) reaches *93.25%* top-1 on the genuine
+Israeli images of the held-out test split (1,392 images; macro-average across the 13 dishes 92.08%).
+The remaining errors are sensible visual overlaps (chocolate mousse vs cake, gnocchi vs
 ravioli) and the smallest ingredient classes, exactly where the least training data exists.
 
 #table(
   columns: (1fr, auto, auto, auto),
   inset: 7pt, align: (left, center, center, center),
-  table.header([*Model*], [*Classes*], [*Top-1*], [*Top-5*]),
+  table.header([*Model*], [*Classes*], [*Top-1 (test)*], [*Top-5 (test)*]),
   [Global (general cuisine)], [132], [88.18%], [96.94%],
-  [Israeli specialist (shipped, V2)], [13 + background], [88.86%], [~98.6%],
+  [Israeli specialist (shipped, V2), on Israeli food], [13 dishes], [93.25%], [-],
 )
+
+#note[*Two different Israeli numbers, and why they differ.* The table reports what the specialist
+does at its *job*: naming Israeli food, measured on the 1,392 genuine Israeli rows of the test split.
+Evaluated instead as a *14-way* problem that also scores the open-set *background* class, the same
+checkpoint reads *88.66%* top-1 / 98.93% top-5 on validation. That lower figure is not a worse model
+- it is dominated by the background class, an intentional out-of-distribution sink whose own recall
+is only about 0.64 because its job is to absorb ambiguous non-Israeli food, not to be a crisp
+category. Both numbers are reported so neither is mistaken for the other. (Ultralytics checkpoints
+and early-stops on the *mean* of top-1 and top-5, so the shipped `best.pt` is *epoch 104*, whose
+fitness 93.799 beats epoch 112's 93.750 - the same rule applied to the Global model in Section 3.3.7.)
+Its predecessor - a 13-class model with no background class - scored *92.26%* on its own clean test
+split, but the background class is what supplies the arbiter's "not-mine" routing signal, so a small
+amount of raw specialist accuracy was deliberately traded for a working ensemble (Decision D-08).]
 
 #figure(
   image("figures/global_curves.png", width: 80%),
@@ -2239,8 +2253,10 @@ The "money metric" is the routed *system* top-1, compared against two references
 *always-Global baseline* (never route) scores 77.4%; the *oracle* (a perfect router that picks
 the right expert whenever either model is correct) scores 88.8%. The shipped system
 reaches *86.2%*, comfortably above the project's 80% target. (Every number in this section is
-recomputed directly from the committed per-image evaluation table,
-`datasets/system_evaluation.csv` - 11,352 held-out test rows, one per image.)
+recomputed directly from the per-image evaluation table
+`datasets/system_evaluation.csv` - 11,352 held-out test rows, one per image. That table is a
+generated artifact: `datasets/` is excluded from the repository by `.gitignore` because of its
+size, so the table is reproduced by re-running the evaluation script rather than checked out.)
 
 #table(
   columns: (1fr, auto),
@@ -2261,7 +2277,7 @@ the other - is the entire value proposition of the ensemble, and it is visible a
 
 #figure(
   image("figures/system_ladder.png", width: 80%),
-  caption: [Baseline vs routed system vs oracle, per domain, computed from the committed 11,352-row
+  caption: [Baseline vs routed system vs oracle, per domain, computed from the 11,352-row
     evaluation table. The Israeli baseline is exactly 0% (disjoint label spaces); routing buys that
     domain back for a 0.9-point cost on the global domain.],
 )
@@ -2339,7 +2355,6 @@ correction) in well under a millisecond, and the link is guarded by a staleness 
 (`STALE_SEC = 4.0` s, polled every 0.4 s in `caleyez_demo.py`). The one latency the code cannot
 measure is the initial BLE handshake, which is governed by the host operating system's Bluetooth
 stack rather than by the app.
-// TODO-VERIFY(BLE connect-to-first-weight handshake time: no instrumentation in scripts/ble/scale_reader.py or the demo's connect path)
 
 == Real-World Field Validation
 
