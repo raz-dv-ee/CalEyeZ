@@ -2651,7 +2651,7 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     high on those foods even when another class edges it out, and that is enough to route them to the global
     expert.</p>
 
-  <div class="foot">CalEyeZ · Israeli Model V2 · status: COMPLETE and ADOPTED. Model retrained (best ep112, val top-1 88.9% on 14 classes), arbiter regenerated + retrained with i_p_background (now its #1 feature), full system eval done, demo + System Analysis updated to V2. System 83.8% to 86.2%, Israeli domain 60.8% to 78.0%.</div>
+  <div class="foot">CalEyeZ · Israeli Model V2 · status: COMPLETE and ADOPTED. Model retrained (best ep104, val top-1 88.66% on 14 classes incl. background; 93.25% top-1 on genuine Israeli food in the held-out test split), arbiter regenerated + retrained with i_p_background (now its #1 feature), full system eval done, demo + System Analysis updated to V2. System 83.8% to 86.2%, Israeli domain 60.8% to 78.0%.</div>
 </section>
 
 <section class="tab" id="tab-future">
@@ -3491,7 +3491,7 @@ python scripts/arbiter/evaluate_system.py              <span class="cm"># honest
     <thead><tr><th>Stage</th><th>What physically happens</th><th>The discipline behind it</th></tr></thead>
     <tbody>
       <tr><td><b>Sense</b></td><td>A camera and a strain-gauge load cell turn light and force into electrical signals.</td><td>Sensors &amp; Actuators · Analog Electronics</td></tr>
-      <tr><td><b>Condition</b></td><td>Median filter on the 1-D weight stream; white balance + CLAHE on the 2-D image.</td><td>Signal &amp; Image Processing</td></tr>
+      <tr><td><b>Condition</b></td><td>Median filter on the 1-D weight stream; center-ROI crop, resize and /255 scaling on the 2-D image (white balance and CLAHE were tried and removed after they hurt accuracy).</td><td>Signal &amp; Image Processing</td></tr>
       <tr><td><b>Compute on silicon</b></td><td>Two CNNs run as tiled matrix-multiplies and convolutions, in parallel, in FP16, on a CUDA GPU.</td><td>GPU Accelerator · Computer Architecture</td></tr>
       <tr><td><b>Decide</b></td><td>An XGBoost arbiter routes between the two experts; a confidence gate escalates when unsure.</td><td>Practical ML · Applications in AI</td></tr>
       <tr><td><b>Drive it in code</b></td><td>OOP classes, ring buffers and bounds-checks orchestrate the camera loop and the BLE device loop.</td><td>Python for E&amp;E · Software / C</td></tr>
@@ -3711,7 +3711,7 @@ software_stable = delta &lt;= STABILITY_THRESHOLD        <span class="cm"># ≤2
       <div class="meta">Course 3603834 · 1-D signals + 2-D images, filtering, pattern recognition</div></div></div>
     <div class="body">
       <p class="lab">What it put into CalEyeZ</p>
-      <div class="built">A 2-D image front-end (center-ROI crop, gray-world white balance, CLAHE) and 1-D filtering on the sensor stream. The course teaches that 1-D signals and 2-D images are the same maths in different dimensions, and CalEyeZ uses both.</div>
+      <div class="built">A 2-D image front-end (center-ROI crop, resize, /255 scaling) and 1-D filtering on the sensor stream. Gray-world white balance and CLAHE were built and measured, then removed after they hurt accuracy, which is itself the course lesson. The course teaches that 1-D signals and 2-D images are the same maths in different dimensions, and CalEyeZ uses both.</div>
       <p class="lab" style="margin-top:14px">The CalEyeZ code</p>
 <pre><span class="cm"># scripts/demo/caleyez_demo.py - 2-D image filtering before recognition</span>
 <span class="kw">def</span> <span class="fn">center_roi</span>(bgr):
