@@ -191,6 +191,29 @@ This section details the functional specifications of the hardware and software 
 7.  **Nutritional Database Module:**
     * **Role:** Provides the raw data for calculation.
     * **Operation:** Acts as a lookup table (Local DB or cached API response) mapping food labels (e.g., "Banana") to their macronutrient profiles (Calories, Protein, Fat, Carbs per 100g).
+8.  **Micronutrient Reference-Intake Module (`lib/tracking.js`):**
+    * **Role:** Turns accumulated micronutrient amounts into an answer to the user's actual question, "am I short of anything?", by expressing every nutrient as a share of that person's daily reference intake.
+    * **Operation:** `scaleMicros()` converts per-100g values to the amount actually eaten; `sumMicros()` aggregates across the selected period; `microReport()` divides by the number of days in the period and compares against the reference. Averaging over the period is deliberate: nutrient status is a function of habitual intake, not of any single day.
+    * **Personalisation:** Reference values are banded by sex and by three age groups (under 19, 19 to 50, over 50). `microTargets()` returns null when age or sex is unknown, so the interface asks for them rather than silently applying another cohort's values.
+    * **Purity and test coverage:** The module touches no DOM, no `localStorage` and no network, so the identical file runs under Node's test runner. 40 unit tests cover the pure functions, 10 of them for this module.
+
+    **Sources of the reference values.**
+
+    | Group | Source |
+    | --- | --- |
+    | Vitamins and minerals | Dietary Reference Intakes (DRI), Food and Nutrition Board, National Academies of Sciences, Engineering and Medicine (NASEM, formerly the Institute of Medicine). The RDA is used where one is defined; the Adequate Intake (AI) is used where no RDA exists, which is the case for vitamin K, potassium and fibre. Republished per nutrient by the NIH Office of Dietary Supplements, `https://ods.od.nih.gov/factsheets/` |
+    | Sodium, 2300 mg | Not an RDA. Chronic Disease Risk Reduction (CDRR) intake, NASEM 2019, carried into the Dietary Guidelines for Americans as an upper bound |
+    | Added sugar, 50 g | Not an RDA. WHO, *Guideline: Sugars intake for adults and children* (2015), the "below 10% of total energy" recommendation evaluated at a 2000 kcal diet |
+
+    **Targets versus ceilings.** Each nutrient carries a direction. Most are minima to reach (`dir: "min"`). Sodium and added sugar are maxima not to exceed (`dir: "max"`) and can never be reported as a shortfall. Encoding the direction in the data model rather than in the presentation layer is what prevents the system from advising a user to eat more salt.
+
+    **Data-honesty guard.** Coverage of the nutrient table is uneven: iron and potassium are present for all 38 local foods carrying micronutrient data, whereas vitamin D and vitamin K appear in only 16. A naive implementation would therefore report a vitamin D deficiency for nearly every user, because the *database* lacks the field rather than the *diet* lacking the nutrient. `microCoverage()` computes, per nutrient, the fraction of logged rows that actually carried a value; any nutrient below the coverage floor is displayed but excluded from `microGaps()` and never counted as a shortfall. This was verified on a seeded seven-day log in which vitamin D scores lowest of all nineteen nutrients and is correctly withheld from the summary, which instead names the two genuine, well-evidenced gaps.
+
+    **Known simplifications, recorded rather than implied.**
+    * The three age bands are coarser than the official DRI tables.
+    * Vitamin D officially steps up from 15 to 20 ug at age 70; this implementation applies the higher value from 51. The choice is conservative: it can under-report adequacy but never over-report it.
+    * Pregnancy and lactation have distinct DRI values and are not modelled.
+    * These are population reference intakes, not personal clinical targets. The interface states this, and the project's stated non-goals exclude dietary prescription.
 
 ### c. GUI
 The CalEyeZ user interface is designed with a focus on usability and real-time data visualization. Built using Tkinter/ttk (the Python standard library) with a custom dark theme, it provides a modern, high-contrast dashboard that allows users to monitor the fusion process between the physical weight and the visual recognition.

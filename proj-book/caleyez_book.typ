@@ -2122,30 +2122,12 @@ Twenty-seven of the forty local foods resolved in USDA and were back-filled by a
 the remaining thirteen, most of the Israeli dishes among them, carry ingredient-based estimates the
 interface labels as such.
 
-*From amounts to meaning: reference intakes.* Reporting that a user ate 340 mg of potassium is data,
-not information. The diary therefore expresses every micronutrient as a share of that person's
-*daily reference intake*, averaged across the selected period, because nutrient status is a function
-of habitual intake rather than of any single day. The reference values are the *Dietary Reference
-Intakes* of the Food and Nutrition Board of the National Academies (NASEM, formerly the Institute of
-Medicine): the RDA where one is defined, and the Adequate Intake where one is not, which is the case
-for vitamin K, potassium and fibre. They are banded by sex and by three age groups. Two entries are
-deliberately *not* RDAs and are handled in the opposite direction, as ceilings rather than targets:
-sodium at 2300 mg, which is the Chronic Disease Risk Reduction intake (NASEM, 2019), and added sugar
-at 50 g, from the WHO recommendation to stay below 10% of energy evaluated at a 2000 kcal diet.
-Encoding that direction in the data model matters, because a system that treated a ceiling as a goal
-would tell a user to eat more salt.
-
-The engineering problem underneath is subtler than the arithmetic, and it is a *data-honesty*
-problem. Coverage of the nutrient table is uneven: iron and potassium are present for all 38 local
-foods that carry micronutrients, but vitamin D and vitamin K appear in only 16. A naive
-implementation would therefore report a vitamin D deficiency for almost every user, because the
-*database* lacks the field, not because the diet lacks the nutrient. The module accordingly computes
-per-nutrient *coverage*, the fraction of the logged rows that actually carried a value, and any
-nutrient below a coverage floor is displayed but never counted as a shortfall. On a seeded test week
-vitamin D scores lowest of all nineteen nutrients and is correctly withheld from the summary, which
-names the two genuine, well-evidenced gaps instead. The wording throughout is descriptive rather
-than prescriptive, and labelled as reference values rather than medical advice, consistent with the
-non-goal set out in Section 1.4.
+*From amounts to meaning: reference intakes.* Micronutrients are reported as a share of the user's
+*daily reference intake* (NASEM Dietary Reference Intakes; sodium and added sugar as ceilings, not
+targets), averaged over the period, since nutrient status follows habitual intake. Because coverage
+of the nutrient table is uneven, per-nutrient *coverage* is computed and thin nutrients are shown but
+never counted as a shortfall, so a gap in the database is never reported as a gap in the diet. Full
+derivation and sources are in `proj-book/CalEyeZ_SDD.md`.
 
 *Treating the user as an adversary.* Recipe names, the profile name, and imported CSV rows are
 user-controlled yet flow straight into the DOM and into `localStorage`, so the layer is written
