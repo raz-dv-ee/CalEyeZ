@@ -72,6 +72,16 @@
 #let okbox(body) = dbox(body, fill: rgb("#e7f7ec"), stroke: rgb("#3fb950"))
 #let tbox(body) = dbox(body, fill: rgb("#e6f7f5"), stroke: rgb("#39d0c4"))
 #let ar = text(size: 14pt, fill: rgb("#6b7280"))[#h(4pt) → #h(4pt)]
+// Roadmap stage: a pipeline box that also says where in this book it is documented.
+#let rstage(body, sec, fill: rgb("#eef3ff"), stroke: rgb("#9bbcff")) = box(
+  fill: fill, stroke: 0.6pt + stroke, radius: 4pt, inset: (x: 6pt, y: 5pt),
+  height: 34pt, baseline: 12pt,          // uniform height so every lane reads as one clean row
+  align(center + horizon)[
+    #text(size: 8.5pt, weight: 600)[#body] \
+    #text(size: 6.8pt, fill: rgb("#6b7280"))[#sec]
+  ]
+)
+#let rar = text(size: 11pt, fill: rgb("#9aa4b2"))[#h(2pt) → #h(2pt)]
 
 // Live-site deep links. Pages base + the tab's hash anchor (e.g. "trainlab", "arbiter").
 // Usage in text:  the #web("trainlab")[learning rate] schedule ...
@@ -355,6 +365,52 @@ The primary scenario, "logging a meal", runs end to end as follows:
 next chapter, *Design Decisions and Trade-offs* (decisions D-01 to D-25), where the options,
 the reason for the choice, and the measured cost of each rejected alternative are set out.]
 
+#figure(
+  align(center)[
+    #block(width: 100%, inset: 6pt)[
+      #align(left)[#text(size: 8pt, fill: rgb("#6b7280"), weight: 600)[THE "WHAT?" LANE #sym.dash.en identity]]
+      #v(3pt)
+      #stack(dir: ltr, spacing: 0pt,
+        rstage[Camera][#sym.section 3.2], rar,
+        rstage[Centre ROI \ crop, $div$255][#sym.section 7.8], rar,
+        rstage(fill: rgb("#eef3ff"))[*Global* expert \ 132 cls, 320px][#sym.section 3.3.4], rar,
+        rstage(fill: rgb("#e7f7ec"), stroke: rgb("#3fb950"))[*Israeli* expert \ 13 + bg, 224px][#sym.section 3.3.9],
+      )
+      #v(5pt)
+      #stack(dir: ltr, spacing: 0pt,
+        rstage(fill: rgb("#fdf3df"), stroke: rgb("#d29922"))[*XGBoost arbiter* \ P(israeli)][#sym.section 3.3.10], rar,
+        rstage(fill: rgb("#fdf3df"), stroke: rgb("#d29922"))[confidence gate][#sym.section 3.3.10], rar,
+        rstage[Gemini fallback \ (if unsure)][#sym.section 7.9], rar,
+        rstage(fill: rgb("#e7f7ec"), stroke: rgb("#3fb950"))[*label*][#sym.section 8.1],
+      )
+      #v(9pt)
+      #align(left)[#text(size: 8pt, fill: rgb("#6b7280"), weight: 600)[THE "HOW MUCH?" LANE #sym.dash.en quantity]]
+      #v(3pt)
+      #stack(dir: ltr, spacing: 0pt,
+        rstage(fill: rgb("#e6f7f5"), stroke: rgb("#39d0c4"))[BLE scale \ strain gauge][#sym.section 3.2], rar,
+        rstage[8-byte decode \ + 5-sample median][#sym.section 6.1], rar,
+        rstage[calibrate $times 1.178$][#sym.section 8.5], rar,
+        rstage(fill: rgb("#e7f7ec"), stroke: rgb("#3fb950"))[*grams*][#sym.section 8.5],
+      )
+      #v(9pt)
+      #align(left)[#text(size: 8pt, fill: rgb("#6b7280"), weight: 600)[FUSION #sym.dash.en the two lanes meet only here]]
+      #v(3pt)
+      #stack(dir: ltr, spacing: 0pt,
+        rstage[*label* + *grams*][#sym.section 3.3.13], rar,
+        rstage[nutrition lookup \ local #sym.arrow USDA #sym.arrow Gemini][#sym.section 7.9], rar,
+        rstage[cooking multiplier][#sym.section 7.10], rar,
+        rstage(fill: rgb("#e7f7ec"), stroke: rgb("#3fb950"))[*calories + macros* \ + the diary][#sym.section 7.12],
+      )
+    ]
+  ],
+  caption: [*Roadmap: the system, and where each part of it is documented.* Read this figure once and
+    the rest of the book has a place to hang. The camera lane answers *what* the food is, the scale
+    lane answers *how much*, and they stay independent until the final multiplication, which is the
+    whole thesis of the project: nothing ever infers mass from pixels. Blue = computation,
+    teal = a physical sensor, amber = the routing decision, green = a finished quantity. Each box
+    carries the section that derives it, so any stage can be read in isolation.],
+)
+
 == System Design and Architecture
 
 CalEyeZ is a *standalone edge-computing* system: all inference runs locally on the host
@@ -362,36 +418,6 @@ PC, and only the nutritional lookup reaches out to the network. The design follo
 *event-driven sensor-fusion* pattern with two parallel sensing channels - a camera for the
 "What?" and a BLE scale for the "How much?" - that are merged when the user triggers an
 analysis.
-
-The data flow has two parallel sensing lanes - the camera lane answering *what* and the scale
-lane answering *how much* - that merge only at the nutrition step:
-
-#figure(
-  align(center)[
-    #stack(dir: ttb, spacing: 7pt,
-      // --- WHAT lane ---
-      [#tbox[*Camera* \ RGB webcam] #ar #dbox[centre-ROI crop \ + resize + $div 255$] #ar
-       #dbox[*Global* expert (132 cls, 320²) \ *Israeli* expert (13 + bg, 224²)]],
-      text(size: 13pt, fill: rgb("#6b7280"))[↓],
-      [#dbox[*20 features* \ top-5 conf · entropy · margin · p#sub[bg]] #ar
-       #dbox[*XGBoost arbiter* \ P(israeli) ⋛ 0.5] #ar #dbox[*confidence gate* \ (Gemini fallback if unsure)] #ar
-       #okbox[recognised \ *label*]],
-      v(4pt),
-      // --- HOW MUCH lane ---
-      [#tbox[*BLE scale* \ strain-gauge cell] #ar #dbox[8-byte packet decode \ + 5-sample median] #ar
-       #dbox[calibrate ×1.178 \ (through-origin)] #ar #okbox[measured \ *grams*]],
-      text(size: 13pt, fill: rgb("#6b7280"))[↓],
-      // --- MERGE ---
-      [#dbox[*label* + *grams*] #ar #dbox[nutrition lookup \ local DB → USDA → Gemini] #ar
-       #okbox[*calories + macros* \ (factor × grams / 100)]],
-    )
-  ],
-  caption: [The CalEyeZ pipeline. The *camera lane* (top) turns a frame into a label - two CNN experts run
-    in parallel, an XGBoost arbiter picks the right one from their confidence signals, and a gate escalates the
-    unsure cases. The *scale lane* (middle) turns a BLE packet into calibrated grams. They meet only at the
-    *fusion* step (bottom), where label + grams become calories. Blue = compute, teal = sensor, green = a
-    finished quantity. Nothing infers mass from pixels - the two lanes stay separate until the arithmetic.],
-)
 
 The central *Fusion Logic Controller* synchronises the asynchronous BLE thread with the
 UI event that captures the frame, runs the two models and the router, calls the nutrition
@@ -873,7 +899,7 @@ Empirically it separates almost linearly: $p_"bg" approx 0.50$ on global food ve
 $approx 0.03$ on genuine Israeli food.
 
 #figure(
-  image("figures/ood_separation.png", width: 82%),
+  image("figures/ood_separation.png", width: 72%),
   caption: [The background class in action, over all 32,136 rows
     (`datasets/arbiter_dataset.csv`). Genuine Israeli food (green) piles up at $p_"bg" approx 0$ - the specialist
     confidently claims it - while global food (red) sits high, with a heavy mass near 1 (median $0.49$). One number,
@@ -1160,7 +1186,7 @@ arbiter. The choice is validated by our own numbers: the near-zero validation-te
 (30/40 = 75%, ~85% expanded) confirms it transfers to unseen real photos.
 
 #figure(
-  image("figures/global_train_batch.jpg", width: 76%),
+  image("figures/global_train_batch.jpg", width: 66%),
   caption: [One real training batch fed to the Global model, exactly as the network sees it. The
     augmentation described above is visible on the actual data: images are re-lit at random (note the
     dark and the over-bright plates), colour-shifted, rotated and letter-boxed onto black, and each
@@ -1896,7 +1922,7 @@ before the arithmetic gives each intermediate product that room, which is the pr
 model *computes at higher precision than it stores*.
 
 #figure(
-  image("figures/fp_bits.png", width: 82%),
+  image("figures/fp_bits.png", width: 72%),
   caption: [The bit layout of both formats. A float is $"sign" times "mantissa" times 2^"exponent"$; the
     *mantissa* holds the significant digits and its width sets the precision - 10 bits (~4 decimal digits) in
     fp16 versus 23 bits (~7 digits) in fp32. The exponent handles magnitude, so fp16 is short on *digits*, not
@@ -2197,20 +2223,20 @@ split, but the background class is what supplies the arbiter's "not-mine" routin
 amount of raw specialist accuracy was deliberately traded for a working ensemble (Decision D-08).]
 
 #figure(
-  image("figures/global_curves.png", width: 80%),
+  image("figures/global_curves.png", width: 70%),
   caption: [Global model training. Top-1 and top-5 accuracy rise and plateau while training and
     validation loss fall together; best weights are frozen at the validation peak (epoch 86).],
 )
 
 #figure(
-  image("figures/global_confusion.png", width: 78%),
+  image("figures/global_confusion.png", width: 68%),
   caption: [Normalised confusion matrix for the 132-class Global model (test split). The strong
     diagonal shows correct classification dominates; off-diagonal mass sits on sensible visual
     overlaps. Full-resolution version is in the repository.],
 )
 
 #figure(
-  image("figures/global_val_preds.jpg", width: 78%),
+  image("figures/global_val_preds.jpg", width: 68%),
   caption: [Example validation predictions from the Global model (a single batch).],
 )
 
@@ -2218,18 +2244,18 @@ The Israeli specialist behaves cleanly on its own 14-way problem (13 dishes plus
 background class), with a strong diagonal and well-controlled training curves.
 
 #figure(
-  image("figures/israeli_curves.png", width: 80%),
+  image("figures/israeli_curves.png", width: 70%),
   caption: [Israeli specialist (V2) training curves.],
 )
 
 #figure(
-  image("figures/israeli_confusion.png", width: 76%),
+  image("figures/israeli_confusion.png", width: 66%),
   caption: [Normalised confusion matrix for the Israeli specialist (V2), including the open-set
     background class used by the router.],
 )
 
 #figure(
-  image("figures/israeli_val_preds.jpg", width: 78%),
+  image("figures/israeli_val_preds.jpg", width: 68%),
   caption: [Example validation predictions from the Israeli specialist (a single batch) - local
     dishes the Global model was never trained on (hummus, sabich, falafel, malawach, shakshuka,
     bourekas, sufganiyah, meorav yerushalmi, samosa), named on held-out photos.],
@@ -2283,7 +2309,7 @@ Global model does not know those classes at all), and the routed system delivers
 the other - is the entire value proposition of the ensemble, and it is visible at a glance:
 
 #figure(
-  image("figures/system_ladder.png", width: 80%),
+  image("figures/system_ladder.png", width: 70%),
   caption: [Baseline vs routed system vs oracle, per domain, computed from the 11,352-row
     evaluation table. The Israeli baseline is exactly 0% (disjoint label spaces); routing buys that
     domain back for a 0.9-point cost on the global domain.],
@@ -2299,7 +2325,7 @@ the router - to go beyond ~88.8% one must improve the classifiers (more or clean
 backbone), not tune the arbiter further.
 
 #figure(
-  image("figures/error_decomposition.png", width: 80%),
+  image("figures/error_decomposition.png", width: 70%),
   caption: [Where the error lives: of 11,352 test images, 86.2% are correct, 2.6% are routing
     errors (recoverable by a better router), and 11.2% are both-experts-wrong (recoverable only by
     better models). The router has already closed 77% of the baseline-to-oracle gap.],
@@ -2432,7 +2458,7 @@ line; every measured point sits *above* it (the scale reads low), and both sets 
 straight line through the origin, which is the visual signature of a pure multiplicative span error.
 
 #figure(
-  image("figures/cal_scatter.png", width: 82%),
+  image("figures/cal_scatter.png", width: 72%),
   caption: [True mass vs raw reading. Blue = fit set (water + food, $n = 10$); amber squares =
     held-out everyday objects ($n = 10$). All points lie on one through-origin line, well above the
     dashed perfect-scale diagonal - a constant *proportional* under-read, not a random or additive one.],
@@ -2471,7 +2497,7 @@ the entire range. The raw error grows *linearly with load* - the signature of a 
 150 g at 1 kg - while the corrected error stays near zero and no longer trends with mass:
 
 #figure(
-  image("figures/cal_error.png", width: 82%),
+  image("figures/cal_error.png", width: 72%),
   caption: [Absolute weight error vs mass, before and after the $1.178times$ correction. The raw
     error (red) rises linearly to 150 g at 1 kg; after correction (green) it is a flat few grams
     across the whole 5-1062 g range.],
@@ -2543,7 +2569,7 @@ clearly:
 )
 
 #figure(
-  image("figures/calorie_decomposition.png", width: 80%),
+  image("figures/calorie_decomposition.png", width: 70%),
   caption: [Per-meal error decomposition (from `scripts/eval/calorie_validation_results.csv`).
     The green weight-channel bars are uniformly small (1-4%); the total calorie error tracks the
     amber *database* bars almost exactly - the residual error is the per-100 g entry choice, not
@@ -2593,7 +2619,7 @@ error - and it earned that while conceding every advantage to the competition.
 )
 
 #figure(
-  image("figures/compare_permeal.png", width: 86%),
+  image("figures/compare_permeal.png", width: 74%),
   caption: [Per-meal absolute calorie error for the three apps on the eight shared meals
     (`scripts/eval/calorie_comparison.xlsx`). CalEyeZ wins or ties most rows; the one row where it
     looks worst - french fries - is a *database* miss (generic deep-fried entry vs a home-fried
@@ -2615,7 +2641,7 @@ assumption. CalEyeZ reads the actual grams, so its calorie figure tracks the rea
 isolated this with a single food at two portions - a full can of tuna (162 g) and a small 14 g ball:
 
 #figure(
-  image("figures/compare_portion.png", width: 82%),
+  image("figures/compare_portion.png", width: 72%),
   caption: [Reported calories vs the *actual* weight on the plate, canned tuna. CalEyeZ (green) sits on
     the ground-truth diagonal at both portions (3% and 8% error); Cal.ai (red) is nearly flat - it
     read the 14 g ball at 45 kcal (*209%* error), never leaving its "small serving of tuna" prior. It
@@ -2658,7 +2684,7 @@ camera angle and the layout on the plate* - the food and its weight never moved.
 each arrangement.
 
 #figure(
-  image("figures/repeatability.png", width: 92%),
+  image("figures/repeatability.png", width: 78%),
   caption: [Seven photos of one tuna plate (truth $approx 31$ kcal). Cal.ai's calorie output swings
     across the full range while CalEyeZ stays on the truth line - because CalEyeZ reads the weight from
     the scale, which does not change with viewpoint, whereas Cal.ai infers the portion from pixels,
@@ -2746,7 +2772,7 @@ consumer nutrition tool the added bill-of-materials, calibration and power simpl
 expensive path to the same density dead-end.
 
 #figure(
-  image("figures/depth_rejection.png", width: 88%),
+  image("figures/depth_rejection.png", width: 76%),
   caption: [Why depth hardware was rejected without building it. *Left:* stereo recovers depth by
     triangulating the disparity $d$ of the same point across a baseline $b$ ($Z = f b\/d$) - but the
     match fails exactly on glossy, textureless food surfaces. *Right:* any single-viewpoint sensor
@@ -2766,14 +2792,14 @@ wrong weight. The methods also required a coin in frame, a single clean object, 
 background, and (for shadows) a hard directional light - none of which survive a real plate.
 
 #figure(
-  image("figures/fail_apple_midas.jpg", width: 82%),
+  image("figures/fail_apple_midas.jpg", width: 72%),
   caption: [Volume from monocular depth (MiDaS). The coin fiducial sets pixel size; the depth map
     over the apple mask integrates to a volume of 139.3 cm³, within ~7% of the true volume - yet
     still useless without a density value to convert it to grams.],
 )
 
 #figure(
-  image("figures/fail_can_shadow.jpg", width: 82%),
+  image("figures/fail_can_shadow.jpg", width: 72%),
   caption: [Volume from shadow geometry. With a 45° light an object's height equals its shadow
     length; the perspective-corrected top area times that height gives 519.67 cm³, again without
     any depth network - and again stuck at the density step.],
