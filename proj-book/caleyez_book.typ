@@ -28,12 +28,15 @@
   #block(text(size: 18pt, weight: "bold", it))
   #v(0.6em)
 ]
+// NOTE: the spacing below a heading must come from the block's own `below:`, never from a
+// trailing #v(). A sticky block sticks to whatever follows it, so a trailing spacer absorbs the
+// stickiness and the heading can still be stranded at the foot of a page.
 #show heading.where(level: 2): it => [
   #v(0.3em)
-  #block(text(size: 14pt, weight: "bold", it))
-  #v(0.2em)
+  #block(text(size: 14pt, weight: "bold", it), sticky: true, below: 0.65em)
 ]
-#show heading.where(level: 3): it => block(text(size: 12pt, weight: "bold", it))
+#show heading.where(level: 3): it => block(
+  text(size: 12pt, weight: "bold", it), sticky: true, above: 0.9em, below: 0.5em)
 
 // Code blocks: light frame
 #show raw.where(block: true): it => block(
