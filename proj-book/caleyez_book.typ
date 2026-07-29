@@ -17,8 +17,11 @@
 #set par(justify: true, leading: 0.7em)
 
 // Keep each paragraph together: never split one across a page break.
-// (An explicit block wrap is required - `set block(breakable:false)` alone does not bind to paragraphs.)
-#show par: it => block(breakable: false, width: 100%, it)
+// Paragraphs are deliberately BREAKABLE. Forcing them whole (block(breakable: false)) guarantees
+// no paragraph is ever split, but the cost is that any paragraph which does not fit the remaining
+// space jumps entirely to the next page, leaving a large blank hole mid-chapter. A visible hole
+// reads as broken typesetting; a paragraph continuing over a page turn is what every printed book
+// does. Figures, tables and equations stay unbreakable, since severing those really is a defect.
 
 // Numbered headings: 1 / 1.1 / 1.1.1
 #set heading(numbering: "1.1.")
