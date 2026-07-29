@@ -76,15 +76,21 @@
 #let tbox(body) = dbox(body, fill: rgb("#e6f7f5"), stroke: rgb("#39d0c4"))
 #let ar = text(size: 14pt, fill: rgb("#6b7280"))[#h(4pt) → #h(4pt)]
 // Roadmap stage: a pipeline box that also says where in this book it is documented.
-#let rstage(body, sec, fill: rgb("#eef3ff"), stroke: rgb("#9bbcff")) = box(
-  fill: fill, stroke: 0.6pt + stroke, radius: 4pt, inset: (x: 6pt, y: 5pt),
-  height: 34pt, baseline: 12pt,          // uniform height so every lane reads as one clean row
+// Roadmap stage. Every cell fills its grid slot completely, so a whole lane shares one height and
+// one baseline no matter how many lines of text a given box carries.
+#let rstage(title, detail, sec, fill: rgb("#eef3ff"), stroke: rgb("#9bbcff")) = box(
+  width: 100%, height: 100%,
+  fill: fill, stroke: 0.6pt + stroke, radius: 4pt, inset: (x: 4pt, y: 4pt),
   align(center + horizon)[
-    #text(size: 8.5pt, weight: 600)[#body] \
-    #text(size: 6.8pt, fill: rgb("#6b7280"))[#sec]
+    #text(size: 8.2pt, weight: 700)[#title]
+    #if detail != none [ \ #text(size: 7.2pt)[#detail] ]
+    #if sec != none [ \ #text(size: 6.4pt, fill: rgb("#7b8794"))[#sec] ]
   ]
 )
-#let rar = text(size: 11pt, fill: rgb("#9aa4b2"))[#h(2pt) → #h(2pt)]
+#let rar = align(center + horizon, text(size: 10pt, fill: rgb("#9aa4b2"))[→])
+#let rdn = align(center + horizon, text(size: 10pt, fill: rgb("#9aa4b2"))[↓])
+#let rlane(title) = block(width: 100%, above: 15pt, below: 5pt,
+  text(size: 7.6pt, fill: rgb("#6b7280"), weight: 700, tracking: 0.4pt, upper(title)))
 
 // Live-site deep links. Pages base + the tab's hash anchor (e.g. "trainlab", "arbiter").
 // Usage in text:  the #web("trainlab")[learning rate] schedule ...
@@ -369,51 +375,52 @@ next chapter, *Design Decisions and Trade-offs* (decisions D-01 to D-25), where 
 the reason for the choice, and the measured cost of each rejected alternative are set out.]
 
 #figure(
-  align(center)[
-    #block(width: 100%, inset: 6pt)[
-      #align(left)[#text(size: 8pt, fill: rgb("#6b7280"), weight: 600)[THE "WHAT?" LANE #sym.dash.en identity]]
-      #v(3pt)
-      #stack(dir: ltr, spacing: 0pt,
-        rstage[Camera][#sym.section 3.2], rar,
-        rstage[Centre ROI \ crop, $div$255][#sym.section 7.8], rar,
-        rstage(fill: rgb("#eef3ff"))[*Global* expert \ 132 cls, 320px][#sym.section 3.3.4], rar,
-        rstage(fill: rgb("#e7f7ec"), stroke: rgb("#3fb950"))[*Israeli* expert \ 13 + bg, 224px][#sym.section 3.3.9],
-      )
-      #v(5pt)
-      #stack(dir: ltr, spacing: 0pt,
-        rstage(fill: rgb("#fdf3df"), stroke: rgb("#d29922"))[*XGBoost arbiter* \ P(israeli)][#sym.section 3.3.10], rar,
-        rstage(fill: rgb("#fdf3df"), stroke: rgb("#d29922"))[confidence gate][#sym.section 3.3.10], rar,
-        rstage[Gemini fallback \ (if unsure)][#sym.section 7.9], rar,
-        rstage(fill: rgb("#e7f7ec"), stroke: rgb("#3fb950"))[*label*][#sym.section 8.1],
-      )
-      #v(9pt)
-      #align(left)[#text(size: 8pt, fill: rgb("#6b7280"), weight: 600)[THE "HOW MUCH?" LANE #sym.dash.en quantity]]
-      #v(3pt)
-      #stack(dir: ltr, spacing: 0pt,
-        rstage(fill: rgb("#e6f7f5"), stroke: rgb("#39d0c4"))[BLE scale \ strain gauge][#sym.section 3.2], rar,
-        rstage[8-byte decode \ + 5-sample median][#sym.section 6.1], rar,
-        rstage[calibrate $times 1.178$][#sym.section 8.5], rar,
-        rstage(fill: rgb("#e7f7ec"), stroke: rgb("#3fb950"))[*grams*][#sym.section 8.5],
-      )
-      #v(9pt)
-      #align(left)[#text(size: 8pt, fill: rgb("#6b7280"), weight: 600)[FUSION #sym.dash.en the two lanes meet only here]]
-      #v(3pt)
-      #stack(dir: ltr, spacing: 0pt,
-        rstage[*label* + *grams*][#sym.section 3.3.13], rar,
-        rstage[nutrition lookup \ local #sym.arrow USDA #sym.arrow Gemini][#sym.section 7.9], rar,
-        rstage[cooking multiplier][#sym.section 7.10], rar,
-        rstage(fill: rgb("#e7f7ec"), stroke: rgb("#3fb950"))[*calories + macros* \ + the diary][#sym.section 7.12],
-      )
-    ]
-  ],
-  caption: [*Roadmap: the system, and where each part of it is documented.* Read this figure once and
-    the rest of the book has a place to hang. The camera lane answers *what* the food is, the scale
-    lane answers *how much*, and they stay independent until the final multiplication, which is the
-    whole thesis of the project: nothing ever infers mass from pixels. Blue = computation,
-    teal = a physical sensor, amber = the routing decision, green = a finished quantity. Each box
-    carries the section that derives it, so any stage can be read in isolation.],
-)
+  block(width: 100%)[
+    #let G = rgb("#3fb950")      // green: a finished quantity
+    #let A = rgb("#d29922")      // amber: the routing decision
+    #let T = rgb("#39d0c4")      // teal: a physical sensor
+    #let COLS = (1fr, 13pt, 1fr, 13pt, 1fr, 13pt, 1fr)
 
+    #rlane[The "what?" lane · identity]
+    #grid(columns: COLS, rows: 34pt, align: horizon,
+      rstage(fill: rgb("#e6f7f5"), stroke: T)[Camera][RGB frame][#sym.section 3.2], rar,
+      rstage[Centre ROI][crop, resize, $div 255$][#sym.section 7.8], rar,
+      rstage[Global expert][132 cls · 320 px][#sym.section 3.3.4], rar,
+      rstage[Israeli expert][13 + bg · 224 px][#sym.section 3.3.9],
+    )
+    #grid(columns: COLS, rows: 11pt, align: horizon,
+      [], [], [], [], rdn, [], rdn,
+    )
+    #grid(columns: COLS, rows: 34pt, align: horizon,
+      rstage(fill: rgb("#fdf3df"), stroke: A)[XGBoost arbiter][P(israeli) ⋛ 0.5][#sym.section 3.3.10], rar,
+      rstage(fill: rgb("#fdf3df"), stroke: A)[Confidence gate][is it trustworthy?][#sym.section 3.3.10], rar,
+      rstage[Gemini fallback][only if unsure][#sym.section 7.9], rar,
+      rstage(fill: rgb("#e7f7ec"), stroke: G)[label][the food name][#sym.section 8.1],
+    )
+
+    #rlane[The "how much?" lane · quantity]
+    #grid(columns: COLS, rows: 34pt, align: horizon,
+      rstage(fill: rgb("#e6f7f5"), stroke: T)[BLE scale][strain-gauge cell][#sym.section 3.2], rar,
+      rstage[Decode][8 bytes · 5-sample median][#sym.section 6.1], rar,
+      rstage[Calibrate][$times 1.178$ span fix][#sym.section 8.5], rar,
+      rstage(fill: rgb("#e7f7ec"), stroke: G)[grams][measured, not guessed][#sym.section 8.5],
+    )
+
+    #rlane[Fusion · the two lanes meet only here]
+    #grid(columns: COLS, rows: 34pt, align: horizon,
+      rstage[label + grams][the only meeting point][#sym.section 3.3.13], rar,
+      rstage[Nutrition lookup][local → USDA → Gemini][#sym.section 7.9], rar,
+      rstage[Cooking multiplier][raw → deep-fried][#sym.section 7.10], rar,
+      rstage(fill: rgb("#e7f7ec"), stroke: G)[calories + macros][and the diary][#sym.section 7.12],
+    )
+  ],
+  caption: [*Roadmap: the system, and where each part of it is documented.* Read this once and the
+    rest of the book has somewhere to hang. The upper lane turns a frame into a *label*; the middle
+    lane turns a BLE packet into *grams*; the two stay completely independent until the final
+    multiplication at the bottom, which is the thesis of the project: nothing ever infers mass from
+    pixels. Teal = a physical sensor, blue = computation, amber = the routing decision, green = a
+    finished quantity. Each box names the section that derives it, so any stage can be read alone.],
+)
 == System Design and Architecture
 
 CalEyeZ is a *standalone edge-computing* system: all inference runs locally on the host
