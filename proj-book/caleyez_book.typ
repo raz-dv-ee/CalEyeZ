@@ -1175,25 +1175,40 @@ clean and the number is real.
 
 === D-06 · Augmentation: custom blur, label smoothing, dropout; mosaic off
 *Options.* Default detection augmentation, or a classification-appropriate set. \
-*Chosen.* Heavy colour/geometry augmentation plus a custom Albumentations blur (to mimic classroom
-motion blur), dropout 0.2, and label smoothing $epsilon=0.1$ requested in the script (found during
-the book audit to be silently ignored by the Ultralytics classify trainer - see the note in
-Section 3.3.4); mosaic *disabled*. \
+*Chosen.* RandAugment plus random erasing and a custom Albumentations blur (to mimic classroom
+motion blur), with dropout 0.2; mosaic *disabled*. Several further arguments were requested in the
+script and are silently ignored by the Ultralytics classify trainer: `label_smoothing` (Section
+3.3.4), the `hsv_*` colour ranges, and the geometric arguments `degrees`, `translate`, `shear`,
+`perspective` and `mixup`. What actually ran is set out below. \
 *Cost of alternatives.* Mosaic augmentation (four images stitched) is designed for detection and
 corrupts a single-label classification target; leaving it on would teach the wrong objective. \
-*The lighting trade-off, made on purpose.* The heaviest augmentation is photometric, because harsh
-and variable lighting is the binding real-world constraint. On *every* batch each image is re-lit at
-random: brightness $V arrow.l V dot U(0.5, 1.5)$ (via $"hsv_v"=0.50$, i.e. up to 50% darker or
-brighter - the "dark plate" case), colour temperature $H arrow.l (H dot U(0.98, 1.02)) mod 180$
-($"hsv_h"=0.02$), and saturation $S arrow.l S dot U(0.25, 1.75)$ ($"hsv_s"=0.75$); on top
-of that the custom blur ($p=0.35$) and random erasing ($0.40$). Over ~116 epochs each photo is seen
-~116 times, each under a different random lighting, so the network learns *lighting-invariant*
-features by construction. This is a deliberate *resilience-over-peak-accuracy* trade-off: lighter
-augmentation would be expected to score a point or two higher on the clean test split, but at the
-cost of robustness to the harsh, variable lighting and blur of a real kitchen; the shipped
-heavy-augmentation model scores *88.18%* and is built to hold up under those field conditions rather
-than to maximise a clean-set number. We accepted that modest clean-test cost because the deployment
-target is a kitchen, not a lab. \
+*The augmentation that actually ran, and a second silent-argument finding.* Auditing this book
+against the installed Ultralytics (8.3.189) turned up the same class of defect as the
+`label_smoothing` note in Section 3.3.4, and a larger one. The classification trainer builds its
+pipeline through `classify_augmentations`, which sets `disable_color_jitter = not
+force_color_jitter` whenever `auto_augment` is set. The run's own `args.yaml` records
+`auto_augment: randaugment`, so *ColorJitter never entered the pipeline* and the requested
+`hsv_h`, `hsv_s` and `hsv_v` values were inert. The same audit showed that the classification
+path never receives `degrees`, `translate`, `scale`, `shear`, `perspective` or `mixup` at all:
+those are detection arguments, accepted by the API and silently discarded here. Reconstructing
+the transform by calling `classify_augmentations` with the run's own arguments returns exactly:
+
+$ "RandomResizedCrop" arrow "HFlip" arrow "VFlip" arrow "RandAugment" arrow "ToTensor" arrow "Normalize" arrow "RandomErasing" $
+
+so the augmentation the shipped model actually saw is *RandomResizedCrop* (320 px, scale 0.4-1.0),
+horizontal flip $p=0.5$, vertical flip $p=0.15$, *RandAugment* (2 ops, magnitude 9), *random
+erasing* $p=0.40$, and the project's own *Albumentations blur* callback ($p=0.35$), which is
+genuinely ours and does run.
+
+*The trade-off survives, but its mechanism is different.* Photometric variation is still heavy:
+RandAugment's operator pool includes brightness, contrast, colour and solarisation, so images are
+still re-lit differently on every epoch. What is *not* true is that the specific $U(0.5,1.5)$
+brightness and $U(0.25,1.75)$ saturation ranges quoted from the script produced it. Over ~116
+epochs each photo is still seen under a different random transform, so the lighting-invariance
+claim holds; it is delivered by RandAugment, erasing and our blur rather than by the HSV
+arguments. This is recorded rather than quietly corrected because it is the same lesson twice: a
+training script is a *request*, and only the run's artifacts prove what a framework honoured.
+
 *Consequence.* A model resilient to lighting, blur and pose, with calibrated confidences for the
 arbiter. The choice is validated by our own numbers: the near-zero validation-test gap (88.16% vs
 88.18%) shows no overfitting - exactly what heavy augmentation buys - and the field validation
@@ -1265,7 +1280,7 @@ the "why" panel. \
 JavaScript tree walk for the browser (verified identical to Python to $10^(-7)$).
 
 === D-12 · Arbiter features = the experts' softmax statistics, not raw embeddings
-*Options.* Feed the arbiter the concatenated 2560-D penultimate embeddings, or a compact set of
+*Options.* Feed the arbiter the concatenated 1024-D penultimate embeddings (512 from each expert), or a compact set of
 confidence statistics (top-5 conf, entropy, margin, $P("background")$, interactions). \
 *Chosen.* The 20 confidence statistics. \
 *Cost of alternatives.* Raw embeddings carry strictly more information (by the data-processing
@@ -2411,14 +2426,16 @@ as ground truth. On an initial set of 40 photos the system scored *30/40 = 75%*,
 Wilson confidence interval of *[59.8%, 85.8%]*; a later, separately-composed 47-photo set scored *40/47 = 85.1%*
 (95% Wilson CI *[72.3%, 92.6%]*), and this is a floor: in the live system the confidence gate
 routes the low-confidence misses to a fallback instead of reporting them. The
-per-class breakdown is informative: everyday foods did very well (french fries 3/3, hamburger
-3/3, cheese bourekas 9/10), while the misses cluster on under-represented or deliberately
-degraded inputs.
+per-class breakdown of *the initial 40-photo set* is informative: everyday foods did very well
+(french fries 3/3, hamburger 3/3, cheese bourekas 9/10), while the misses cluster on
+under-represented or deliberately degraded inputs. The later 47-photo set is composed differently
+and contains no hummus or grapes; on it the strongest classes are hamburger 12/12, cheese bourekas
+9/10 and canned tuna 8/11.
 
 #table(
   columns: (1fr, auto, 2fr),
   inset: 7pt, align: (left, center, left),
-  table.header([*Class*], [*Score*], [*Typical failure cause*]),
+  table.header([*Class* (initial 40-photo set)], [*Score*], [*Typical failure cause*]),
   [french_fries], [3/3], [-],
   [hamburger], [3/3], [-],
   [bourekas_cheese], [9/10], [1 confused with an Israeli look-alike (malawach)],
