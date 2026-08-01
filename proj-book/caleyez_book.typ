@@ -391,14 +391,13 @@ the reason for the choice, and the measured cost of each rejected alternative ar
       rstage[Global expert][132 cls · 320 px][#sym.section 3.3.4], rar,
       rstage[Israeli expert][13 + bg · 224 px][#sym.section 3.3.9],
     )
-    #grid(columns: COLS, rows: 11pt, align: horizon,
-      [], [], [], [], rdn, [], rdn,
-    )
+    #align(center)[#text(size: 7.4pt, fill: rgb("#6b7280"))[
+      #v(3pt) both experts run on every image; their confidence vectors are the arbiter's input #v(1pt) #sym.arrow.b]]
     #grid(columns: COLS, rows: 34pt, align: horizon,
-      rstage(fill: rgb("#fdf3df"), stroke: A)[XGBoost arbiter][P(israeli) ⋛ 0.5][#sym.section 3.3.10], rar,
-      rstage(fill: rgb("#fdf3df"), stroke: A)[Confidence gate][is it trustworthy?][#sym.section 3.3.10], rar,
-      rstage[Gemini fallback][only if unsure][#sym.section 7.9], rar,
-      rstage(fill: rgb("#e7f7ec"), stroke: G)[label][the food name][#sym.section 8.1],
+      rstage(fill: rgb("#fdf3df"), stroke: A)[XGBoost arbiter][picks the expert][#sym.section 3.3.10], rar,
+      rstage(fill: rgb("#fdf3df"), stroke: A)[Confidence gate][trust the answer?][#sym.section 3.3.10], rar,
+      rstage(fill: rgb("#e7f7ec"), stroke: G)[label][the food name][#sym.section 8.1], [],
+      rstage(stroke: rgb("#c4b5d8"))[Gemini fallback][branch, if unsure][#sym.section 7.9],
     )
 
     #rlane[The "how much?" lane · quantity]
@@ -426,8 +425,10 @@ the reason for the choice, and the measured cost of each rejected alternative ar
 )
 == System Design and Architecture
 
-CalEyeZ is a *standalone edge-computing* system: all inference runs locally on the host
-PC, and only the nutritional lookup reaches out to the network. The design follows an
+CalEyeZ is a *standalone edge-computing* system: all inference runs on the device in front of the
+user, and only the nutritional lookup reaches out to the network. That device is a desktop PC for
+the reference build and an ordinary phone for the browser build (Chapter 7), which runs the same
+two experts and the same arbiter with no server involved. The design follows an
 *event-driven sensor-fusion* pattern with two parallel sensing channels - a camera for the
 "What?" and a BLE scale for the "How much?" - that are merged when the user triggers an
 analysis.
