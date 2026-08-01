@@ -296,7 +296,7 @@ digital scale; (c) nutritional retrieval from the USDA API with a local fallback
   mapped to the nearest visual match.
 - *Hardware dependency* - a CUDA GPU is recommended for low-latency training/inference; the
   shipped ONNX edge build runs CPU-only at higher latency.
-- *Connectivity* - the USDA lookup needs internet (mitigated by a local JSON cache).
+- *Connectivity* - the USDA lookup needs internet (mitigated by a curated local table compiled into the demo, and a JSON table in the browser build).
 - *Sensing conditions* - adequate lighting for the camera and a stable BLE link for the scale.
 
 #note[*Engineering pivot recorded here for honesty:* the weight subsystem was originally
@@ -463,15 +463,14 @@ active/stereo depth alternatives were considered and rejected (Section 8).
 about 0.35 s per analysis.
 
 The interfaces are all standard and off-the-shelf: USB Video Class for the camera, and the
-Bluetooth GATT profile for the scale. The dominant *system constraint* is the 8 GB VRAM
-budget, which directly shaped the training configuration - 320 px input at batch 16 fits in
+Bluetooth GATT profile for the scale. The 8 GB VRAM budget bounds the *extremes* of the training configuration (it would rule out a much larger batch, or the heavier YOLO11x backbone at 320 px) without binding the shipped run, which measured about 2.2 GB under mixed precision - 320 px input at batch 16 fits in
 roughly 2.2 GB under automatic mixed precision, leaving headroom (see Section 6.2).
 
 === Component Selection and Justification
 A BLE scale was selected over an OCR-read display because reading a 7-segment LCD under
 classroom glare was unreliable; BLE gives a deterministic digital value. A plain RGB webcam
 was sufficient because the algorithm does not rely on depth. The RTX 3060 Ti was the
-available GPU and its 8 GB is the binding constraint the training pipeline is tuned around.
+available GPU and its 8 GB is the headroom the training configuration was checked against, not a limit that forced it (Section 3.3.8).
 
 == Detailed Software Design
 
@@ -606,7 +605,7 @@ are found in a single linear pass by bucketing on the 160-bit key rather than by
 pairwise comparison of 100k images. One canonical copy of each digest is kept; the rest are
 discarded. (The Israeli-model rebuild used SHA-256 for the same purpose across its raw ingest.)
 
-*Near-duplicate removal (perceptual hashing).* A cryptographic hash changes completely if a single
+*Near-duplicate grouping (perceptual hashing).* A cryptographic hash changes completely if a single
 pixel changes, so it cannot catch a re-saved or slightly re-compressed copy. For that we use a
 *perceptual* hash - the difference hash (dHash): the image is reduced to greyscale at
 $9 times 8$, and each of the 64 output bits records whether one pixel is brighter than its right-
@@ -621,7 +620,7 @@ $ d_H (x_1, x_2) = sum_(k=1)^64 b_k^((1)) xor b_k^((2)) #h(0.3em) lt.eq #h(0.3em
 
 with a threshold of 5 bits. Because dHash encodes *relative* brightness gradients it is invariant
 to global brightness/contrast shifts and mild re-compression, so it catches the copies SHA-1 misses
-while a tight threshold avoids collapsing genuinely distinct dishes.
+while a tight threshold avoids collapsing genuinely distinct dishes. Crucially these copies are *not* deleted, because they carry real visual variance: images within Hamming distance 5 are merged by union-find into a *cluster*, and the 70/20/10 split is then assigned one whole cluster at a time (`scripts/flatten_general_dataset.py`). The split unit is therefore the cluster, never the raw image, so a photo and its re-encodings can never straddle a split boundary. Only the SHA-1 pass deletes anything.
 
 *The proof it worked.* After de-duplication and a fresh split, the Global model's *validation and
 test accuracies agree to 0.02 points* (88.16% vs 88.18%). A leaking split shows the opposite
@@ -1610,7 +1609,9 @@ model's test score; after the rebuild the validation and test accuracies agree (
 88.18%), which is the proof that the splits are clean.
 
 *Model training.* Both classifiers are YOLO11l-cls trained by transfer learning, configured
-exactly as in Section 3.3 - AdamW, cosine learning-rate decay, dropout, and heavy
+as in Section 3.3 - AdamW, dropout, and heavy
+augmentation; cosine learning-rate decay was used on the Global run only, the Israeli V2 run
+keeping the framework default of linear decay (`cos_lr: false` in its `args.yaml`), and
 augmentation including a custom Albumentations blur callback to mimic classroom motion blur.
 The 320 px input at batch 16 mirrors the training configuration (Section 3.3); memory was not the
 binding constraint (the run measured about 2.2 GB of the 8 GB card).
@@ -1788,7 +1789,10 @@ I = await mk(MODEL_BASE + 'israeli_fp16.onnx', ep, prog(50));  // 50-100%
 
 The models are hosted cross-origin in the main `CalEyeZ` repository under `/webmodels/` and fetched
 over CORS, so the app repository stays a few kilobytes and deploys in seconds. After the first load
-the browser HTTP-caches the files, so every later launch is instant and fully offline.
+the browser HTTP-caches the model files, so a later launch is fast and recognition keeps
+working without the network for as long as that cache survives. This is the ordinary HTTP cache,
+not a service worker: the app ships no service worker and no web-app manifest, so install-grade
+offline behaviour is future work rather than a current guarantee.
 
 *Bytes to session.* `InferenceSession.create` parses the ONNX graph and allocates the weight
 tensors in the WASM heap. This is where fp16 becomes fp32: on the WASM path ORT upcasts each
@@ -1971,7 +1975,7 @@ $times 10^(-3)$. *Third,* the softmax passes only a fraction of a logit change t
 take a top logit $z_1 = 8.000$ and a runner-up $z_2 = 6.000$ (a modest margin of 2). The two-class softmax is
 $p_1 = 1 \/ (1 + e^(-(z_1 - z_2)))$, so $p_1 = 1 \/(1 + e^(-2.000)) = 0.88080$ in fp32; if fp16 rounding shifts
 the margin to $2.004$, $p_1 = 1\/(1 + e^(-2.004)) = 0.88121$ - a change of $Delta p approx 4 times 10^(-4)$. The
-*maximum* over every class and every held-out row, measured in the ONNX parity test (Section 7.5), is
+*maximum* over every class and every held-out row, measured in the ONNX parity test (Section 7.5) over its 25 field photographs, is
 $approx 10^(-3)$. The decision only flips if the top two probabilities sit *within that $10^(-3)$* of each
 other; real top-1/top-2 margins are on the order of tenths (e.g. $0.88$ versus $0.12$), so a $10^(-3)$ wiggle
 never crosses them - which is exactly why the exhaustive parity check found *zero* top-1 mismatches. The drift
@@ -2003,8 +2007,9 @@ and avoid int8, whose coarser steps can flip the subtle textures that separate l
 
 == Converting the Arbiter: XGBoost Tree to JavaScript
 
-The arbiter is a gradient-boosted tree ensemble, and it could *not* be exported to ONNX like the CNNs
-were. ONNX does define a tree operator (`ai.onnx.ml.TreeEnsembleClassifier`), but the WebAssembly
+The arbiter is a gradient-boosted tree ensemble. It *can* be exported to ONNX, and it was:
+`build_edge_onnx/models/arbiter.onnx` is a single `TreeEnsembleClassifier` node. What it cannot do is
+*execute* in the browser. ONNX does define a tree operator (`ai.onnx.ml.TreeEnsembleClassifier`), but the WebAssembly
 build of ORT-Web does *not* ship the `ai.onnx.ml` operator domain, so a tree model simply will not
 execute in the browser through ONNX Runtime. The arbiter had to be evaluated another way.
 
@@ -2917,7 +2922,7 @@ OCR was abandoned rather than fixed, because the BLE path made it unnecessary.
 
 Before the demo, the browser application was put through a deliberate self-audit: a line-by-line
 review of the recognition, tracking and nutrition code, cross-checked against the desktop reference
-and the unit-test suite (30 tests, all passing). It surfaced *no* crashing or recognition-affecting
+and the unit-test suite (40 tests, all passing). It surfaced *no* crashing or recognition-affecting
 defects, but did find three low-severity robustness and security gaps, each of which was fixed and
 re-verified against the tests.
 
