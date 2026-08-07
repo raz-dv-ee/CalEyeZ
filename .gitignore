@@ -157,3 +157,6 @@ build_edge_onnx/.venv_onnx/
 build_edge_onnx/*.log
 build_edge_onnx/models/*.onnx
 runs/**/best.onnx
+
+# Project book: kept local, not published to the repo
+proj-book/
