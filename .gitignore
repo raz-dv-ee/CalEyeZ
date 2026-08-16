@@ -158,5 +158,7 @@ build_edge_onnx/*.log
 build_edge_onnx/models/*.onnx
 runs/**/best.onnx
 
-# Project book: kept local, not published to the repo
-proj-book/
+# Project book: only the two design documents are published
+proj-book/*
+!proj-book/CalEyeZ_FRS.md
+!proj-book/CalEyeZ_SDD.md
